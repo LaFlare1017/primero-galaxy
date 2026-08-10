@@ -934,9 +934,9 @@ test('the contact address ships nowhere in the served page or JS (only base64)',
   expect(jsBodies).not.toContain(NAME);
 });
 
-test('the header and hero "Enter the galaxy" CTAs land in the tool at /galaxy', async ({ page }) => {
-  // Two boots of the tool, so budget past the suite default.
-  test.setTimeout(120_000);
+test('every landing-page CTA lands in the galaxy tool at /galaxy', async ({ page }) => {
+  // Each CTA boots the tool, so budget past the suite default.
+  test.setTimeout(180_000);
 
   const ctas = [
     { label: 'header', link: page.getByRole('link', { name: 'Enter the galaxy →' }) },
@@ -949,6 +949,24 @@ test('the header and hero "Enter the galaxy" CTAs land in the tool at /galaxy', 
         .first()
         .getByRole('link', { name: 'Enter the galaxy' }),
     },
+    {
+      label: 'contact',
+      link: page.getByRole('link', { name: 'Add your company to the galaxy' }),
+    },
+    {
+      label: 'final CTA',
+      // Scoped by its heading so a section added later can't shift the
+      // "last section" and silently change which link gets clicked.
+      link: page
+        .locator('section')
+        .filter({
+          has: page.getByRole('heading', {
+            name: 'Your company could be one of the stars.',
+          }),
+        })
+        .getByRole('link', { name: 'Enter the galaxy' }),
+    },
+    { label: 'footer', link: page.getByRole('link', { name: 'Launch the galaxy ↗' }) },
   ];
 
   for (const { label, link } of ctas) {
