@@ -873,6 +873,79 @@ test('a toast that expired while away does not resurrect on reload', async ({ pa
   expect(pending).toEqual([]);
 });
 
+test('removing the same company twice keeps one Removed toast; Undo restores it', async ({ page }) => {
+  test.setTimeout(120_000);
+  await waitForApp(page);
+
+  // Seed a user star plus a pending "removed" toast for it. Its createdAt is
+  // set slightly in the future so the 12s auto-dismiss window is guaranteed
+  // to still be open when the UI remove below fires — the test must not
+  // depend on machine speed racing the dismiss timer.
+  await page.evaluate((star) => {
+    localStorage.setItem('primero-galaxy:user-stars', JSON.stringify([star]));
+    sessionStorage.setItem(
+      'primero-galaxy:pending-toasts',
+      JSON.stringify([{ id: 't-seeded', kind: 'removed', star, createdAt: Date.now() + 8000 }])
+    );
+  }, makeSeedStar());
+  await page.reload();
+  await waitForGalaxyBoot(page);
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () => (window.__galaxy as GalaxyHandle).store.getState().userStars.length
+        ),
+      { timeout: 30_000 }
+    )
+    .toBe(1);
+
+  // The seeded Removed toast is live and its window is definitely open.
+  const removedToast = page.getByText('Removed from the galaxy.');
+  await expect(removedToast).toHaveCount(1);
+  await expect(removedToast).toBeVisible();
+
+  // Remove the same company through the sheet's "Your stars" list: the new
+  // removal must SUPERSEDE the seeded toast (same kind + slug) — never stack
+  // a duplicate, even though the first toast is still on screen.
+  await page.getByRole('button', { name: 'Add Company' }).click();
+  await expect(page.getByRole('heading', { name: 'Add Your Company' })).toBeVisible();
+  const removeButton = page.getByRole('button', { name: 'Remove Window Test Co' });
+  await expect(removeButton).toBeVisible();
+  await removeButton.click();
+
+  // Exactly one Removed toast remains — no stacked duplicate — in both the
+  // DOM and the store (the store check is the airtight one: it runs moments
+  // after the click, while the seeded toast's window is still open).
+  await expect(removedToast).toHaveCount(1, { timeout: 5000 });
+  const removedKinds = await page.evaluate(() => {
+    const s = (window.__galaxy as GalaxyHandle).store.getState();
+    return s.toasts.filter(
+      (t: any) => t.kind === 'removed' && t.star.slug === 'window-test-co'
+    ).length;
+  });
+  expect(removedKinds).toBe(1);
+
+  // Undo on the surviving toast restores the star and clears the toast.
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () => (window.__galaxy as GalaxyHandle).store.getState().userStars.length
+        ),
+      { timeout: 30_000 }
+    )
+    .toBe(1);
+  await expect(removedToast).toBeHidden();
+
+  // Final cleanup: the suite must leave no user stars behind.
+  await page.evaluate(() => {
+    const s = (window.__galaxy as GalaxyHandle).store.getState();
+    s.userStars.forEach((u: any) => s.removeUserStar(u.id));
+  });
+});
+
 test('the landing page contact form renders and submits a pre-filled mailto', async ({ page }) => {
   // The root route is the explainer landing page.
   await page.goto('/');
