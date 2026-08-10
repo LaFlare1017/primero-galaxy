@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ContactForm } from '@/components/ui/ContactForm';
+import { breathFrequency, breathPhase, starBreath } from '@/lib/constants';
 
 export const metadata: Metadata = {
   title: 'Primero Galaxy — An Explorable AI Transformation Galaxy',
@@ -19,19 +20,26 @@ const EYEBROW = 'text-[11px] font-semibold uppercase tracking-label text-traject
 const SECTION_TITLE = 'text-3xl font-semibold tracking-title text-star-bright md:text-4xl';
 
 /**
- * Legend dot: a hollow glowing "star bubble" that breathes like the animated
- * stars in the galaxy tool. The rim/bloom colors arrive as CSS custom
- * properties so each maturity band keeps its red → amber → teal story.
+ * Legend dot: a hollow glowing "star bubble" that breathes on the exact wave
+ * of the star it stands for — the halo breathing of galaxy star `starIndex`
+ * (frequency and phase from the shared starBreath constants). The rim/bloom
+ * colors arrive as CSS custom properties so each maturity band keeps its
+ * red → amber → teal story.
  */
 function LegendBubble({
+  starIndex,
   color,
   glow,
-  delay = 0,
 }: {
+  starIndex: number;
   color: string;
   glow: string;
-  delay?: number;
 }) {
+  // Same sine wave as the galaxy: scale = 1 + amplitude·sin(ωt + phase).
+  // animationDelay is negative so the bubble is mid-cycle at first paint,
+  // exactly like an already-animating star.
+  const omega = breathFrequency(starIndex, starBreath.halo);
+  const phase = breathPhase(starIndex) + starBreath.halo.phaseBias;
   return (
     <span
       className="legend-bubble shrink-0"
@@ -39,7 +47,8 @@ function LegendBubble({
         {
           '--bubble': color,
           '--bubble-glow': glow,
-          animationDelay: `${delay}s`,
+          animationDuration: `${(2 * Math.PI) / omega}s`,
+          animationDelay: `${-phase / omega}s`,
         } as React.CSSProperties
       }
     />
@@ -189,7 +198,7 @@ export default function LandingPage() {
 
           <div className="mt-10 grid gap-3 md:grid-cols-3">
             <div className="flex items-center gap-4 rounded-xl border border-border-subtle bg-void/60 p-5">
-              <LegendBubble color="#FF6B35" glow="rgba(255,107,53,0.5)" />
+              <LegendBubble starIndex={0} color="#FF6B35" glow="rgba(255,107,53,0.5)" />
               <div>
                 <h3 className="text-[13px] font-medium text-star-bright">
                   Low maturity · 0–40
@@ -200,7 +209,7 @@ export default function LandingPage() {
               </div>
             </div>
             <div className="flex items-center gap-4 rounded-xl border border-border-subtle bg-void/60 p-5">
-              <LegendBubble color="#F7C548" glow="rgba(247,197,72,0.5)" delay={-1.2} />
+              <LegendBubble starIndex={1} color="#F7C548" glow="rgba(247,197,72,0.5)" />
               <div>
                 <h3 className="text-[13px] font-medium text-star-bright">
                   Mid maturity · 40–70
@@ -211,7 +220,7 @@ export default function LandingPage() {
               </div>
             </div>
             <div className="flex items-center gap-4 rounded-xl border border-border-subtle bg-void/60 p-5">
-              <LegendBubble color="#00D9C0" glow="rgba(0,217,192,0.5)" delay={-2.4} />
+              <LegendBubble starIndex={2} color="#00D9C0" glow="rgba(0,217,192,0.5)" />
               <div>
                 <h3 className="text-[13px] font-medium text-star-bright">
                   High maturity · 70–100

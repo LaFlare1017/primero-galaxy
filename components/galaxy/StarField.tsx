@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { Company } from '@/types';
 import { useGalaxyStore } from '@/store/galaxyStore';
 import { smoothstep } from '@/lib/utils';
-import { maturityColor } from '@/lib/constants';
+import { breathFrequency, breathPhase, maturityColor, starBreath } from '@/lib/constants';
 
 interface StarFieldProps {
   companies: Company[];
@@ -80,7 +80,7 @@ export function StarField({ companies, onStarHover, onStarSelect }: StarFieldPro
       const m = company.maturity.overall;
       baseScales[i] = 1 + (m / 100) * 1.1; // low ~1.0, high ~2.1
       featured[i] = company.isFeatured ? 1 : 0;
-      phases[i] = (i % 11) * 0.57;
+      phases[i] = breathPhase(i);
 
       // Brightness tuned so only bright/featured stars cross the bloom threshold
       let brightness = 0.8 + (m / 100) * 0.6; // ~0.85 -> ~1.4
@@ -148,7 +148,7 @@ export function StarField({ companies, onStarHover, onStarSelect }: StarFieldPro
 
       // Every star breathes — phase- and frequency-offset so the whole field
       // undulates organically instead of pulsing in lockstep.
-      scale *= 1 + 0.07 * Math.sin(t * (1.1 + (i % 7) * 0.12) + phases[i]);
+      scale *= 1 + starBreath.core.amplitude * Math.sin(t * breathFrequency(i, starBreath.core) + phases[i]);
 
       if (featured[i]) {
         // Featured stars breathe a little stronger (extra bloom drive)
@@ -183,7 +183,11 @@ export function StarField({ companies, onStarHover, onStarSelect }: StarFieldPro
         const haloScale =
           scale *
           HALO_RATIO *
-          (1 + 0.16 * Math.sin(t * (1.3 + (i % 7) * 0.1) + phases[i] + 1.1));
+          (1 +
+            starBreath.halo.amplitude *
+              Math.sin(
+                t * breathFrequency(i, starBreath.halo) + phases[i] + starBreath.halo.phaseBias
+              ));
         dummy.position.set(p.x, p.y, p.z);
         dummy.quaternion.copy(camQuat);
         dummy.scale.setScalar(haloScale);
@@ -191,7 +195,11 @@ export function StarField({ companies, onStarHover, onStarSelect }: StarFieldPro
         halo.setMatrixAt(i, dummy.matrix);
 
         let hb =
-          dim * HALO_BRIGHTNESS * (0.85 + 0.15 * Math.sin(t * 1.3 + phases[i] + 1.1));
+          dim *
+          HALO_BRIGHTNESS *
+          (starBreath.halo.brightnessBase +
+            starBreath.halo.brightnessAmplitude *
+              Math.sin(t * starBreath.halo.baseFrequency + phases[i] + starBreath.halo.phaseBias));
         if (featured[i]) hb *= 1.2;
         color.set(maturityColor(companies[i].maturity.overall)).multiplyScalar(hb);
         halo.setColorAt(i, color);

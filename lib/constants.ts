@@ -34,6 +34,51 @@ export const COMPANY_COUNT = 500;
 export const FEATURED_COUNT = 10;
 export const PE_BACKED_COUNT = 50;
 
+/**
+ * Star breathing — the single source of truth for the organic undulation of
+ * the galaxy's stars AND the landing page's legend bubbles, so both animate
+ * on the exact same waves. Each star breathes on a sine wave with a per-star
+ * phase and frequency offset (instead of pulsing in lockstep):
+ *
+ *   phase(i)             = (i % phaseMod) * phaseStep
+ *   frequency(i, band)   = band.baseFrequency + (i % band.frequencyMod) * band.frequencyStep
+ *   coreScale(t, i)      = 1 + core.amplitude * sin(t * frequency(i, core) + phase(i))
+ *   haloScale(t, i)      = 1 + halo.amplitude * sin(t * frequency(i, halo) + phase(i) + halo.phaseBias)
+ *   haloBrightness(t, i) = halo.brightnessBase + halo.brightnessAmplitude * sin(t * halo.baseFrequency + phase(i) + halo.phaseBias)
+ */
+export const starBreath = {
+  phaseStep: 0.57,
+  phaseMod: 11,
+  core: {
+    amplitude: 0.07,
+    baseFrequency: 1.1,
+    frequencyStep: 0.12,
+    frequencyMod: 7,
+  },
+  halo: {
+    amplitude: 0.16,
+    baseFrequency: 1.3,
+    frequencyStep: 0.1,
+    frequencyMod: 7,
+    phaseBias: 1.1,
+    brightnessBase: 0.85,
+    brightnessAmplitude: 0.15,
+  },
+} as const;
+
+/** Per-star breathing phase offset (radians). */
+export function breathPhase(i: number): number {
+  return (i % starBreath.phaseMod) * starBreath.phaseStep;
+}
+
+/** Per-star breathing frequency (rad/s) for a core/halo band. */
+export function breathFrequency(
+  i: number,
+  band: { baseFrequency: number; frequencyStep: number; frequencyMod: number }
+): number {
+  return band.baseFrequency + (i % band.frequencyMod) * band.frequencyStep;
+}
+
 /** Maturity color for a 0-100 score (hex). */
 export function maturityColor(score: number): string {
   if (score > 70) return COLORS.maturityHigh;
