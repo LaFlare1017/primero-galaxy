@@ -27,9 +27,8 @@ declare global {
 // The window.__galaxy handle is typed loosely in page context.
 type GalaxyHandle = Record<string, any>;
 
-async function waitForApp(page: Page) {
-  // The galaxy lives at /galaxy; the root route is the explainer landing page.
-  await page.goto('/galaxy');
+/** Poll until the freshly mounted galaxy re-registers its debug handles. */
+async function waitForGalaxyBoot(page: Page) {
   await expect
     .poll(
       () =>
@@ -40,6 +39,12 @@ async function waitForApp(page: Page) {
       { timeout: 30_000 }
     )
     .toBe(true);
+}
+
+async function waitForApp(page: Page) {
+  // The galaxy lives at /galaxy; the root route is the explainer landing page.
+  await page.goto('/galaxy');
+  await waitForGalaxyBoot(page);
   // Let the landing title sequence + staggered star-appear animation finish.
   await page.waitForTimeout(6000);
 }
@@ -927,4 +932,42 @@ test('the contact address ships nowhere in the served page or JS (only base64)',
   expect(jsBodies).toContain(JS_BASE64);
   expect(jsBodies).not.toContain(ADDRESS);
   expect(jsBodies).not.toContain(NAME);
+});
+
+test('the header and hero "Enter the galaxy" CTAs land in the tool at /galaxy', async ({ page }) => {
+  // Two boots of the tool, so budget past the suite default.
+  test.setTimeout(120_000);
+
+  const ctas = [
+    { label: 'header', link: page.getByRole('link', { name: 'Enter the galaxy →' }) },
+    {
+      label: 'hero',
+      // The hero is the first section; scope there so the final-CTA link of
+      // the same name can't satisfy this assertion.
+      link: page
+        .locator('section')
+        .first()
+        .getByRole('link', { name: 'Enter the galaxy' }),
+    },
+  ];
+
+  for (const { label, link } of ctas) {
+    await page.goto('/');
+    await expect(link).toBeVisible();
+    await link.click();
+
+    // The CTA lands in the tool and the galaxy actually boots: URL, canvas,
+    // and the app debug handles registered by the fresh mount.
+    await expect(page).toHaveURL(/\/galaxy$/);
+    await expect(page.locator('canvas')).toBeVisible();
+    await waitForGalaxyBoot(page);
+    const starCount = await page.evaluate(() => {
+      let count = 0;
+      (window.__galaxy as GalaxyHandle).r3f.scene.traverse((o: any) => {
+        if (o.isInstancedMesh) count = o.count;
+      });
+      return count;
+    });
+    expect(starCount, `${label} CTA should land in the 500-star galaxy`).toBe(500);
+  }
 });
