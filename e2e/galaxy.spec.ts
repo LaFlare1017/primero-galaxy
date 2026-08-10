@@ -30,6 +30,9 @@ type GalaxyHandle = Record<string, any>;
 // The galaxy renders the curated Fortune 500 dataset (lib/fortune500-data.ts).
 const STAR_COUNT = 196;
 
+// Toast auto-dismiss window — keep in sync with store/galaxyStore.ts.
+const TOAST_DURATION_MS = 12000;
+
 /** Poll until the freshly mounted galaxy re-registers its debug handles. */
 async function waitForGalaxyBoot(page: Page) {
   await expect
@@ -778,22 +781,25 @@ function makeSeedStar(name = 'Window Test Co'): any {
   };
 }
 
-test('a hydrated toast keeps only its remaining window (no fresh 8s)', async ({ page }) => {
+test('a hydrated toast keeps only its remaining window (no fresh duration)', async ({ page }) => {
   test.setTimeout(120_000);
   await waitForApp(page);
 
-  // Seed a user star + an "added" toast whose 8s window is already half over.
+  // Seed a user star + an "added" toast whose window is already mostly gone.
   // After the reload it must auto-dismiss in the ~4s that remain — not a
-  // fresh 8 seconds from hydration.
-  await page.evaluate((star) => {
-    localStorage.setItem('primero-galaxy:user-stars', JSON.stringify([star]));
-    sessionStorage.setItem(
-      'primero-galaxy:pending-toasts',
-      JSON.stringify([
-        { id: 't-remaining', kind: 'added', star, createdAt: Date.now() - 4000 },
-      ])
-    );
-  }, makeSeedStar());
+  // fresh full window from hydration.
+  await page.evaluate(
+    ({ star, ms }) => {
+      localStorage.setItem('primero-galaxy:user-stars', JSON.stringify([star]));
+      sessionStorage.setItem(
+        'primero-galaxy:pending-toasts',
+        JSON.stringify([
+          { id: 't-remaining', kind: 'added', star, createdAt: Date.now() - (ms - 4000) },
+        ])
+      );
+    },
+    { star: makeSeedStar(), ms: TOAST_DURATION_MS }
+  );
 
   await page.reload();
   // Wait for the fresh mount to re-register handles (hydration runs on mount).
@@ -813,7 +819,7 @@ test('a hydrated toast keeps only its remaining window (no fresh 8s)', async ({ 
   await expect(toast).toBeVisible({ timeout: 5000 });
 
   // …but its timer only has the ~4s remaining: it auto-dismisses well before
-  // a fresh 8s post-hydration would have elapsed.
+  // a fresh full window post-hydration would have elapsed.
   await expect(toast).toBeHidden({ timeout: 5000 });
 
   // Dismissal purged the pending entry from sessionStorage too.
@@ -827,17 +833,21 @@ test('a hydrated toast keeps only its remaining window (no fresh 8s)', async ({ 
 test('a toast that expired while away does not resurrect on reload', async ({ page }) => {
   await waitForApp(page);
 
-  // Seed a "removed" (Undo) toast that expired before the reload: created 10s
-  // ago, well past the 8s window. Hydration must drop it — no fresh window.
-  await page.evaluate((star) => {
-    localStorage.setItem('primero-galaxy:user-stars', JSON.stringify([star]));
-    sessionStorage.setItem(
-      'primero-galaxy:pending-toasts',
-      JSON.stringify([
-        { id: 't-expired', kind: 'removed', star, createdAt: Date.now() - 10_000 },
-      ])
-    );
-  }, makeSeedStar());
+  // Seed a "removed" (Undo) toast that expired before the reload: created
+  // well past the auto-dismiss window. Hydration must drop it — no fresh
+  // window.
+  await page.evaluate(
+    ({ star, ms }) => {
+      localStorage.setItem('primero-galaxy:user-stars', JSON.stringify([star]));
+      sessionStorage.setItem(
+        'primero-galaxy:pending-toasts',
+        JSON.stringify([
+          { id: 't-expired', kind: 'removed', star, createdAt: Date.now() - (ms + 2000) },
+        ])
+      );
+    },
+    { star: makeSeedStar(), ms: TOAST_DURATION_MS }
+  );
 
   await page.reload();
   await expect

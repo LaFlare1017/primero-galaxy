@@ -7,6 +7,10 @@ import { defineConfig } from '@playwright/test';
  * HMR/dev-recompile flakiness: `npm run build && npm run start -- -p 3100`.
  * Point `reuseExistingServer` at a server you started yourself to skip the
  * rebuild for local iteration.
+ *
+ * The build is isolated to `.next-e2e` via NEXT_E2E_DIST_DIR so it never
+ * touches the dev server's `.next` (dev and prod would otherwise clobber
+ * each other in a shared checkout).
  */
 export default defineConfig({
   testDir: './e2e',
@@ -26,7 +30,8 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   webServer: {
-    command: 'npm run build && npm run start -- -p 3100',
+    command:
+      'NEXT_E2E_DIST_DIR=.next-e2e npm run build && NEXT_E2E_DIST_DIR=.next-e2e npm run start -- -p 3100',
     url: 'http://localhost:3100',
     reuseExistingServer: !process.env.CI,
     timeout: 300_000,

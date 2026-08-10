@@ -12,8 +12,11 @@ const USER_STARS_KEY = 'primero-galaxy:user-stars';
 // die with the tab, matching the short toast window.
 const PENDING_TOASTS_KEY = 'primero-galaxy:pending-toasts';
 
-/** How long a toast stays actionable before auto-dismissing (ms). */
-export const TOAST_DURATION_MS = 8000;
+/** How long a toast stays actionable before auto-dismissing (ms).
+ * 12s gives a user time to actually reach the "See trajectory" / Undo
+ * actions after a camera flight — and keeps the e2e assertions clear of the
+ * auto-dismiss race on slow/loaded machines. */
+export const TOAST_DURATION_MS = 12000;
 
 export function loadUserStars(): Company[] {
   try {
@@ -68,6 +71,16 @@ export interface GalaxyToast {
 
 function makeToastId(): string {
   return `t-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+/**
+ * Keep at most one toast per (kind, company): removing or re-adding the same
+ * company twice inside the toast window supersedes the older toast instead of
+ * stacking two identical ones (the newest always carries the current state).
+ */
+function upsertToast(toasts: GalaxyToast[], toast: GalaxyToast): GalaxyToast[] {
+  const key = (t: GalaxyToast) => `${t.kind}:${t.star.slug}`;
+  return [...toasts.filter((t) => key(t) !== key(toast)), toast];
 }
 
 interface GalaxyState {
@@ -167,11 +180,14 @@ export const useGalaxyStore = create<GalaxyState>((set) => ({
       const userStars = [...state.userStars, star];
       persistUserStars(userStars);
       // Persist the "added" toast too, so the "See trajectory" prompt
-      // survives a refresh right after adding.
-      const toasts: GalaxyToast[] = [
-        ...state.toasts,
-        { id: makeToastId(), kind: 'added', star, createdAt: Date.now() },
-      ];
+      // survives a refresh right after adding. A re-add of the same company
+      // supersedes the previous toast for it.
+      const toasts = upsertToast(state.toasts, {
+        id: makeToastId(),
+        kind: 'added',
+        star,
+        createdAt: Date.now(),
+      });
       persistPendingToasts(toasts);
       return { userStars, toasts };
     }),
@@ -187,17 +203,14 @@ export const useGalaxyStore = create<GalaxyState>((set) => ({
       // fly the camera back and reopen the panel.
       const wasSelected = state.selectedStar?.id === id;
       const toasts = star
-        ? [
-            ...state.toasts,
-            {
-              id: makeToastId(),
-              kind: 'removed' as const,
-              star,
-              inPortfolio: state.portfolioStars.some((s) => s.id === id),
-              wasSelected,
-              createdAt: Date.now(),
-            },
-          ]
+        ? upsertToast(state.toasts, {
+            id: makeToastId(),
+            kind: 'removed',
+            star,
+            inPortfolio: state.portfolioStars.some((s) => s.id === id),
+            wasSelected,
+            createdAt: Date.now(),
+          })
         : state.toasts;
       // If the star being removed is the one on screen, reset the view too
       // (deleting from the Add sheet while a planet panel is open behind it).
