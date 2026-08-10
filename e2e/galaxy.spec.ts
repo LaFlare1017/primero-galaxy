@@ -1250,3 +1250,67 @@ test('every landing-page CTA lands in the galaxy tool at /galaxy', async ({ page
     expect(starCount, `${label} CTA should land in the ${STAR_COUNT}-star galaxy`).toBe(STAR_COUNT);
   }
 });
+
+/**
+ * Sample the landing page's reactive-lines canvas: a hash of every 4th pixel
+ * (animation moves the lines, so any redraw changes the hash) plus a count of
+ * non-background pixels (proves a frame actually painted).
+ */
+async function readCanvasFrame(page: Page) {
+  return page.evaluate(() => {
+    const canvas = document.querySelector('canvas') as HTMLCanvasElement | null;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return { hash: -1, nonBg: 0 };
+    const d = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+    let hash = 0;
+    let nonBg = 0;
+    for (let i = 0; i < d.length; i += 16) {
+      hash = ((hash * 31 + d[i]) | 0) ^ (d[i + 1] << 4) ^ (d[i + 2] << 8);
+      // The canvas base is the app void (#030308); anything else is a line.
+      if (d[i] !== 3 || d[i + 1] !== 3 || d[i + 2] !== 8) nonBg++;
+    }
+    return { hash, nonBg };
+  });
+}
+
+test('the reactive-lines background animates under normal motion (control)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.goto('/');
+  await page.waitForLoadState('networkidle');
+
+  // The animation is deferred until the first mouse move — start it, then
+  // confirm the frame actually painted.
+  await page.mouse.move(720, 450, { steps: 3 });
+  await expect
+    .poll(async () => (await readCanvasFrame(page)).nonBg, { timeout: 10_000 })
+    .toBeGreaterThan(0);
+  const first = await readCanvasFrame(page);
+
+  // The cursor is still lerping to its target, so consecutive frames must
+  // differ — this proves the harness can actually detect animation (and that
+  // the reduced-motion test below isn't vacuously passing).
+  await page.waitForTimeout(400);
+  const second = await readCanvasFrame(page);
+  expect(second.hash).not.toBe(first.hash);
+});
+
+test('the reactive-lines background draws one static frame under reduced motion', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  await page.waitForLoadState('networkidle');
+
+  // A single static frame painted on mount — no mouse interaction needed.
+  await expect
+    .poll(async () => (await readCanvasFrame(page)).nonBg, { timeout: 10_000 })
+    .toBeGreaterThan(0);
+  const first = await readCanvasFrame(page);
+
+  // Time passes: the canvas must NOT animate (frames stay identical).
+  await page.waitForTimeout(400);
+  expect((await readCanvasFrame(page)).hash).toBe(first.hash);
+
+  // Even mouse movement must not start the animation.
+  await page.mouse.move(700, 400, { steps: 5 });
+  await page.waitForTimeout(300);
+  expect((await readCanvasFrame(page)).hash).toBe(first.hash);
+});

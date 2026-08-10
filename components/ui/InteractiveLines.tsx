@@ -87,6 +87,14 @@ function useCanvasAnimation({
 
     const st = stateRef.current;
 
+    // Under prefers-reduced-motion the canvas draws one static frame (on
+    // mount and after resizes) and never starts the animation loop — matching
+    // the app's CSS handling of the legend bubbles. Evaluated once at mount.
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const drawStatic = () => {
+      onDrawRef.current(ctx, st);
+    };
+
     const setup = () => {
       const dpr = window.devicePixelRatio || 1;
       const rect = container.getBoundingClientRect();
@@ -104,6 +112,7 @@ function useCanvasAnimation({
     };
 
     const start = () => {
+      if (reduceMotion) return; // static frame only — never animate
       if (!st.animationId && st.isVisible && st.isPageVisible) {
         st.animationId = requestAnimationFrame(loop);
       }
@@ -119,7 +128,12 @@ function useCanvasAnimation({
     setup();
     onSetupRef.current?.(ctx, st);
 
-    if (!deferStart) start();
+    if (reduceMotion) {
+      // A single static frame instead of the animation loop.
+      drawStatic();
+    } else if (!deferStart) {
+      start();
+    }
 
     let debTimer: ReturnType<typeof setTimeout>;
     const onResize = () => {
@@ -127,7 +141,7 @@ function useCanvasAnimation({
       debTimer = setTimeout(() => {
         stop();
         setup();
-        start();
+        reduceMotion ? drawStatic() : start();
       }, 100);
     };
 
