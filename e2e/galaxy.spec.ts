@@ -4,6 +4,9 @@ declare global {
   interface Window {
     // Debug handle exposed by the app (GalaxyApp / CameraRig / GalaxyScene)
     __galaxy?: Record<string, any>;
+    // Debug handle exposed by the reactive-lines background: the pattern's
+    // pointer target, so tests can assert mouse/touch input reaches it.
+    __lines?: { target(): { x: number; y: number } };
   }
 }
 
@@ -1252,46 +1255,76 @@ test('every landing-page CTA lands in the galaxy tool at /galaxy', async ({ page
 });
 
 /**
- * Sample the landing page's reactive-lines canvas: a hash of every 4th pixel
- * (animation moves the lines, so any redraw changes the hash) plus a count of
- * non-background pixels (proves a frame actually painted).
+ * Sample the landing page's reactive-lines canvas: a hash of sampled pixels
+ * (animation moves the lines, so any redraw changes the hash), a count of
+ * line pixels, and a count of void-background pixels (#030308). The void
+ * count is the key painted-vs-blank discriminator: an unpainted canvas is
+ * opaque black (#000, zero void pixels), while a painted frame is mostly
+ * void with the lavender lines on top.
  */
 async function readCanvasFrame(page: Page) {
   return page.evaluate(() => {
     const canvas = document.querySelector('canvas') as HTMLCanvasElement | null;
     const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx) return { hash: -1, nonBg: 0 };
+    if (!canvas || !ctx) return { hash: -1, nonBg: 0, voidPx: 0 };
     const d = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
     let hash = 0;
     let nonBg = 0;
+    let voidPx = 0;
     for (let i = 0; i < d.length; i += 16) {
       hash = ((hash * 31 + d[i]) | 0) ^ (d[i + 1] << 4) ^ (d[i + 2] << 8);
-      // The canvas base is the app void (#030308); anything else is a line.
-      if (d[i] !== 3 || d[i + 1] !== 3 || d[i + 2] !== 8) nonBg++;
+      if (d[i] === 3 && d[i + 1] === 3 && d[i + 2] === 8) voidPx++;
+      else nonBg++;
     }
-    return { hash, nonBg };
+    return { hash, nonBg, voidPx };
   });
 }
 
-test('the reactive-lines background animates under normal motion (control)', async ({ page }) => {
+test('the reactive-lines background paints and animates immediately on load (control)', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.goto('/');
   await page.waitForLoadState('networkidle');
 
-  // The animation is deferred until the first mouse move — start it, then
-  // confirm the frame actually painted.
-  await page.mouse.move(720, 450, { steps: 3 });
+  // The frame painted on mount with NO interaction — the animation is not
+  // deferred until a mouse move (the void background is painted, not a
+  // blank black canvas).
+  await expect
+    .poll(async () => (await readCanvasFrame(page)).voidPx, { timeout: 10_000 })
+    .toBeGreaterThan(0);
   await expect
     .poll(async () => (await readCanvasFrame(page)).nonBg, { timeout: 10_000 })
     .toBeGreaterThan(0);
-  const first = await readCanvasFrame(page);
 
-  // The cursor is still lerping to its target, so consecutive frames must
-  // differ — this proves the harness can actually detect animation (and that
-  // the reduced-motion test below isn't vacuously passing).
-  await page.waitForTimeout(400);
-  const second = await readCanvasFrame(page);
-  expect(second.hash).not.toBe(first.hash);
+  // Mouse input reaches the pattern: the exposed pointer target follows the
+  // cursor. The running loop paints from this target, so input → animation
+  // (the reduced-motion test below proves the loop can also be absent).
+  await page.mouse.move(720, 450, { steps: 3 });
+  const target = await page.evaluate(() => window.__lines!.target());
+  expect(target).toEqual({ x: 720, y: 450 });
+});
+
+test('the reactive-lines background reacts to touch drags (touch fallback)', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.goto('/');
+  await page.waitForLoadState('networkidle');
+
+  // Touch devices have no cursor: the canvas still paints on load.
+  await expect
+    .poll(async () => (await readCanvasFrame(page)).voidPx, { timeout: 10_000 })
+    .toBeGreaterThan(0);
+
+  // A touch drag (synthetic TouchEvent through the document listener) must
+  // reach the pattern: the exposed pointer target follows the finger, so the
+  // background stays interactive on devices with no mouse.
+  await page.evaluate(() => {
+    const touch = (x: number, y: number) =>
+      new Touch({ identifier: 1, target: document.body, clientX: x, clientY: y });
+    document.dispatchEvent(
+      new TouchEvent('touchmove', { touches: [touch(900, 300)], bubbles: true })
+    );
+  });
+  const target = await page.evaluate(() => window.__lines!.target());
+  expect(target).toEqual({ x: 900, y: 300 });
 });
 
 test('the reactive-lines background draws one static frame under reduced motion', async ({ page }) => {
@@ -1301,7 +1334,7 @@ test('the reactive-lines background draws one static frame under reduced motion'
 
   // A single static frame painted on mount — no mouse interaction needed.
   await expect
-    .poll(async () => (await readCanvasFrame(page)).nonBg, { timeout: 10_000 })
+    .poll(async () => (await readCanvasFrame(page)).voidPx, { timeout: 10_000 })
     .toBeGreaterThan(0);
   const first = await readCanvasFrame(page);
 

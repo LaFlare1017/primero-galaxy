@@ -201,7 +201,9 @@ export default function InteractiveLines({
   const cfgRef = useRef({ linesNum: 40, bias: 0.5 });
 
   const { containerRef, canvasRef, stateRef } = useCanvasAnimation({
-    deferStart: true,
+    // Start on load: the background must be visible without a mouse move —
+    // touch devices never fire one, so deferring would leave a blank canvas.
+    deferStart: false,
 
     onSetup: (e, t) => {
       mouseRef.current.targetX = t.width / 2;
@@ -322,15 +324,19 @@ export default function InteractiveLines({
 
     let t = e.getBoundingClientRect();
 
-    let started = false;
-    let r = (ev: MouseEvent) => {
+    // Mouse AND touch drive the pattern: touchmove keeps the background
+    // interactive on devices with no cursor. The loop starts on load, so
+    // this only re-targets the pointer/finger — nothing here gates whether
+    // the animation runs.
+    let target = (clientX: number, clientY: number) => {
       if (!stateRef.current.isVisible) return;
-      mouseRef.current.targetX = ev.clientX - t.left;
-      mouseRef.current.targetY = ev.clientY - t.top;
-      if (!started) {
-        started = true;
-        (canvasRef.current as any)?.__canvasStart?.();
-      }
+      mouseRef.current.targetX = clientX - t.left;
+      mouseRef.current.targetY = clientY - t.top;
+    };
+    let r = (ev: MouseEvent) => target(ev.clientX, ev.clientY);
+    let touch = (ev: TouchEvent) => {
+      const pt = ev.touches[0];
+      if (pt) target(pt.clientX, pt.clientY);
     };
 
     let n = 0;
@@ -343,10 +349,21 @@ export default function InteractiveLines({
     };
 
     document.addEventListener("mousemove", r, { passive: true });
+    document.addEventListener("touchmove", touch, { passive: true });
     window.addEventListener("scroll", i, { passive: true });
+
+    // Debug handle (harmless in prod): expose the pattern's pointer target so
+    // tests can assert mouse/touch input reaches it — pixel hashes alone
+    // can't, because the line count converges asymptotically after load.
+    const handle = window as unknown as Record<string, unknown>;
+    handle.__lines = {
+      ...((handle.__lines as Record<string, unknown>) ?? {}),
+      target: () => ({ x: mouseRef.current.targetX, y: mouseRef.current.targetY }),
+    };
 
     return () => {
       document.removeEventListener("mousemove", r);
+      document.removeEventListener("touchmove", touch);
       window.removeEventListener("scroll", i);
       n && cancelAnimationFrame(n);
     };
