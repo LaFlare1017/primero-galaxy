@@ -55,6 +55,8 @@ npm run test:e2e   # Playwright E2E against a production build on :3100
 
 The E2E suite proves the interaction pipeline with **real browser input**: boot + 500 stars, raycast → tooltip, double-click → planet view → trajectory → reset, the full add/delete/undo/localStorage loop, and toast remaining-window hydration.
 
+CI also enforces the Lighthouse accessibility/SEO scores (currently **100/100 on both routes**) via `scripts/lighthouse-gate.mjs`; the gate fails the build on any regression.
+
 ## How It Works
 
 - **Data** — `/api/companies` serves 500 deterministically generated companies (7 industries, 7 ERP systems, realistic maturity distributions, 50 PE-backed, 10 featured, seeded for reproducible tests). Layout positions are pre-computed with the force simulation.

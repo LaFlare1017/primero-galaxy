@@ -49,3 +49,37 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+
+  lighthouse:
+    name: Lighthouse a11y + SEO gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - uses: browser-actions/setup-chrome@v1
+      - run: npm run build
+      - name: Audit both routes and enforce the 100/100 gate
+        run: |
+          npm run start -- -p 3100 > /tmp/lh-server.log 2>&1 &
+          SERVER=$!
+          # Wait until the server answers before auditing.
+          for i in $(seq 1 30); do
+            curl -sf -o /dev/null http://localhost:3100/ && break
+            sleep 1
+          done
+          npx lighthouse http://localhost:3100/ --output=json \
+            --output-path=/tmp/lh-root.json \
+            --only-categories=accessibility,seo \
+            --chrome-flags="--headless=new --no-sandbox" --quiet
+          npx lighthouse http://localhost:3100/galaxy --output=json \
+            --output-path=/tmp/lh-galaxy.json \
+            --only-categories=accessibility,seo \
+            --chrome-flags="--headless=new --no-sandbox" --quiet \
+            --max-wait-for-load=60000
+          kill $SERVER 2>/dev/null || true
+          node scripts/lighthouse-gate.mjs /tmp/lh-root.json /tmp/lh-galaxy.json
