@@ -63,7 +63,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Santa Clara, CA',
     m: [97, 95, 82, 98, 86, 97],
     featured: true,
-    note: 'The AI infrastructure company — data-center compute is ~92% of revenue, ~$500B of AI-chip orders across 2025–26, and Huang publicly frames AI as a $3–4T market and the "new industrial revolution".',
+    note: 'The AI infrastructure company: data-center compute is ~92% of revenue, ~$500B of AI-chip orders across 2025–26, and Huang publicly frames AI as a $3–4T market and the "new industrial revolution".',
   },
   {
     name: 'Microsoft',
@@ -107,7 +107,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Menlo Park, CA',
     m: [86, 88, 76, 89, 74, 90],
     featured: true,
-    note: 'Open-sourced Llama, formed Superintelligence Labs for AGI research, and Zuckerberg publicly frames AI as the primary driver of ad targeting and recommendation revenue — "the most important trend of our time".',
+    note: 'Open-sourced Llama, formed Superintelligence Labs for AGI research, and Zuckerberg publicly frames AI as the primary driver of ad targeting and recommendation revenue, calling it "the most important trend of our time".',
   },
   {
     name: 'Oracle',
@@ -118,7 +118,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Austin, TX',
     m: [84, 86, 74, 87, 78, 82],
     featured: true,
-    note: 'Aggressive AI-infrastructure push — Stargate data-center deals, OCI AI superclusters, and Ellison publicly describing an "AI arms race" with AI cloud backlog the headline metric on earnings calls.',
+    note: 'Aggressive AI-infrastructure push: Stargate data-center deals, OCI AI superclusters, and Ellison publicly describing an "AI arms race" with AI cloud backlog the headline metric on earnings calls.',
   },
   {
     name: 'Broadcom',

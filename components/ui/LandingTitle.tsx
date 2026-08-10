@@ -39,21 +39,30 @@ export function LandingTitle() {
         phase === 'out' ? 'animate-fade-out' : ''
       }`}
     >
+      <motion.p
+        className="text-[11px] font-semibold uppercase tracking-label text-trajectory"
+        initial={{ y: 10 }}
+        animate={{ y: 0 }}
+        transition={{ delay: 0.1, duration: 0.8, ease: 'easeOut' }}
+      >
+        AI Transformation Maturity Visualization
+      </motion.p>
       <motion.h1
-        className="text-center text-5xl font-semibold tracking-title text-star-bright md:text-[72px]"
+        className="mt-5 text-center text-4xl font-semibold leading-[1.05] tracking-title text-star-bright md:text-6xl"
         initial={{ y: 14 }}
         animate={{ y: 0 }}
-        transition={{ delay: 0.15, duration: 0.8, ease: 'easeOut' }}
+        transition={{ delay: 0.2, duration: 0.8, ease: 'easeOut' }}
       >
         The AI Transformation Galaxy
       </motion.h1>
       <motion.p
-        className="mt-5 text-xs uppercase tracking-label text-ui-muted md:text-sm"
+        className="mt-5 max-w-[62ch] text-center text-base leading-relaxed text-star-bright/90 md:text-lg"
         initial={{ y: 10 }}
         animate={{ y: 0 }}
         transition={{ delay: 0.5, duration: 0.8, ease: 'easeOut' }}
       >
-        Fortune 500 companies. One universe. Explore.
+        Each star is a Fortune 500 company embarking on an AI Transformation
+        journey. Explore.
       </motion.p>
     </div>
   );

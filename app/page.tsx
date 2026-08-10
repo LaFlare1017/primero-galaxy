@@ -6,7 +6,7 @@ import { breathTiming } from '@/lib/constants';
 import { COMPANY_COUNT } from '@/lib/fortune500-data';
 
 export const metadata: Metadata = {
-  title: 'Primero Galaxy — An Explorable AI Transformation Galaxy',
+  title: 'Primero Galaxy: An Explorable AI Transformation Galaxy',
   description:
     'Every star is a Fortune 500 enterprise. Every constellation is a transformation strategy. Every trajectory is a path to AI maturity. Explore real companies in 3D.',
   alternates: { canonical: '/' },
@@ -139,7 +139,7 @@ export default function LandingPage() {
           style={fade(0.4)}
         >
           A living 3D map of America&apos;s largest enterprises becoming
-          AI-native. Color marks each company&apos;s estimated maturity — zoom in
+          AI-native. Color marks each company&apos;s estimated maturity; zoom in
           and any star becomes a planet you can orbit, inspect, and transform.
         </p>
         <div
@@ -175,7 +175,7 @@ export default function LandingPage() {
             The galaxy <span className="text-ui-muted">is</span> the interface.
           </h2>
           <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-ui-dim">
-            No dashboards, no sidebars, no panels. Every star earns its place —
+            No dashboards, no sidebars, no panels. Every star earns its place,
             and every one of them tells the story of a Fortune 500 company&apos;s
             AI transformation, estimated from what it has publicly said and
             shipped. The closer you look, the more the data reveals itself.
@@ -203,9 +203,9 @@ export default function LandingPage() {
                 A star is a Fortune 500 company
               </h3>
               <p className="mt-2 text-[13px] leading-relaxed text-ui-muted">
-                {COMPANY_COUNT} real enterprises across 12 industries —
+                {COMPANY_COUNT} real enterprises across 12 industries:
                 Technology, Financial Services, Healthcare, Retail, Energy and
-                more — each with an estimated AI maturity profile compiled
+                more, each with an estimated AI maturity profile compiled
                 from public disclosures.
               </p>
             </div>
@@ -226,7 +226,7 @@ export default function LandingPage() {
               <p className="mt-2 text-[13px] leading-relaxed text-ui-muted">
                 Warm orange means early stage. Amber is mid-transformation.
                 Teal signals a company that has arrived. Size scales with
-                maturity too — the leaders are the biggest stars.
+                maturity too. The leaders are the biggest stars.
               </p>
             </div>
             <div className="rounded-xl border border-border-subtle bg-nebula/40 p-6">
@@ -250,7 +250,7 @@ export default function LandingPage() {
                 Trajectories are transformation
               </h3>
               <p className="mt-2 text-[13px] leading-relaxed text-ui-muted">
-                Violet paths arc from every company to its projected future —
+                Violet paths arc from every company to its projected future,
                 with EBITDA impact, exit multiple, and milestone-by-milestone
                 plans.
               </p>
@@ -273,7 +273,7 @@ export default function LandingPage() {
                   Low maturity · 0–40
                 </h3>
                 <div className="mt-0.5 text-[12px] text-ui-muted">
-                  Early AI adoption — data scattered, workflows manual.
+                  Early AI adoption: data scattered, workflows manual.
                 </div>
               </div>
             </div>
@@ -309,7 +309,7 @@ export default function LandingPage() {
               </h3>
               <div className="mt-0.5 text-[12px] text-ui-muted">
                 The projected route from where a company is to where it could
-                be — complete with milestones and ROI.
+                be, complete with milestones and ROI.
               </div>
             </div>
           </div>
@@ -398,7 +398,7 @@ export default function LandingPage() {
                 },
                 {
                   title: 'Planet',
-                  body: 'Inspect one company — a radar chart of five maturity dimensions, its trajectory, and projected ROI.',
+                  body: 'Inspect one company: a radar chart of five maturity dimensions, its trajectory, and projected ROI.',
                   color: '#00D9C0',
                   glow: 'rgba(0,217,192,0.5)',
                   starIndex: 6,
@@ -441,7 +441,7 @@ export default function LandingPage() {
               <p className="mt-2 text-[13px] leading-relaxed text-ui-muted">
                 Every star opens into a full profile: data infrastructure,
                 workflow standardization, AI deployment, governance, and
-                talent — each scored 0–100.
+                talent, each scored 0–100.
               </p>
             </div>
             <div className="rounded-xl border border-border-subtle bg-void/60 p-6">
@@ -458,7 +458,7 @@ export default function LandingPage() {
                 Search the galaxy
               </h3>
               <p className="mt-2 text-[13px] leading-relaxed text-ui-muted">
-                Type any company name and fly straight to its star — every one
+                Type any company name and fly straight to its star; every one
                 of the {COMPANY_COUNT} is a few keystrokes from its full
                 profile.
               </p>
@@ -479,7 +479,7 @@ export default function LandingPage() {
           </h2>
           <p className="mx-auto mt-4 max-w-lg text-[14px] leading-relaxed text-ui-dim">
             Add your company to the galaxy and see the trajectory you could
-            be on — or reach out to Primero for a full maturity assessment.
+            be on, or reach out to Primero for a full maturity assessment.
           </p>
           <div className="mt-8 flex flex-col items-center gap-6">
             <Link
@@ -501,7 +501,7 @@ export default function LandingPage() {
           Your company could be one of the stars.
         </h2>
         <p className="mx-auto mt-4 max-w-lg text-[14px] leading-relaxed text-ui-dim">
-          Fly in, look around, and add yourself to the map — or just lose
+          Fly in, look around, and add yourself to the map, or just lose
           yourself in {COMPANY_COUNT} stories of transformation.
         </p>
         <Link

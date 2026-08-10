@@ -143,7 +143,7 @@ export function PlanetPanel() {
               </div>
               {!selected.isUserAdded && (
                 <p className="mt-1.5 text-[10px] text-ui-muted/60">
-                  Directional estimate from public AI disclosures — research use only
+                  Directional estimate from public AI disclosures (research use only)
                 </p>
               )}
             </div>
@@ -274,7 +274,7 @@ export function PlanetPanel() {
                           </div>
                           <div className="pb-1">
                             <div className="text-[12px] font-medium text-star-bright">
-                              Month {m.month} — {m.title}
+                              Month {m.month}: {m.title}
                             </div>
                             <div className="text-[11px] text-ui-muted">{m.description}</div>
                             <div className="mt-0.5 text-[11px] font-medium text-maturity-high">

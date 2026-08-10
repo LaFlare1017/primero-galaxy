@@ -1137,15 +1137,15 @@ test('the landing page contact form renders and submits a pre-filled mailto', as
   // the app, so the address never appears as plaintext in the repo.
   expect(mailtoUrl.pathname).toBe(atob('SG9kbGVyb25AZ21haWwuY29t'));
   expect(mailtoUrl.searchParams.get('subject')).toBe(
-    'Primero Galaxy — contact from Jane Smith'
+    'Primero Galaxy: contact from Jane Smith'
   );
   const body = mailtoUrl.searchParams.get('body');
   expect(body).toContain('We would love a full maturity assessment');
-  expect(body).toContain('— Jane Smith (jane@company.com)');
+  expect(body).toContain('Jane Smith (jane@company.com)');
 
   // The confirmation renders after submit.
   await expect(
-    page.getByText('Opening your email app — your message is ready to send.')
+    page.getByText('Opening your email app. Your message is ready to send.')
   ).toBeVisible();
 });
 

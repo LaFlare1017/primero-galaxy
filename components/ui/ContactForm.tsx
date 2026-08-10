@@ -24,13 +24,13 @@ export function ContactForm() {
     // in the markup or the JS bundle (base64 keeps it out of plaintext).
     const recipient = atob('SG9kbGVyb25AZ21haWwuY29t');
     const subject = encodeURIComponent(
-      `Primero Galaxy — contact from ${name.trim() || 'a visitor'}`
+      `Primero Galaxy: contact from ${name.trim() || 'a visitor'}`
     );
     const body = encodeURIComponent(
       [
         message.trim(),
         '',
-        `— ${name.trim() || 'Anonymous'}${email.trim() ? ` (${email.trim()})` : ''}`,
+        `${name.trim() || 'Anonymous'}${email.trim() ? ` (${email.trim()})` : ''}`,
       ].join('\n')
     );
     window.location.href = `mailto:${recipient}?subject=${subject}&body=${body}`;
@@ -91,7 +91,7 @@ export function ContactForm() {
       </button>
       {sent && (
         <p className="mt-3 text-center text-[12px] text-maturity-high">
-          Opening your email app — your message is ready to send.
+          Opening your email app. Your message is ready to send.
         </p>
       )}
     </form>

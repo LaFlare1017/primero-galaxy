@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: '404 — Not Found · Primero Galaxy',
+  title: '404: Not Found · Primero Galaxy',
 };
 
 const VIDEO_SRC =
