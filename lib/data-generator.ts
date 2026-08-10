@@ -40,6 +40,8 @@ function buildCompanies(count: number): Company[] {
       ticker: meta?.ticker || undefined,
       domain: meta?.domain || undefined,
       aiPositioning: e.note,
+      aiSource: e.source,
+      dimensionSources: e.dimensionSources,
       isFeatured: Boolean(e.featured),
       isUserAdded: false,
     };

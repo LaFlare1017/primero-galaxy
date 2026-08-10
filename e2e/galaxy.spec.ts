@@ -67,7 +67,7 @@ async function getTargetCompany(page: Page) {
     (c: any) => c.trajectory && c.maturity.overall > 55 && c.maturity.overall < 85
   );
   if (!target) throw new Error('no trajectory company found in dataset');
-  return target as { id: string; name: string };
+  return target as { id: string; name: string; domain: string };
 }
 
 /** Point the camera at the star from ~260 units so it sits centered on screen. */
@@ -298,7 +298,10 @@ test('double-clicking a star opens planet view; trajectory + reset complete the 
   await expect(page.getByText('Revenue', { exact: true })).toBeVisible();
   await expect(page.getByText('Employees', { exact: true })).toBeVisible();
   await expect(page.getByText('sector median').first()).toBeVisible();
-  const profileLink = page.getByRole('link', { name: /↗$/ });
+  // The profile header links to the company website; the panel also carries
+  // per-dimension "Source ↗" links, so match the domain link by its exact
+  // accessible name rather than any link ending in "↗".
+  const profileLink = page.getByRole('link', { name: `${company.domain} ↗` });
   await expect(profileLink).toBeVisible();
   await expect(profileLink).toHaveAttribute('target', '_blank');
 

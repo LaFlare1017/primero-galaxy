@@ -1,5 +1,7 @@
 // Full TypeScript interfaces for the Primero Galaxy data model.
 
+import type { DimensionKey } from '@/lib/constants';
+
 export type Industry =
   | 'Technology'
   | 'Financial Services'
@@ -104,6 +106,13 @@ export interface Company {
    * omitted.
    */
   aiPositioning?: string;
+  /** Source URL anchoring aiPositioning (dataset stars only). */
+  aiSource?: string;
+  /**
+   * Per-dimension evidence URLs (the sources a dimension score was derived
+   * from). Falls back to aiSource per dimension when missing.
+   */
+  dimensionSources?: Partial<Record<DimensionKey, string>>;
 
   // Flags
   isFeatured: boolean; // Highlighted in galaxy

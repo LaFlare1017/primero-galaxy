@@ -99,10 +99,53 @@ export function maturityLabel(score: number): string {
   return 'Low';
 }
 
-export const DIMENSIONS: { key: 'dataInfrastructure' | 'workflowStandardization' | 'aiDeployment' | 'governance' | 'talent'; label: string }[] = [
-  { key: 'dataInfrastructure', label: 'Data Infrastructure' },
-  { key: 'workflowStandardization', label: 'Workflow Standardization' },
-  { key: 'aiDeployment', label: 'AI Deployment' },
-  { key: 'governance', label: 'Governance' },
-  { key: 'talent', label: 'Talent' },
+export type DimensionKey =
+  | 'dataInfrastructure'
+  | 'workflowStandardization'
+  | 'aiDeployment'
+  | 'governance'
+  | 'talent';
+
+export interface Dimension {
+  key: DimensionKey;
+  label: string;
+  /**
+   * Methodology: what the pillar measures and how its 0-100 score is
+   * derived from public AI disclosures (earnings calls, product launches,
+   * responsible-AI pages, reported deployments).
+   */
+  description: string;
+}
+
+export const DIMENSIONS: Dimension[] = [
+  {
+    key: 'dataInfrastructure',
+    label: 'Data Infrastructure',
+    description:
+      'The depth of the data foundation: cloud and data-platform maturity, unified and machine-readable data, and analytics at scale. Scores draw on disclosed cloud migrations, enterprise data platforms, and ML-ready pipelines.',
+  },
+  {
+    key: 'workflowStandardization',
+    label: 'Workflow Standardization',
+    description:
+      'How far core processes (operations, supply chain, customer workflows) are codified and automated rather than run as isolated pilots. Scores draw on disclosed automation programs, digital-twin usage, and process-reengineering initiatives.',
+  },
+  {
+    key: 'aiDeployment',
+    label: 'AI Deployment',
+    description:
+      'The breadth and maturity of production AI: named products and assistants shipped to customers and employees, with disclosed scale such as user counts, seats, or revenue run rates. A named product with measurable adoption is the strongest evidence.',
+  },
+  {
+    key: 'governance',
+    label: 'Governance',
+    description:
+      'Whether the company runs AI under formal governance: published responsible-AI principles, ethics oversight, executive accountability, and documented risk frameworks. Scores draw on public AI-governance pages and regulatory disclosures.',
+  },
+  {
+    key: 'talent',
+    label: 'Talent',
+    description:
+      'Workforce AI capability: disclosed AI hiring, dedicated AI research or engineering orgs, upskilling programs, and executive leadership on AI. Named AI orgs and executive-level accountability score highest.',
+  },
 ];

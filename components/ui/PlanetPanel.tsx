@@ -20,6 +20,9 @@ export function PlanetPanel() {
   // Two-step confirm for deleting a user-added star; auto-cancels after 4s.
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
+  // Methodology expander for the maturity dimensions block.
+  const [showMethodology, setShowMethodology] = useState(false);
+
   // Reset the confirm state when switching to a different company.
   useEffect(() => {
     setConfirmingDelete(false);
@@ -109,6 +112,16 @@ export function PlanetPanel() {
                 <p className="mt-1 text-[12px] leading-relaxed text-ui-dim">
                   {selected.aiPositioning}
                 </p>
+                {selected.aiSource && (
+                  <a
+                    href={selected.aiSource}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-ui-dim transition-colors hover:text-star-bright"
+                  >
+                    Source ↗
+                  </a>
+                )}
               </div>
             )}
 
@@ -176,14 +189,53 @@ export function PlanetPanel() {
                   Maturity dimensions
                 </span>
                 <span className="flex items-center gap-1.5 text-[10px] text-ui-muted/70">
-                  <span className="h-px w-3 bg-ui-muted/70" />
+                  <button
+                    onClick={() => setShowMethodology(!showMethodology)}
+                    className="rounded-sm px-1 py-0.5 text-[10px] text-ui-muted transition-colors hover:text-star-bright"
+                    aria-expanded={showMethodology}
+                  >
+                    Methodology
+                  </button>
+                  <span aria-hidden="true" className="h-px w-3 bg-ui-muted/70" />
                   sector median
                 </span>
               </div>
+
+              <AnimatePresence initial={false}>
+                {showMethodology && (
+                  <motion.div
+                    key="methodology"
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.25, ease: EASE }}
+                    className="overflow-hidden"
+                  >
+                    <div className="mb-4 space-y-2.5 rounded-lg border border-border-subtle bg-nebula/60 p-3">
+                      <p className="text-[10px] leading-relaxed text-ui-muted">
+                        Directional 0-100 estimates synthesized from public AI
+                        disclosures; each dimension links to the evidence it is
+                        derived from.
+                      </p>
+                      {DIMENSIONS.map((d) => (
+                        <div key={d.key}>
+                          <div className="text-[11px] font-medium text-ui-dim">{d.label}</div>
+                          <p className="mt-0.5 text-[10px] leading-relaxed text-ui-muted/80">
+                            {d.description}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               <div className="space-y-3">
                 {DIMENSIONS.map((d, i) => {
                   const score = selected.maturity[d.key];
                   const median = SECTOR_MEDIAN[selected.industry][i + 1];
+                  const source =
+                    selected.dimensionSources?.[d.key] ?? selected.aiSource;
                   return (
                     <div key={d.key}>
                       <div className="flex items-center justify-between text-[11px]">
@@ -207,6 +259,16 @@ export function PlanetPanel() {
                           aria-hidden="true"
                         />
                       </div>
+                      {!selected.isUserAdded && source && (
+                        <a
+                          href={source}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-1 inline-block text-[10px] text-ui-muted transition-colors hover:text-star-bright"
+                        >
+                          Source ↗
+                        </a>
+                      )}
                     </div>
                   );
                 })}

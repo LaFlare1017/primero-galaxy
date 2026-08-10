@@ -1,3 +1,4 @@
+import type { DimensionKey } from '@/lib/constants';
 import type { Industry } from '@/types';
 
 /**
@@ -50,6 +51,13 @@ export interface Fortune500AIEntry {
   featured?: boolean;
   /** Public AI positioning: what the company has said/done, with anchors. */
   note: string;
+  /** Source URL backing the AI positioning note. */
+  source: string;
+  /**
+   * Per-dimension evidence URLs (the sources a dimension score was derived
+   * from). Falls back to `source` in the UI when a dimension is missing.
+   */
+  dimensionSources?: Partial<Record<DimensionKey, string>>;
 }
 
 export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
@@ -64,6 +72,11 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     m: [97, 95, 82, 98, 86, 97],
     featured: true,
     note: 'The AI infrastructure company: data-center compute is ~92% of revenue, ~$500B of AI-chip orders across 2025–26, and Huang publicly frames AI as a $3–4T market and the "new industrial revolution".',
+    source: 'https://nvidianews.nvidia.com/news/nvidia-announces-financial-results-for-fourth-quarter-and-fiscal-2026',
+    dimensionSources: {
+      governance: 'https://www.nvidia.com/en-us/ai-trust-center/trustworthy-ai/',
+      talent: 'https://www.nvidia.com/en-us/about-nvidia/careers/',
+    },
   },
   {
     name: 'Microsoft',
@@ -75,6 +88,11 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     m: [95, 96, 85, 95, 90, 96],
     featured: true,
     note: 'Nadella reports >90% of the Fortune 500 use Microsoft 365 Copilot, an AI business past a $37B annual revenue run rate, and Copilot at 30M+ paid seats with autonomous agents the stated next phase.',
+    source: 'https://www.linkedin.com/posts/satyanadella_just-wrapped-our-quarterly-earnings-call-activity-7455387581535637504-TbEx',
+    dimensionSources: {
+      governance: 'https://www.microsoft.com/en-us/ai/principles-and-approach',
+      talent: 'https://blogs.microsoft.com/blog/2025/01/13/introducing-core-ai-platform-and-tools/',
+    },
   },
   {
     name: 'Alphabet',
@@ -86,6 +104,12 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     m: [93, 94, 78, 94, 82, 95],
     featured: true,
     note: 'Gemini models woven through Search, Cloud and Workspace, TPUs and DeepMind anchor an AI-first strategy, and Pichai publicly calls AI "the platform shift of a lifetime" with Cloud AI growth cited on every earnings call.',
+    source: 'https://abc.xyz/investor/events/event-details/2026/2025-Q4-Earnings-Call-2026-Dr_C033hS6/default.aspx',
+    dimensionSources: {
+      governance: 'https://ai.google/principles/',
+      talent: 'https://deepmind.google/',
+      dataInfrastructure: 'https://cloud.google.com/ai-infrastructure',
+    },
   },
   {
     name: 'Amazon',
@@ -97,6 +121,11 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     m: [90, 95, 84, 91, 84, 92],
     featured: true,
     note: 'AWS AI revenue run rate crossed $15B (Jassy, Q1 2026), custom Trainium/Inferentia chip business roughly doubled to ~$20B, and Jassy publicly projects AI could make AWS a $600B business by 2036.',
+    source: 'https://www.aboutamazon.com/news/company-news/amazon-ceo-andy-jassy-aws-ai-q1-2026-earnings',
+    dimensionSources: {
+      governance: 'https://www.aboutamazon.com/what-we-do/artificial-intelligence-ai/responsible-ai',
+      dataInfrastructure: 'https://aws.amazon.com/ai/infrastructure/',
+    },
   },
   {
     name: 'Meta',
@@ -108,6 +137,11 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     m: [86, 88, 76, 89, 74, 90],
     featured: true,
     note: 'Open-sourced Llama, formed Superintelligence Labs for AGI research, and Zuckerberg publicly frames AI as the primary driver of ad targeting and recommendation revenue, calling it "the most important trend of our time".',
+    source: 'https://investor.atmeta.com/investor-news/press-release-details/2026/Meta-Reports-Fourth-Quarter-and-Full-Year-2025-Results/default.aspx',
+    dimensionSources: {
+      governance: 'https://ai.meta.com/static-resource/responsible-use-guide/',
+      talent: 'https://ai.meta.com/research/',
+    },
   },
   {
     name: 'Oracle',
@@ -119,6 +153,11 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     m: [84, 86, 74, 87, 78, 82],
     featured: true,
     note: 'Aggressive AI-infrastructure push: Stargate data-center deals, OCI AI superclusters, and Ellison publicly describing an "AI arms race" with AI cloud backlog the headline metric on earnings calls.',
+    source: 'https://blogs.oracle.com/ceo/from-the-q3-earnings-call',
+    dimensionSources: {
+      governance: 'https://www.oracle.com/il-en/corporate/responsible-ai-iso-42001/',
+      dataInfrastructure: 'https://www.oracle.com/ai-infrastructure/',
+    },
   },
   {
     name: 'Broadcom',
@@ -129,17 +168,22 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Palo Alto, CA',
     m: [85, 84, 72, 88, 80, 84],
     note: 'Custom AI accelerators for hyperscalers (Google TPUs, OpenAI) plus VMware AI; Hock Tan publicly calls AI networking and compute the company\'s largest growth engine.',
+    source: 'https://www.cnbc.com/2025/12/11/broadcom-avgo-q4-earnings-2025.html',
   },
   {
     name: 'Palantir',
     industry: 'Technology',
     founded: 2003,
-    revenue: 2900,
+    revenue: 4475,
     employees: 4500,
-    location: 'Denver, CO',
+    location: 'Miami, FL',
     m: [86, 88, 80, 88, 72, 86],
     featured: true,
-    note: 'AIP became its flagship product with triple-digit growth; CEO Alex Karp publicly frames enterprise AI adoption as an existential/national priority and the company entered the Fortune 500 in 2025.',
+    note: 'AIP became its flagship product; CEO Alex Karp publicly frames enterprise AI adoption as an existential/national priority, and the company is approaching Fortune 500 scale (FY2025 revenue $4.5B vs the $7.5B list cutoff).',
+    source: 'https://investors.palantir.com/news-details/2026/Palantir-Reports-Q4-2025-U-S--Comm-Revenue-Growth-of-137-YY-and-Revenue-Growth-of-70-YY-Issues-FY-2026-Revenue-Guidance',
+    dimensionSources: {
+      governance: 'https://palantir.com/docs/foundry/aip/ethics-governance/',
+    },
   },
   {
     name: 'ServiceNow',
@@ -150,6 +194,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Santa Clara, CA',
     m: [85, 84, 82, 86, 80, 82],
     note: 'Positioned as the enterprise "AI platform for business transformation"; McDermott publicly touts AI agents on the Now Platform as the fastest-growing product line.',
+    source: 'https://newsroom.servicenow.com/press-releases/details/2026/ServiceNow-Reports-Second-Quarter-2026-Financial-Results/default.aspx',
   },
   {
     name: 'Salesforce',
@@ -160,6 +205,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'San Francisco, CA',
     m: [82, 83, 80, 84, 78, 80],
     note: 'Agentforce agentic AI is the centerpiece of earnings calls; Benioff publicly claims tens of thousands of Agentforce deployments and positions Salesforce as the "AI CRM".',
+    source: 'https://www.salesforce.com/news/press-releases/2026/07/07/1-billion-ai-transformation-investment-switzerland/',
   },
   {
     name: 'Accenture',
@@ -170,6 +216,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'New York, NY',
     m: [80, 84, 78, 82, 80, 82],
     note: 'Invested $3B+ in AI and publicly reports thousands of generative-AI client projects, positioning "reinvention" consulting around AI as its growth engine.',
+    source: 'https://newsroom.accenture.com/news/2023/accenture-to-invest-3-billion-in-ai-to-accelerate-clients-reinvention',
   },
   {
     name: 'Adobe',
@@ -180,6 +227,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'San Jose, CA',
     m: [79, 82, 74, 82, 78, 80],
     note: 'Firefly generative models embedded across Creative Cloud with public messaging around IP-safe, commercially licensed AI and "AI-assisted creativity".',
+    source: 'https://business.adobe.com/products/firefly-business.html',
   },
   {
     name: 'AMD',
@@ -190,6 +238,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Santa Clara, CA',
     m: [83, 82, 72, 86, 78, 84],
     note: 'MI300/MI350 accelerators positioned head-to-head against Nvidia; Lisa Su publicly targets the AI data-center TAM as AMD\'s largest growth opportunity.',
+    source: 'https://www.crn.com/news/ai/2026/amd-q2-earnings-ceo-su-boosts-outlook-as-accelerator-cpu-sales-climb',
   },
   {
     name: 'Cisco',
@@ -200,6 +249,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'San Jose, CA',
     m: [68, 76, 68, 66, 74, 72],
     note: 'Splunk acquisition plus "AI-ready network" messaging; Robbins publicly frames AI workloads as driving a networking supercycle.',
+    source: 'https://fortune.com/2026/05/15/critical-infrastructure-ai-era-cisco-ceo-earnings-beat-shares-record/',
   },
   {
     name: 'IBM',
@@ -210,6 +260,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Armonk, NY',
     m: [78, 82, 76, 78, 84, 80],
     note: 'watsonx platform and open-source Granite models with an "AI for business" stance; publicly reports thousands of watsonx engagements and enterprise AI pilots.',
+    source: 'https://www.crn.com/news/software/2026/ibm-s-hybrid-cloud-and-ai-push-powers-major-q4-2025-growth-across-software-and-infrastructure',
   },
   {
     name: 'Dell Technologies',
@@ -220,6 +271,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Round Rock, TX',
     m: [66, 72, 64, 68, 70, 66],
     note: 'Publicly cites a multi-billion-dollar AI-server backlog and positions AI-optimized servers and "AI factory" services as its growth story.',
+    source: 'https://investors.delltechnologies.com/news-releases/news-release-details/dell-technologies-delivers-fourth-quarter-and-full-year-fiscal-3',
   },
   {
     name: 'Hewlett Packard Enterprise',
@@ -230,6 +282,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Spring, TX',
     m: [72, 76, 66, 74, 72, 72],
     note: 'AI systems (Cray) orders and the Juniper networking deal anchor Neri\'s public "AI-native portfolio" narrative.',
+    source: 'https://www.hpe.com/us/en/newsroom/press-release/2025/07/hewlett-packard-enterprise-closes-acquisition-of-juniper-networks-to-offer-industry-leading-comprehensive-cloud-native-ai-driven-portfolio.html',
   },
   {
     name: 'Intel',
@@ -240,6 +293,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Santa Clara, CA',
     m: [58, 62, 56, 58, 66, 60],
     note: 'Public AI positioning centers on the foundry push (Intel 18A) and AI PCs (Core Ultra) rather than data-center GPUs; Gaudi lags in the accelerator race.',
+    source: 'https://www.intc.com/news-events/press-releases/detail/1759/intel-reports-fourth-quarter-and-full-year-2025-financial',
   },
   {
     name: 'Qualcomm',
@@ -250,6 +304,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'San Diego, CA',
     m: [70, 74, 64, 72, 72, 74],
     note: 'On-device AI positioning (AI PCs, phones, automotive); publicly touts NPU leadership and hybrid device+cloud inference as its differentiation.',
+    source: 'https://futurumgroup.com/insights/qualcomm-unveils-future-of-intelligence-at-ces-2026-pushes-the-boundaries-of-on-device-ai/',
   },
   {
     name: 'Micron',
@@ -260,6 +315,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Boise, ID',
     m: [69, 72, 62, 72, 70, 68],
     note: 'HBM for AI accelerators sold out; Mehrotra publicly frames AI memory demand as a multi-year supercycle driving record revenue.',
+    source: 'https://fortune.com/2026/06/26/micron-technology-346-percent-revenue-surge-ai-memory-chips-hbm-earnings-2026/',
   },
   {
     name: 'Apple',
@@ -270,6 +326,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Cupertino, CA',
     m: [72, 78, 62, 74, 84, 76],
     note: 'Apple Intelligence across devices with a privacy-first, on-device public stance; slower to monetize generative AI but deeply embedded in hardware and OS.',
+    source: 'https://www.apple.com/newsroom/2026/06/apple-unveils-next-generation-of-apple-intelligence-siri-ai-and-more/',
   },
   {
     name: 'Intuit',
@@ -280,6 +337,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Mountain View, CA',
     m: [74, 78, 72, 76, 76, 74],
     note: 'GenOS and the Intuit Assist assistant; public messaging frames AI as the core of QuickBooks and TurboTax personalization and automation.',
+    source: 'https://investors.intuit.com/news-events/press-releases/detail/1254/intuit-supercharges-genos-for-delivery-of-done-for-you-agentic-ai-experiences-to-~100-million-consumers-businesses',
   },
   {
     name: 'Workday',
@@ -290,6 +348,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Pleasanton, CA',
     m: [70, 74, 72, 72, 74, 72],
     note: 'Illuminate AI and agentic HR/finance AI; publicly positioned as "AI for HR and finance" with a governance-first pitch.',
+    source: 'https://newsroom.workday.com/2025-09-16-Workday-Illuminate-TM-Expands-with-New-AI-Agents-for-HR,-Finance,-and-Industry',
   },
   {
     name: 'Palo Alto Networks',
@@ -300,6 +359,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Santa Clara, CA',
     m: [75, 76, 72, 76, 74, 76],
     note: 'Precision AI security platform; Arora publicly frames AI-first security as the industry\'s growth engine and ties platform consolidation to AI agents.',
+    source: 'https://www.paloaltonetworks.com/precision-ai-security',
   },
   {
     name: 'Cognizant',
@@ -310,6 +370,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Teaneck, NJ',
     m: [72, 74, 72, 72, 74, 74],
     note: 'Publicly commits to large-scale gen-AI upskilling and "AI-fueled services", positioning AI as reshaping the IT-services delivery model.',
+    source: 'https://www.prnewswire.com/news-releases/cognizant-launches-ai-training-data-services-to-accelerate-ai-model-development-at-enterprise-scale-302517315.html',
   },
   {
     name: 'Applied Materials',
@@ -320,6 +381,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Santa Clara, CA',
     m: [66, 68, 60, 68, 70, 68],
     note: 'Semiconductor equipment supplier riding AI-chip demand; public commentary ties growth to AI infrastructure buildout.',
+    source: 'https://ir.appliedmaterials.com/news-releases/news-release-details/applied-materials-announces-second-quarter-2026-results',
   },
   {
     name: 'HP Inc',
@@ -330,6 +392,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Palo Alto, CA',
     m: [54, 58, 52, 54, 60, 52],
     note: '"AI every day" AI-PC push and HP Print AI; modest public AI positioning relative to peers.',
+    source: 'https://www.wsj.com/business/earnings/hp-expects-growing-demand-for-ai-enabled-personal-computers-to-continue-b9be507f',
   },
   {
     name: 'Western Digital',
@@ -340,6 +403,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'San Jose, CA',
     m: [50, 54, 50, 52, 56, 50],
     note: 'AI-driven storage demand (data-center HDDs) cited on earnings; limited end-user AI strategy.',
+    source: 'https://www.pcmag.com/news/ai-demand-clears-out-western-digitals-hard-drive-supply-for-2026',
   },
   {
     name: 'Texas Instruments',
@@ -350,6 +414,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Dallas, TX',
     m: [48, 52, 46, 48, 54, 48],
     note: 'Public AI commentary focuses on edge/embedded AI demand for analog chips; conservative, low-profile posture.',
+    source: 'https://futurumgroup.com/insights/texas-instruments-buys-silicon-labs-to-fuel-edge-ai-scale/',
   },
   {
     name: 'Motorola Solutions',
@@ -360,6 +425,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Chicago, IL',
     m: [66, 70, 64, 66, 70, 66],
     note: 'Public-safety AI (video analytics, command-center AI); Brown publicly positions AI as core to mission-critical communications.',
+    source: 'https://tcca.info/new-motorola-solutions-ai-offerings-help-public-safety-agencies-reclaim-hours-every-day/',
   },
 
   // ───────────────────────────────────────── FINANCIAL SERVICES ─────────────────────────────────────────
@@ -373,6 +439,11 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     m: [93, 94, 88, 93, 90, 94],
     featured: true,
     note: '~$2B annual AI spend within a $17–19.8B tech budget, 2,000+ AI/ML specialists, 400+ AI use cases in production and roughly half of employees using gen-AI daily; Dimon\'s letters call AI "transformative for every job".',
+    source: 'https://www.emarketer.com/content/ai-arms-race-jpmorgan-2-billion',
+    dimensionSources: {
+      governance: 'https://www.jpmorgan.com/technology/news/deploying-responsible-ai',
+      talent: 'https://www.jpmorganchase.com/about/technology/research/machine-learning',
+    },
   },
   {
     name: 'Goldman Sachs',
@@ -383,6 +454,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'New York, NY',
     m: [80, 82, 76, 82, 78, 82],
     note: 'GS AI assistant with 10,000+ developers on AI coding tools; publicly frames gen-AI as a productivity unlock across investment banking and trading.',
+    source: 'https://www.cnbc.com/2025/01/21/goldman-sachs-launches-ai-assistant.html',
   },
   {
     name: 'Morgan Stanley',
@@ -393,6 +465,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'New York, NY',
     m: [82, 84, 78, 84, 80, 82],
     note: 'First-mover OpenAI partnership (2023) powering AI @Morgan Stanley for advisors; publicly reports strong advisor adoption and an agent roadmap.',
+    source: 'https://www.morganstanley.com/press-releases/key-milestone-in-innovation-journey-with-openai',
   },
   {
     name: 'Bank of America',
@@ -403,6 +476,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Charlotte, NC',
     m: [78, 80, 76, 80, 80, 78],
     note: 'Erica virtual assistant with 25M+ users and billions of interactions; publicly touts AI in fraud detection and customer service at scale.',
+    source: 'https://newsroom.bankofamerica.com/content/newsroom/press-releases/2025/08/a-decade-of-ai-innovation--bofa-s-virtual-assistant-erica-surpas.html',
   },
   {
     name: 'Citigroup',
@@ -413,6 +487,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'New York, NY',
     m: [72, 74, 72, 72, 74, 72],
     note: '"AI factory" pilot model and gen-AI rollout to employees; public comments emphasize responsible-AI governance alongside deployment.',
+    source: 'https://aimagazine.com/news/jane-fraser-on-how-citi-is-harnessing-ai',
   },
   {
     name: 'Wells Fargo',
@@ -423,6 +498,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'San Francisco, CA',
     m: [68, 70, 66, 66, 72, 68],
     note: 'Fargo copilot and AI fraud tools; publicly cautious, putting risk governance ahead of deployment speed.',
+    source: 'https://stories.wf.com/our-impact/wells-fargo-artificial-intelligence-and-you/',
   },
   {
     name: 'American Express',
@@ -433,6 +509,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'New York, NY',
     m: [80, 82, 78, 80, 80, 80],
     note: 'ML-driven fraud and rewards; publicly reports gen-AI improving customer service and personalization at scale.',
+    source: 'https://www.americanexpress.com/en-us/credit-cards/credit-intel/fraud-alerts/',
   },
   {
     name: 'Capital One',
@@ -443,6 +520,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'McLean, VA',
     m: [78, 82, 74, 78, 78, 80],
     note: 'Self-described "tech company that happens to be a bank"; Eno assistant, ML-first cloud migration, and a public AI-engineering culture.',
+    source: 'https://www.capitalone.com/tech/ai/',
   },
   {
     name: 'Visa',
@@ -453,6 +531,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'San Francisco, CA',
     m: [85, 86, 80, 86, 82, 84],
     note: 'AI fraud and risk across VisaNet with generative-AI/agent tools for issuers and merchants; McInerney publicly frames AI as core to payments.',
+    source: 'https://www.pymnts.com/news/artificial-intelligence/2025/visa-ceo-puts-agentic-ai-at-the-center-of-payments/',
   },
   {
     name: 'Mastercard',
@@ -463,6 +542,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Purchase, NY',
     m: [84, 86, 80, 84, 82, 82],
     note: 'Decision Intelligence and generative-AI "AI-powered decisioning"; publicly reports AI models blocking billions of dollars in fraud.',
+    source: 'https://www.mastercard.com/us/en/news-and-trends/Insights/2026/ai-is-helping-banks-save-millions-by-transforming-payment-fraud-prevention.html',
   },
   {
     name: 'PayPal',
@@ -473,6 +553,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'San Jose, CA',
     m: [72, 76, 70, 72, 72, 72],
     note: 'AI-driven risk and personalization; public statements push an "AI-first" product strategy under CEO Chriss.',
+    source: 'https://newsroom.paypal-corp.com/2026-02-25-PayPal-Recognized-as-Global-Leader-in-AI-Talent-in-2026-Evident-AI-Index-for-Payments',
   },
   {
     name: 'BlackRock',
@@ -483,6 +564,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'New York, NY',
     m: [70, 72, 68, 70, 74, 70],
     note: 'Aladdin platform AI; Fink\'s public letters emphasize AI\'s productivity and data advantages for asset management.',
+    source: 'https://www.blackrock.com/corporate/investor-relations/larry-fink-annual-chairmans-letter',
   },
   {
     name: 'Charles Schwab',
@@ -493,6 +575,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Westlake, TX',
     m: [60, 64, 58, 60, 62, 60],
     note: 'AI service/support tools for advisers; public commentary focused on productivity tools rather than frontier AI.',
+    source: 'https://pressroom.aboutschwab.com/press-releases/press-release/2026/Charles-Schwab-Launches-AI-Powered-Capability-That-Helps-Investors-Understand-Portfolio-Performance-and-Market-Activity/default.aspx',
   },
   {
     name: 'BNY Mellon',
@@ -503,6 +586,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'New York, NY',
     m: [64, 68, 62, 64, 68, 64],
     note: 'AI in custody and operations; publicly highlights gen-AI pilots and data modernization.',
+    source: 'https://www.bny.com/corporate/global/en/about-us/technology-innovation/artificial-intelligence.html',
   },
   {
     name: 'State Street',
@@ -513,6 +597,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Boston, MA',
     m: [58, 62, 58, 58, 62, 58],
     note: 'Moderate AI automation in the back office; public commentary on gen-AI experimentation.',
+    source: 'https://www.statestreet.com/alpha/insights/artificial-intelligence',
   },
   {
     name: 'US Bancorp',
@@ -523,6 +608,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Minneapolis, MN',
     m: [56, 60, 56, 56, 60, 56],
     note: 'Smart assistant and AI in risk; measured public posture.',
+    source: 'https://www.usbank.com/online-mobile-banking/smart-assistant.html',
   },
   {
     name: 'PNC Financial',
@@ -533,6 +619,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Pittsburgh, PA',
     m: [56, 60, 56, 56, 60, 56],
     note: 'AI in fraud and collections; limited public generative-AI narrative.',
+    source: 'https://www.pnc.com/en/corporate-and-institutional/campaigns/optimize-working-capital-agentic-ai.html',
   },
   {
     name: 'Truist',
@@ -543,6 +630,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Charlotte, NC',
     m: [54, 58, 54, 54, 58, 54],
     note: 'Early gen-AI pilots (employee copilot); cautious public stance.',
+    source: 'https://ir.truist.com/2026-02-03-Truist-launches-AI-enabled-receivables-platform-to-accelerate-cash-application-and-minimize-exceptions',
   },
   {
     name: 'Intercontinental Exchange',
@@ -553,6 +641,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Atlanta, GA',
     m: [68, 70, 66, 68, 68, 66],
     note: 'AI in data/analytics (ICE Data Services); public comments on AI-powered trading and data tools.',
+    source: 'https://ir.theice.com/press/news-details/2026/ICE-Launches-AI-Powered-Fixed-Income-Pre-Trade-Analytics-for-Buyside-Investors/default.aspx',
   },
   {
     name: 'S&P Global',
@@ -563,6 +652,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'New York, NY',
     m: [72, 74, 70, 72, 74, 72],
     note: 'Kensho AI acquisition and AI in ratings/data; publicly positioned as an AI-native data provider.',
+    source: 'https://kensho.com/',
   },
   {
     name: 'Fiserv',
@@ -573,6 +663,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Brookfield, WI',
     m: [70, 72, 70, 70, 72, 70],
     note: 'Clover and banking AI; publicly touts AI-powered risk/underwriting and gen-AI assistant tools for financial institutions.',
+    source: 'https://investors.fiserv.com/news-releases/news-release-details/fiserv-forms-strategic-collaboration-openai-bring-ai-how-fiserv',
   },
   {
     name: 'FIS',
@@ -583,6 +674,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Jacksonville, FL',
     m: [66, 68, 66, 66, 70, 66],
     note: 'AI in banking/wealth platforms; moderate public AI commentary amid transformation.',
+    source: 'https://www.fisglobal.com/about-us/media-room/press-release/2026/fis-launches-industry-first-ai-transaction-platform-to-help-banks-lead',
   },
 
   // ─────────────────────────────────────────────── INSURANCE ───────────────────────────────────────────────
@@ -595,6 +687,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Omaha, NE',
     m: [50, 54, 48, 50, 56, 50],
     note: 'Conglomerate with limited public AI commentary (Buffett\'s skeptical framing) though GEICO deploys ML in claims and underwriting.',
+    source: 'https://www.cnbc.com/2026/05/02/warren-buffett-berkshire-hathaway-annual-meeting-2026-live-updates.html',
   },
   {
     name: 'Progressive',
@@ -605,6 +698,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Mayfield Village, OH',
     m: [72, 74, 72, 72, 74, 70],
     note: 'Usage-based insurance and AI claims; publicly touts ML pricing and telematics (Snapshot) as competitive advantages.',
+    source: 'https://www.progressive.com/auto/discounts/snapshot/',
   },
   {
     name: 'Allstate',
@@ -615,6 +709,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Northbrook, IL',
     m: [66, 68, 64, 66, 70, 64],
     note: 'AI photo-claims and Arity telematics; public comments on gen-AI in claims processing.',
+    source: 'https://www.allstateinvestors.com/static-files/7211698c-c913-4c99-98e5-82a4836b85a4',
   },
   {
     name: 'Chubb',
@@ -625,6 +720,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'New York, NY',
     m: [68, 70, 66, 68, 72, 66],
     note: 'AI in underwriting and claims; public statements frame AI as a risk-pricing advantage.',
+    source: 'https://emerj.com/ai-at-chubb/',
   },
   {
     name: 'Travelers',
@@ -635,6 +731,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'New York, NY',
     m: [64, 66, 62, 64, 68, 62],
     note: 'AI in claims and underwriting; moderate public gen-AI pilot commentary.',
+    source: 'https://investor.travelers.com/newsroom/press-releases/news-details/2026/Travelers-Launches-Industry-Leading-Agentic-AI-Claim-Assistant-Developed-with-OpenAI/default.aspx',
   },
   {
     name: 'MetLife',
@@ -645,6 +742,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'New York, NY',
     m: [64, 66, 62, 64, 66, 62],
     note: 'AI customer-service agent-assist; public "AI-first" digital strategy comments.',
+    source: 'https://www.metlife.com/about-us/newsroom/2026/march/metlife-study-finds-ai-acceleration-is-creating-new-concerns-in-todays-workplace/',
   },
   {
     name: 'Prudential Financial',
@@ -655,6 +753,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Newark, NJ',
     m: [62, 64, 60, 62, 66, 60],
     note: 'AI in advice and operations; measured public positioning.',
+    source: 'https://news.prudential.com/us-en/latest-news/prudential-news/2026/q2/AI-at-Prudential-Amplifying-human-potential-to-better-serve-our-customers',
   },
   {
     name: 'AIG',
@@ -665,6 +764,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'New York, NY',
     m: [60, 62, 60, 60, 64, 58],
     note: 'AI in underwriting and claims; public comments on data modernization.',
+    source: 'https://www.aig.com/home/investor-relations/aig-2025-annual-report',
   },
   {
     name: 'Liberty Mutual',
@@ -675,6 +775,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Boston, MA',
     m: [62, 64, 60, 62, 64, 60],
     note: 'Computer-vision AI claims and gen-AI experimentation publicly discussed.',
+    source: 'https://www.libertymutualgroup.com/about-lm/news/articles/liberty-mutual-insurance-establishes-artificial-intelligence-collaboration-mit',
   },
   {
     name: 'The Hartford',
@@ -685,6 +786,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Hartford, CT',
     m: [60, 62, 58, 60, 62, 58],
     note: 'AI in underwriting and claims; moderate public AI narrative.',
+    source: 'https://www.thehartford.com/employee-benefits/producers/broker-resources/reshaping-benefit-experience-ai',
   },
 
   // ─────────────────────────────────────────────── HEALTHCARE ───────────────────────────────────────────────
@@ -698,6 +800,10 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     m: [85, 88, 80, 86, 84, 84],
     featured: true,
     note: '~$1.5B AI investment planned for 2026 including the Avery generative-AI platform for clinical/admin work; publicly frames AI as the largest lever on healthcare cost and quality.',
+    source: 'https://www.unitedhealthgroup.com/newsroom/2026/2026-03-26-uhc-introduces-ai-companion-empowering-people-with-simpler-navigation-personal-experience.html',
+    dimensionSources: {
+      governance: 'https://www.unitedhealthgroup.com/uhg/what-we-do/artificial-intelligence/ai-responsible-use.html',
+    },
   },
   {
     name: 'Eli Lilly',
@@ -708,6 +814,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Indianapolis, IN',
     m: [78, 80, 74, 78, 76, 80],
     note: 'AI in drug discovery and clinical trials (multiple collaborations); public statements on AI accelerating R&D.',
+    source: 'https://investor.lilly.com/news-releases/news-release-details/nvidia-and-lilly-announce-co-innovation-ai-lab-reinvent-drug',
   },
   {
     name: 'Pfizer',
@@ -718,6 +825,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'New York, NY',
     m: [74, 76, 72, 74, 76, 76],
     note: 'AI across R&D and commercial; public "AI-first" transformation comments from leadership.',
+    source: 'https://www.pharmexec.com/view/jp-morgan-2026-pfizer-pivot-covid-pipeline-execution',
   },
   {
     name: 'Johnson & Johnson',
@@ -728,6 +836,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'New Brunswick, NJ',
     m: [76, 78, 72, 76, 78, 76],
     note: 'MedTech AI (surgical robotics, imaging) and AI in R&D; public statements on AI-enabled surgery.',
+    source: 'https://www.jnj.com/media-center/press-releases/johnson-johnson-receives-fda-market-authorization-in-the-u-s-for-its-ottava-robotic-surgical-system',
   },
   {
     name: 'Merck',
@@ -738,6 +847,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Rahway, NJ',
     m: [70, 72, 68, 70, 74, 72],
     note: 'AI in R&D and manufacturing; public gen-AI pilot commentary.',
+    source: 'https://www.merck.com/news/merck-expands-innovative-internal-generative-ai-solutions-helping-to-deliver-medicines-to-patients-faster/',
   },
   {
     name: 'Abbott Laboratories',
@@ -748,6 +858,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Abbott Park, IL',
     m: [68, 70, 66, 68, 72, 68],
     note: 'AI in diagnostics and connected devices; measured public positioning.',
+    source: 'https://www.fiercebiotech.com/medtech/abbott-launches-ai-based-libre-assist-its-new-app-feature-meal-planning',
   },
   {
     name: 'Amgen',
@@ -758,6 +869,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Thousand Oaks, CA',
     m: [66, 68, 64, 66, 70, 68],
     note: 'AI in drug discovery via collaborations; public comments on computational biology.',
+    source: 'https://www.amgen.com/science/research-and-development-strategy/ai-in-research-and-development',
   },
   {
     name: 'Medtronic',
@@ -768,6 +880,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Dublin, IE',
     m: [70, 72, 68, 70, 72, 70],
     note: 'AI-embedded devices (GI Genius, diabetes algorithms); public AI device-pipeline commentary.',
+    source: 'https://www.medtronic.com/en-us/our-company/ai-healthcare-technology.html',
   },
   {
     name: 'Boston Scientific',
@@ -778,6 +891,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Marlborough, MA',
     m: [64, 66, 62, 64, 66, 62],
     note: 'AI-embedded devices; modest public AI narrative.',
+    source: 'https://news.bostonscientific.com/ai-diagnostic-heart-failure-symptoms-arrythmia',
   },
   {
     name: 'Stryker',
@@ -788,6 +902,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Kalamazoo, MI',
     m: [62, 64, 60, 62, 64, 60],
     note: 'AI-assisted surgery (Mako robotics); public comments on AI-enabled medtech.',
+    source: 'https://www.stryker.com/us/en/about/news/2026/stryker-expands-mako-robotics-portfolio.html',
   },
   {
     name: 'CVS Health',
@@ -798,6 +913,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Woonsocket, RI',
     m: [62, 66, 62, 62, 64, 60],
     note: 'AI in pharmacy and claims; public gen-AI efficiency commentary.',
+    source: 'https://www.cvshealth.com/news/company-news/cvs-health-recognized-for-technology-that-improves-medication-safety-and-patient-care.html',
   },
   {
     name: 'Cigna Group',
@@ -808,6 +924,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Bloomfield, CT',
     m: [66, 68, 64, 66, 68, 64],
     note: 'AI in care management and claims; moderate public AI narrative.',
+    source: 'https://newsroom.cigna.com/cigna-healthcare-unveils-industry-leading-ai-powered-digital-tools',
   },
   {
     name: 'Humana',
@@ -818,6 +935,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Louisville, KY',
     m: [60, 62, 60, 60, 62, 58],
     note: 'AI in member services; cautious public posture.',
+    source: 'https://news.humana.com/news/articles/humana-redefines-the-member-experience-with-agent-assist-built-with-google-cloud',
   },
   {
     name: 'Elevance Health',
@@ -828,6 +946,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Indianapolis, IN',
     m: [60, 62, 58, 60, 62, 58],
     note: 'AI in claims and member experience; public gen-AI pilots.',
+    source: 'https://www.elevancehealth.com/our-approach-to-health/digitally-enabled-healthcare/how-ai-helps-improve-the-consumer-experience',
   },
   {
     name: 'Centene',
@@ -838,6 +957,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'St. Louis, MO',
     m: [54, 58, 54, 54, 58, 52],
     note: 'Limited public AI strategy; cost-focused posture.',
+    source: 'https://www.centene.com/why-were-different/corporate-sustainability/empowering-health/innovation-thought-leadership.html',
   },
   {
     name: 'HCA Healthcare',
@@ -848,6 +968,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Nashville, TN',
     m: [58, 60, 58, 58, 60, 56],
     note: 'AI in clinical operations and documentation; public efficiency commentary.',
+    source: 'https://hcahealthcaretoday.com/2026/07/21/hca-healthcares-strategic-approach-to-scaling-artificial-intelligence/',
   },
   {
     name: 'McKesson',
@@ -858,6 +979,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Irving, TX',
     m: [64, 68, 62, 64, 66, 62],
     note: 'AI in pharmaceutical supply chain; moderate public AI narrative.',
+    source: 'https://www.pharmacytimes.com/view/mckesson-ideashare-2026-how-ai-and-automation-are-building-the-supply-chain-of-the-future',
   },
   {
     name: 'Cardinal Health',
@@ -868,16 +990,18 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Dublin, OH',
     m: [58, 62, 58, 58, 60, 56],
     note: 'AI in distribution; limited public commentary.',
+    source: 'https://newsroom.cardinalhealth.com/Inside-Cardinal-Healths-AI-Center-of-Excellence',
   },
   {
     name: 'Cencora',
     industry: 'Healthcare',
-    founded: 2018,
+    founded: 2001,
     revenue: 293000,
     employees: 46000,
     location: 'Conshohocken, PA',
     m: [56, 60, 56, 56, 58, 54],
     note: 'Supply-chain AI; limited public gen-AI narrative.',
+    source: 'https://www.cencora.com/resources/enterprise/building-a-more-resilient-pharmaceutical-distribution-ecosystem',
   },
   {
     name: 'IQVIA',
@@ -888,6 +1012,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Durham, NC',
     m: [66, 68, 64, 66, 68, 66],
     note: 'AI in clinical development and real-world data; public "AI-enabled R&D" positioning.',
+    source: 'https://www.iqvia.com/insights/the-iqvia-institute/reports-and-publications/reports/global-r-and-d-trends-2026',
   },
   {
     name: 'Walgreens Boots Alliance',
@@ -898,6 +1023,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Deerfield, IL',
     m: [50, 54, 50, 50, 54, 48],
     note: 'AI in pharmacy operations; limited public AI strategy amid restructuring.',
+    source: 'https://www.cnbc.com/2025/05/11/walgreens-doubles-down-on-robots-to-fill-prescriptions-amid-turnaround.html',
   },
   {
     name: 'Danaher',
@@ -908,6 +1034,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Washington, DC',
     m: [64, 66, 62, 64, 68, 62],
     note: 'AI in diagnostics and lab automation; moderate public positioning.',
+    source: 'https://www.prnewswire.com/news-releases/danaher-announces-diagnostic-development-and-commercialization-partnership-to-scale-precision-medicine-302468868.html',
   },
 
   // ─────────────────────────────────────────────── RETAIL ───────────────────────────────────────────────
@@ -921,6 +1048,11 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     m: [86, 90, 84, 86, 82, 82],
     featured: true,
     note: 'AI tools rolled out to ~1.5M associates, an OpenAI partnership for AI-first shopping (Oct 2025), and spatial-AI digital twins that detect store issues weeks early; McMillon publicly calls AI the company\'s biggest competitive lever.',
+    source: 'https://corporate.walmart.com/news/2025/10/14/walmart-partners-with-openai-to-create-ai-first-shopping-experiences',
+    dimensionSources: {
+      governance: 'https://www.enz.ai/ai-governance-podcast-responsible-ai-at-walmart',
+      aiDeployment: 'https://corporate.walmart.com/news/2025/06/24/walmart-unveils-new-ai-powered-tools-to-empower-1-5-million-associates',
+    },
   },
   {
     name: 'Target',
@@ -931,6 +1063,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Minneapolis, MN',
     m: [72, 76, 70, 72, 72, 70],
     note: 'AI personalization and store operations (Roundel); public comments on gen-AI supply-chain and guest tools.',
+    source: 'https://corporate.target.com/press/fact-sheet/2026/02/conversational-ai-advertising',
   },
   {
     name: 'Home Depot',
@@ -941,6 +1074,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Atlanta, GA',
     m: [74, 78, 72, 74, 74, 72],
     note: 'HD Sidekick store assistant and AI search; publicly touts gen-AI "online experience" and associate tools.',
+    source: 'https://corporate.homedepot.com/news/company/ai-home-depot-look-future-home-improvement',
   },
   {
     name: "Lowe's",
@@ -951,6 +1085,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Mooresville, NC',
     m: [68, 72, 66, 68, 70, 66],
     note: 'AI store assistant and planning tools; moderate public AI commentary.',
+    source: 'https://corporate.lowes.com/newsroom/press-releases/lowes-launches-first-ai-powered-home-improvement-virtual-advisor-03-05-25',
   },
   {
     name: 'Costco',
@@ -961,6 +1096,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Issaquah, WA',
     m: [54, 60, 52, 54, 60, 52],
     note: 'Conservative: minimal public gen-AI narrative; uses ML for pricing and membership quietly.',
+    source: 'https://www.retailcustomerexperience.com/articles/costco-ceo-cfo-talk-ai-powered-online-sales-jump-tariff-strategy/',
   },
   {
     name: 'Kroger',
@@ -971,6 +1107,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Cincinnati, OH',
     m: [62, 66, 62, 62, 64, 60],
     note: '84.51° analytics and AI personalization; public comments on gen-AI in retail media.',
+    source: 'https://www.krogerprecisionmarketing.com/knowledge-hub/news/modern-retail-kroger-launches-ai-generated-email-digest-for-suppliers/',
   },
   {
     name: 'Albertsons',
@@ -981,6 +1118,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Boise, ID',
     m: [58, 62, 58, 58, 60, 56],
     note: 'AI personalization via loyalty; moderate public narrative.',
+    source: 'https://www.albertsonscompanies.com/newsroom/blog/blog-details/2026/Shaping-the-Future-of-Retail-Accelerating-Growth-with-4-Big-Bets-in-Our-AI-Strategy/default.aspx',
   },
   {
     name: 'Dollar General',
@@ -991,6 +1129,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Goodlettsville, TN',
     m: [48, 52, 48, 48, 52, 46],
     note: 'Limited public AI strategy; cost-focused operations.',
+    source: 'https://www.grocerydive.com/news/dollar-general-ai-optimization-executive-role/804881/',
   },
   {
     name: 'Dollar Tree',
@@ -1001,6 +1140,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Chesapeake, VA',
     m: [46, 50, 46, 46, 50, 44],
     note: 'Minimal public AI commentary.',
+    source: 'https://www.retaildive.com/news/dollar-tree-ceo-tech-ai-adoption/803528/',
   },
   {
     name: 'Best Buy',
@@ -1011,6 +1151,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Richfield, MN',
     m: [64, 68, 62, 64, 66, 62],
     note: 'AI service/support (Geek Squad) and a gen-AI shopping assistant; moderate public positioning.',
+    source: 'https://corporate.bestbuy.com/2024/generative-ai-customer-support/',
   },
   {
     name: "Macy's",
@@ -1021,6 +1162,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'New York, NY',
     m: [52, 56, 50, 52, 56, 50],
     note: 'AI personalization and pricing; limited public gen-AI narrative amid turnaround.',
+    source: 'https://www.customerexperiencedive.com/news/ask-macys-AI-conversational-shopping-assistant/816261/',
   },
   {
     name: 'Nordstrom',
@@ -1031,6 +1173,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Seattle, WA',
     m: [52, 56, 50, 52, 56, 50],
     note: 'AI recommendations; limited public gen-AI commentary.',
+    source: 'https://www.supplychaindive.com/news/manifest-nordstrom-ai-procurement-spend-insights/811778/',
   },
   {
     name: 'TJX',
@@ -1041,6 +1184,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Framingham, MA',
     m: [48, 52, 48, 48, 52, 46],
     note: 'Off-price model; minimal public AI strategy.',
+    source: 'https://www.klover.ai/tjx-companies-ai-strategy-analysis-of-dominance-in-retail/',
   },
   {
     name: 'Gap',
@@ -1051,6 +1195,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'San Francisco, CA',
     m: [48, 52, 48, 48, 52, 46],
     note: 'AI in personalization; limited public commentary.',
+    source: 'https://www.gapinc.com/en-us/articles/2025/11/gap-inc-is-using-ai-to-reimagine-retail,-with-new-',
   },
   {
     name: 'eBay',
@@ -1061,6 +1206,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'San Jose, CA',
     m: [58, 62, 56, 58, 60, 56],
     note: 'AI listings and search; public comments on gen-AI selling tools for merchants.',
+    source: 'https://innovation.ebayinc.com/stories/magical-listing-tool-harnesses-the-power-of-ai-to-make-selling-on-ebay-faster-easier-and-more-accurate/',
   },
   {
     name: 'Ulta Beauty',
@@ -1071,6 +1217,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Bolingbrook, IL',
     m: [54, 58, 52, 54, 56, 52],
     note: 'AI personalization in retail media; limited public gen-AI narrative.',
+    source: 'https://www.digitalcommerce360.com/2026/06/05/ulta-beauty-ai-assistant-ecommerce-sales-q1-fy26/',
   },
   {
     name: 'Ross Stores',
@@ -1081,6 +1228,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Dublin, CA',
     m: [46, 50, 46, 46, 50, 44],
     note: 'Off-price; minimal public AI commentary.',
+    source: 'https://investors.rossstores.com/',
   },
 
   // ───────────────────────────────────────────── CONSUMER GOODS ─────────────────────────────────────────────
@@ -1093,6 +1241,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Cincinnati, OH',
     m: [72, 76, 72, 72, 76, 72],
     note: 'AI across supply chain, marketing and R&D (gen-AI-enabled marketing); public comments on AI-driven productivity.',
+    source: 'https://us.pg.com/blogs/innovation-at-scale-transforming-business-through-technology/',
   },
   {
     name: 'PepsiCo',
@@ -1103,6 +1252,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Purchase, NY',
     m: [70, 74, 70, 70, 74, 70],
     note: 'AI in supply chain and sales (PepsiCo Digital); public "AI-powered efficiency" commentary.',
+    source: 'https://www.pepsico.com/en/newsroom/press-releases/2025/pepsico-announces-industry-first-ai-and-digital-twin-collaboration-with-siemens-and-nvidia',
   },
   {
     name: 'Coca-Cola',
@@ -1113,6 +1263,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Atlanta, GA',
     m: [74, 76, 72, 76, 74, 72],
     note: 'Gen-AI-first marketer (Y3000, AI campaigns, Microsoft partnership); Quincey publicly frames AI as core to creativity and productivity.',
+    source: 'https://www.coca-colacompany.com/media-center/the-coca-cola-company-and-microsoft-announce-five-year-strategic-partnership-to-accelerate-cloud-and-generative-ai-initiatives',
   },
   {
     name: 'Mondelez',
@@ -1123,6 +1274,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Chicago, IL',
     m: [66, 70, 66, 66, 70, 64],
     note: 'AI in supply chain and marketing; moderate public gen-AI commentary.',
+    source: 'https://www.supplychaindive.com/news/mondelez-taps-ai-for-distribution-centers-to-cut-costs/820067/',
   },
   {
     name: 'General Mills',
@@ -1133,6 +1285,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Minneapolis, MN',
     m: [62, 66, 62, 62, 66, 60],
     note: 'AI in demand forecasting and R&D; public comments on gen-AI efficiency.',
+    source: 'https://www.ciodive.com/news/General-Mills-AI-cost-saving-strategy/740416/',
   },
   {
     name: 'Kraft Heinz',
@@ -1143,6 +1296,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Pittsburgh, PA',
     m: [58, 62, 58, 58, 62, 56],
     note: 'AI in marketing and supply chain; moderate public narrative.',
+    source: 'https://chiefaiofficer.com/kraft-heinzs-ai-cuts-product-development-time-by-50/',
   },
   {
     name: 'Starbucks',
@@ -1153,6 +1307,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Seattle, WA',
     m: [72, 74, 72, 72, 72, 70],
     note: 'Deep Brew AI for personalization and store ops; public comments on gen-AI ordering and personalization.',
+    source: 'https://hyperight.com/deep-brew-transforming-starbucks-into-a-data-driven-company/',
   },
   {
     name: "McDonald's",
@@ -1163,6 +1318,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Chicago, IL',
     m: [68, 70, 68, 70, 68, 66],
     note: 'Google gen-AI partnership (2023) and AI drive-thru/store tools; public AI-efficiency commentary from Kempczinski.',
+    source: 'https://corporate.mcdonalds.com/corpmcd/our-stories/article/mcd-google-cloud-announce-partnership.html',
   },
   {
     name: 'Yum! Brands',
@@ -1173,6 +1329,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Louisville, KY',
     m: [60, 64, 60, 60, 62, 58],
     note: 'AI ordering and personalization across KFC/Pizza Hut/Taco Bell; moderate public AI narrative.',
+    source: 'https://www.yum.com/wps/portal/yumbrands/Yumbrands/news/press-releases/yum+brands+to+accelerate+ai+innovation+in+an+industry-first+collaboration+with+nvidia',
   },
   {
     name: 'Nike',
@@ -1183,6 +1340,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Beaverton, OR',
     m: [62, 66, 62, 62, 64, 60],
     note: 'AI personalization and supply chain; public gen-AI commentary limited amid restructuring.',
+    source: 'https://about.nike.com/en/newsroom/releases/nike-is-serving-athletes-faster-through-ai-powered-shopping-on-google',
   },
   {
     name: 'Philip Morris',
@@ -1193,6 +1351,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'New York, NY',
     m: [66, 70, 66, 66, 70, 64],
     note: 'AI in consumer engagement (IQOS ecosystem); moderate public AI commentary.',
+    source: 'https://brandsensitize.com/philip-morris-international-leading-the-way-towards-a-smoke-free-future/',
   },
   {
     name: 'Altria',
@@ -1203,6 +1362,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Richmond, VA',
     m: [48, 52, 48, 48, 52, 46],
     note: 'Limited public AI strategy.',
+    source: 'https://www.linkedin.com/posts/altria_altria-cagny2026-operationalexcellence-activity-7440404729588895744-UlNx',
   },
   {
     name: 'Colgate-Palmolive',
@@ -1213,6 +1373,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'New York, NY',
     m: [56, 60, 56, 56, 60, 54],
     note: 'AI in marketing and supply chain; modest public commentary.',
+    source: 'https://sloanreview.mit.edu/article/the-genai-focus-shifts-to-innovation-at-colgate-palmolive/',
   },
   {
     name: 'Kimberly-Clark',
@@ -1223,6 +1384,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Irving, TX',
     m: [54, 58, 54, 54, 58, 52],
     note: 'Supply-chain AI; modest public AI commentary.',
+    source: 'https://www.supplychaindive.com/news/kimberly-clark-credits-supply-chain-for-productivity-gains/822811/',
   },
   {
     name: 'Tyson Foods',
@@ -1233,6 +1395,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Springdale, AR',
     m: [52, 56, 52, 52, 56, 50],
     note: 'AI in production and supply chain; limited public gen-AI narrative.',
+    source: 'https://www.tysonfoods.com/news/news-releases/2025/7/tyson-demo-day-showcases-ai-innovations-food-technology',
   },
   {
     name: 'Estée Lauder',
@@ -1243,6 +1406,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'New York, NY',
     m: [54, 58, 52, 54, 56, 52],
     note: 'AI personalization in retail media; limited public gen-AI amid turnaround.',
+    source: 'https://news.microsoft.com/source/features/digital-transformation/estee-lauder-uses-ai-to-reimagine-trend-forecasting-and-consumer-marketing/',
   },
   {
     name: 'Hershey',
@@ -1253,6 +1417,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Hershey, PA',
     m: [56, 60, 54, 56, 58, 54],
     note: 'AI in demand forecasting and marketing; modest public commentary.',
+    source: 'https://www.thehersheycompany.com/en_us/home/newsroom/blog/inside-hersheys-shift-to-real-time-ai-driven-marketing.html',
   },
   {
     name: 'Kellanova',
@@ -1263,6 +1428,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Chicago, IL',
     m: [52, 56, 52, 52, 56, 50],
     note: 'AI in supply chain and marketing; limited public gen-AI narrative.',
+    source: 'https://newsroom.kellanova.com/2025-05-19-How-AI-is-Reshaping-the-Future-of-Work-at-Kellanova',
   },
 
   // ─────────────────────────────────────────────── AUTOMOTIVE ───────────────────────────────────────────────
@@ -1276,6 +1442,10 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     m: [80, 78, 74, 86, 66, 84],
     featured: true,
     note: 'FSD/autonomy, Dojo training clusters and Optimus robots; Musk publicly frames Tesla as an AI/robotics company whose value is "almost entirely" tied to autonomy.',
+    source: 'https://www.tesla.com/AI',
+    dimensionSources: {
+      governance: 'https://www.tesla.com/legal/additional-resources',
+    },
   },
   {
     name: 'General Motors',
@@ -1285,7 +1455,8 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     employees: 163000,
     location: 'Detroit, MI',
     m: [66, 70, 66, 68, 68, 66],
-    note: 'Cruise robotaxis and Super Cruise ADAS; public comments on AI in manufacturing and software-defined vehicles.',
+    note: 'Super Cruise hands-free ADAS and AI in manufacturing and software-defined vehicles; GM exited the Cruise robotaxi business in December 2024 to refocus autonomy on personal vehicles.',
+    source: 'https://news.gm.com/home.detail.html/Pages/news/us/en/2024/dec/1210-gm.html',
   },
   {
     name: 'Ford',
@@ -1296,6 +1467,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Dearborn, MI',
     m: [64, 68, 64, 66, 66, 64],
     note: 'BlueCruise and AI in manufacturing; moderate public gen-AI commentary.',
+    source: 'https://techcrunch.com/2026/01/07/ford-has-an-ai-assistant-and-new-hands-free-bluecruise-tech-on-the-way/',
   },
   {
     name: 'Toyota Motor North America',
@@ -1306,6 +1478,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Plano, TX',
     m: [62, 66, 62, 62, 64, 60],
     note: 'Toyota Research Institute and Woven City AI; measured public positioning.',
+    source: 'https://woven.toyota/en/',
   },
   {
     name: 'American Honda',
@@ -1316,6 +1489,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Torrance, CA',
     m: [54, 58, 54, 54, 58, 52],
     note: 'ADAS-focused AI; limited public gen-AI narrative.',
+    source: 'https://global.honda/en/tech/Honda_SDV_ASIMO_OS/',
   },
   {
     name: 'Stellantis',
@@ -1326,6 +1500,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Auburn Hills, MI',
     m: [58, 62, 58, 58, 60, 56],
     note: 'STLA SmartCockpit AI; moderate public commentary.',
+    source: 'https://www.stellantis.com/en/innovation/technology-software',
   },
   {
     name: 'Cummins',
@@ -1336,6 +1511,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Columbus, IN',
     m: [60, 64, 60, 60, 62, 58],
     note: 'AI in engine diagnostics and manufacturing; moderate public narrative.',
+    source: 'https://www.cummins.com/en-na/news/releases/2026/04/28/cummins-builds-many-paths-strategy-act-expo',
   },
   {
     name: 'Aptiv',
@@ -1346,6 +1522,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Dublin, IE',
     m: [60, 62, 58, 62, 60, 60],
     note: 'AI in ADAS and software-defined vehicles; public tech-forward positioning.',
+    source: 'https://www.aptiv.com/en/insights/article/the-story-of-smart-vehicle-architecture-',
   },
   {
     name: 'Magna',
@@ -1356,6 +1533,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Aurora, ON',
     m: [56, 60, 56, 56, 58, 54],
     note: 'AI in manufacturing and ADAS; limited public gen-AI narrative.',
+    source: 'https://www.magna.com/stories/blog/2026/ai-at-work--5-ways-magna-is-reimagining-manufacturing',
   },
   {
     name: 'Lear',
@@ -1366,6 +1544,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Southfield, MI',
     m: [48, 52, 48, 48, 52, 46],
     note: 'Minimal public AI commentary.',
+    source: 'https://www.lear.com/newsroom/palantir-and-lear-announce-five-year-partnership-expansion-to-accelerate-automotive-technology-transformation-ybzjj',
   },
   {
     name: 'BorgWarner',
@@ -1376,6 +1555,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Auburn Hills, MI',
     m: [50, 54, 50, 50, 54, 48],
     note: 'Limited public AI strategy.',
+    source: 'https://www.borgwarner.com/newsroom/press-releases/2026/02/11/borgwarner-strategically-enters-data-center-market-with-power-generation-solution-award',
   },
 
   // ─────────────────────────────────────────── AEROSPACE & DEFENSE ───────────────────────────────────────────
@@ -1388,6 +1568,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Evendale, OH',
     m: [74, 76, 72, 74, 74, 72],
     note: 'AI engine diagnostics and maintenance; public comments on digital twins and AI in aviation services.',
+    source: 'https://www.geaerospace.com/news/press-releases/apac/us300m-bolster-ge-aerospaces-engine-repair-capabilities-singapore',
   },
   {
     name: 'Boeing',
@@ -1398,6 +1579,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Arlington, VA',
     m: [56, 60, 56, 56, 60, 54],
     note: 'AI in manufacturing and quality; public AI commentary subdued amid the operational crisis.',
+    source: 'https://www.boeing.com/innovation/innovation-quarterly/2025/12/shaping-ai-for-the-sky',
   },
   {
     name: 'Lockheed Martin',
@@ -1408,6 +1590,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Bethesda, MD',
     m: [66, 68, 64, 66, 68, 66],
     note: 'AI for defense (JADC2, autonomy); public AI-first defense positioning.',
+    source: 'https://news.lockheedmartin.com/2025-06-03-Lockheed-Martins-AI-Fight-Club-TM-Puts-AI-to-the-Test-for-National-Security',
   },
   {
     name: 'RTX',
@@ -1418,6 +1601,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Arlington, VA',
     m: [64, 66, 62, 64, 66, 64],
     note: 'AI in defense and aviation; moderate public AI commentary.',
+    source: 'https://www.rtx.com/news/2025/05/27/in-aviation-ai-makes-a-leap-into-the-cabin',
   },
   {
     name: 'Northrop Grumman',
@@ -1428,6 +1612,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Falls Church, VA',
     m: [62, 64, 60, 62, 64, 62],
     note: 'AI in autonomy and space; public AI defense positioning.',
+    source: 'https://news.northropgrumman.com/artificial-intelligence/northrop-grumman-to-accelerate-ai-innovation-with-nvidia-tools',
   },
   {
     name: 'General Dynamics',
@@ -1438,6 +1623,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Reston, VA',
     m: [60, 62, 58, 60, 62, 58],
     note: 'AI in shipbuilding and IT; measured public commentary.',
+    source: 'https://www.gdit.com/capabilities/technology/technologies/artificial-intelligence/',
   },
   {
     name: 'L3Harris',
@@ -1448,6 +1634,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Melbourne, FL',
     m: [58, 60, 56, 58, 60, 56],
     note: 'AI in ISR and defense electronics; moderate public AI narrative.',
+    source: 'https://www.l3harris.com/newsroom/press-release/2025/09/l3harris-and-shield-ai-demonstrate-ai-powered-system-defeat-unmanned',
   },
   {
     name: 'Textron',
@@ -1458,6 +1645,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Providence, RI',
     m: [52, 56, 52, 52, 56, 50],
     note: 'Limited public AI commentary.',
+    source: 'https://www.textronsystems.com/our-company/news-events/articles/press-release/textron-systems-and-kodiak-integrate-textron-systems',
   },
 
   // ─────────────────────────────────────────── ENERGY & UTILITIES ───────────────────────────────────────────
@@ -1470,6 +1658,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Spring, TX',
     m: [62, 66, 62, 62, 66, 60],
     note: 'AI in reservoir modeling and operations; public comments on AI productivity and AI-driven power demand.',
+    source: 'https://corporate.exxonmobil.com/who-we-are/technology-and-collaborations/digital-technologies',
   },
   {
     name: 'Chevron',
@@ -1480,6 +1669,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'San Ramon, CA',
     m: [60, 64, 60, 60, 64, 58],
     note: 'AI in operations and safety; moderate public AI commentary.',
+    source: 'https://www.chevron.com/newsroom/2025/q1/chevron-uses-ai-to-bring-reliable-energy-to-data-centers',
   },
   {
     name: 'ConocoPhillips',
@@ -1490,6 +1680,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Houston, TX',
     m: [52, 56, 52, 52, 56, 50],
     note: 'AI in subsurface modeling; limited public gen-AI narrative.',
+    source: 'https://www.conocophillips.com/what-we-do/innovation-and-technology/digitizing-our-business/',
   },
   {
     name: 'SLB',
@@ -1500,6 +1691,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Houston, TX',
     m: [70, 74, 68, 70, 72, 70],
     note: 'AI in oilfield operations (Lumi data platform); public "AI-driven energy" positioning.',
+    source: 'https://www.slb.com/newsroom/press-release/2025/pr-2025-1103-slb-tela-ai',
   },
   {
     name: 'Baker Hughes',
@@ -1510,6 +1702,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Houston, TX',
     m: [64, 68, 64, 64, 66, 62],
     note: 'Cordant asset-intelligence AI; moderate public AI narrative.',
+    source: 'https://www.bakerhughes.com/ai-bakerhughesc3ai/',
   },
   {
     name: 'Halliburton',
@@ -1520,6 +1713,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Houston, TX',
     m: [56, 60, 56, 56, 60, 54],
     note: 'AI in drilling operations (DecisionSpace); limited public gen-AI commentary.',
+    source: 'https://www.halliburton.com/en/about-us/press-release/halliburton-delivers-end-to-end-digital-execution-at-2026-technology-showcase',
   },
   {
     name: 'Phillips 66',
@@ -1530,6 +1724,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Houston, TX',
     m: [46, 50, 46, 46, 50, 44],
     note: 'Limited public AI strategy; refining.',
+    source: 'https://www.phillips66.com/newsroom/our-digital-capabilities-are-empowering-our-people/',
   },
   {
     name: 'Valero Energy',
@@ -1540,6 +1735,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'San Antonio, TX',
     m: [44, 48, 44, 44, 48, 42],
     note: 'Minimal public AI commentary; refining.',
+    source: 'https://www.rudyl.ai/ai-research/companies/valero-energy',
   },
   {
     name: 'Marathon Petroleum',
@@ -1550,6 +1746,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Findlay, OH',
     m: [46, 50, 46, 46, 50, 44],
     note: 'Minimal public AI commentary.',
+    source: 'https://www.forbes.com/sites/peterhigh/2026/03/13/marathon-petroleums-ehren-powell-on-data-ai-and-operational-safety/',
   },
   {
     name: 'Occidental Petroleum',
@@ -1560,6 +1757,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Houston, TX',
     m: [50, 54, 50, 50, 54, 48],
     note: 'AI in carbon capture/operations (1PointFive); limited public gen-AI narrative.',
+    source: 'https://www.oxy.com/operations/carbon-innovation/project-ventures/',
   },
   {
     name: 'NextEra Energy',
@@ -1570,6 +1768,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Juno Beach, FL',
     m: [54, 58, 54, 54, 58, 52],
     note: 'AI in grid operations and renewables forecasting; moderate public commentary.',
+    source: 'https://www.investor.nexteraenergy.com/news-and-events/news-releases/2025/12-08-2025-120206963',
   },
   {
     name: 'Duke Energy',
@@ -1580,6 +1779,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Charlotte, NC',
     m: [50, 54, 50, 50, 54, 48],
     note: 'AI in grid management; limited public gen-AI narrative.',
+    source: 'https://impact.duke-energy.com/energy-modernization-and-resiliency',
   },
   {
     name: 'Southern Company',
@@ -1590,6 +1790,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Atlanta, GA',
     m: [48, 52, 48, 48, 52, 46],
     note: 'AI in grid and plant operations; limited public AI commentary.',
+    source: 'https://www.southerncompany.com/about/our-business/setting-the-pace.html',
   },
   {
     name: 'Dominion Energy',
@@ -1600,6 +1801,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Richmond, VA',
     m: [46, 50, 46, 46, 50, 44],
     note: 'Limited public AI commentary.',
+    source: 'https://www.dominionenergy.com/about/delivering-energy/electric-projects/energy-grid-transformation',
   },
   {
     name: 'Entergy',
@@ -1610,6 +1812,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'New Orleans, LA',
     m: [46, 50, 46, 46, 50, 44],
     note: 'Public commentary centers on AI data-center power demand; limited internal AI narrative.',
+    source: 'https://www.entergy.com/datacenters',
   },
   {
     name: 'Freeport-McMoRan',
@@ -1620,6 +1823,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Phoenix, AZ',
     m: [52, 56, 52, 52, 56, 50],
     note: 'AI in mining operations (autonomous haulage); limited public gen-AI.',
+    source: 'https://www.mckinsey.com/capabilities/tech-and-ai/how-we-help-clients/rewired-in-action/freeport-mcmoran-unlocking-new-mining-production-through-ai-transformation',
   },
   {
     name: 'Newmont',
@@ -1630,6 +1834,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Denver, CO',
     m: [46, 50, 46, 46, 50, 44],
     note: 'Autonomous mining AI; limited public commentary.',
+    source: 'https://thesiliconreview.com/2025/03/newmont-ai-drilling-nevada',
   },
 
   // ─────────────────────────────────────── INDUSTRIAL & MANUFACTURING ───────────────────────────────────────
@@ -1642,6 +1847,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Charlotte, NC',
     m: [72, 76, 72, 72, 74, 72],
     note: 'Explicit AI strategy across aerospace, buildings and industrial automation; public statements on AI agents and OT+IT convergence (Honeywell Forge).',
+    source: 'https://www.honeywell.com/us/en/news/press-releases/2025/06/honeywell-drives-industrial-transition-from-automation-to-autonomy-with-new-ai-enabled-digital-suite',
   },
   {
     name: 'Deere',
@@ -1652,6 +1858,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Moline, IL',
     m: [66, 72, 68, 66, 68, 64],
     note: 'Autonomous tractors, See & Spray and precision-ag AI; public AI-first agriculture positioning.',
+    source: 'https://www.deere.com/en-us/products-solutions/tractors/autonomous-tractor',
   },
   {
     name: 'Caterpillar',
@@ -1662,6 +1869,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Irving, TX',
     m: [58, 62, 58, 58, 62, 56],
     note: 'Autonomous mining and trucking AI; measured public AI commentary.',
+    source: 'https://investors.caterpillar.com/news/news-details/2026/Caterpillar-Unveils-AI-Powered-Future-and-Invests-in-the-Workforce-Building-It/default.aspx',
   },
   {
     name: '3M',
@@ -1672,6 +1880,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'St. Paul, MN',
     m: [60, 64, 60, 60, 64, 58],
     note: 'AI in R&D and manufacturing; moderate public commentary.',
+    source: 'https://news.3m.com/2026-06-22-3M-launches-Ask-3M,-an-AI-powered-tool-for-faster-access-to-technical-expertise',
   },
   {
     name: 'Emerson',
@@ -1682,6 +1891,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'St. Louis, MO',
     m: [60, 64, 60, 60, 62, 58],
     note: 'Industrial-automation AI (AspenTech); moderate public narrative.',
+    source: 'https://www.emerson.com/en/automation-systems/industrial-ai',
   },
   {
     name: 'Rockwell Automation',
@@ -1692,6 +1902,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Milwaukee, WI',
     m: [64, 66, 64, 64, 64, 62],
     note: 'Factory AI and industrial analytics; public "connected enterprise" AI positioning.',
+    source: 'https://www.rockwellautomation.com/en-us/future-trends-industrial-operations/industrial-ai.html',
   },
   {
     name: 'Eaton',
@@ -1702,6 +1913,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Dublin, IE',
     m: [60, 62, 58, 60, 62, 58],
     note: 'AI in power management and grid; moderate public commentary.',
+    source: 'https://www.eaton.com/us/en-us/company/news-insights/news-releases/2025/eaton-accelerates-data-center-infrastrructure-in-ai-era-with-nvidia.html',
   },
   {
     name: 'Parker Hannifin',
@@ -1712,6 +1924,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Cleveland, OH',
     m: [56, 60, 56, 56, 60, 54],
     note: 'Modest public AI commentary.',
+    source: 'https://www.rudolflai.com/ai-research/companies/parker-hannifin',
   },
   {
     name: 'Johnson Controls',
@@ -1722,6 +1935,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Cork, IE',
     m: [62, 66, 62, 62, 64, 60],
     note: 'AI in smart buildings (OpenBlue); public "AI for buildings" positioning.',
+    source: 'https://www.johnsoncontrols.com/openblue',
   },
   {
     name: 'Dow',
@@ -1732,6 +1946,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Midland, MI',
     m: [58, 62, 58, 58, 62, 56],
     note: 'AI in R&D and manufacturing; moderate public commentary.',
+    source: 'https://corporate.dow.com/en-us/news/seek-together/ai-ecosystem-solutions.html',
   },
   {
     name: 'DuPont',
@@ -1742,6 +1957,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Wilmington, DE',
     m: [54, 58, 54, 54, 58, 52],
     note: 'AI in materials R&D; limited public gen-AI narrative.',
+    source: 'https://www.dupont.com/news/dupont-collaborates-with-uncountable-to-advance-ai-ready-labs-strategy.html',
   },
   {
     name: 'LyondellBasell',
@@ -1752,6 +1968,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Houston, TX',
     m: [50, 54, 50, 50, 54, 48],
     note: 'Limited public AI commentary.',
+    source: 'https://c3.ai/news/lyondellbasell-signs-five-year-expanded-contract-with-c3-ai-to-accelerate-enterprise-ai',
   },
   {
     name: 'Linde',
@@ -1762,6 +1979,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Guildford, UK',
     m: [56, 60, 56, 56, 60, 54],
     note: 'AI in operations and safety; moderate public commentary.',
+    source: 'https://www.investing.com/analysis/linde-ai-infrastructure-boom-fuels-recurring-revenue-for-industrial-gas-leader-200678482',
   },
   {
     name: 'PPG Industries',
@@ -1772,6 +1990,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Pittsburgh, PA',
     m: [50, 54, 50, 50, 54, 48],
     note: 'Limited public AI commentary.',
+    source: 'https://www.ppg.com/en-US/about-ppg/innovation',
   },
   {
     name: 'Illinois Tool Works',
@@ -1782,6 +2001,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Glenview, IL',
     m: [46, 50, 46, 46, 50, 44],
     note: 'Minimal public AI narrative.',
+    source: 'https://www.rudolflai.com/ai-research/companies/illinois-tool-works',
   },
   {
     name: 'GE Vernova',
@@ -1792,6 +2012,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Cambridge, MA',
     m: [56, 60, 56, 56, 60, 54],
     note: 'AI in grid and electrification; public commentary on AI-driven power demand.',
+    source: 'https://www.gevernova.com/news/press-releases/ge-vernova-introduces-gridosr-transmission-new-ai',
   },
   {
     name: 'Whirlpool',
@@ -1802,6 +2023,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Benton Harbor, MI',
     m: [50, 54, 50, 50, 54, 48],
     note: 'Limited public AI commentary; connected appliances.',
+    source: 'https://investors.whirlpoolcorp.com/news-and-events/news/news-details/2025/Whirlpool-Corporation-Invites-You-to-Experience-the-Future-of-Innovation-at-KBIS-2025/default.aspx',
   },
   {
     name: 'Carrier Global',
@@ -1812,6 +2034,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Palm Beach Gardens, FL',
     m: [58, 62, 58, 58, 60, 56],
     note: 'AI in HVAC and building services; moderate public commentary.',
+    source: 'https://www.carrier.com/commercial/en/us/news/news-article/carrier-introduces-generative-ai-feature-in-abound-to-elevate-building-operations-insights.html',
   },
 
   // ──────────────────────────────────── TRANSPORTATION & LOGISTICS ────────────────────────────────────
@@ -1824,6 +2047,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Memphis, TN',
     m: [72, 76, 72, 72, 72, 70],
     note: 'AI in routing and operations (FedEx Dataworks); public comments on gen-AI for customer service and network optimization.',
+    source: 'https://newsroom.fedex.com/newsroom/global-english/fedex-dataworks-and-servicenow-unite-ai-data-and-workflows-to-power-supply-chains-of-the-future',
   },
   {
     name: 'UPS',
@@ -1834,6 +2058,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Atlanta, GA',
     m: [70, 74, 70, 70, 70, 68],
     note: 'ORION route optimization plus AI; public comments (Tomé) on AI-driven network efficiency.',
+    source: 'https://www.ups.com/us/en/customized-shipping-logistic-services/wholesale-logistics-services/wholesaling-services-demand-signals-smarter-forecasting',
   },
   {
     name: 'Uber',
@@ -1844,6 +2069,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'San Francisco, CA',
     m: [72, 76, 70, 74, 68, 74],
     note: 'AI-native dispatch and pricing; public gen-AI support tools and customer-service agents.',
+    source: 'https://www.uber.com/us/en/ai-solutions/',
   },
   {
     name: 'Delta Air Lines',
@@ -1854,6 +2080,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Atlanta, GA',
     m: [62, 66, 62, 62, 64, 60],
     note: 'AI in operations (baggage, predictive maintenance); moderate public AI commentary.',
+    source: 'https://news.delta.com/delta-unveils-ai-powered-travel-journey-new-multi-modal-transportation-options',
   },
   {
     name: 'United Airlines',
@@ -1864,6 +2091,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Chicago, IL',
     m: [60, 64, 60, 60, 62, 58],
     note: 'AI in operations and crew scheduling; moderate public narrative.',
+    source: 'https://www.united.com/en/us/fly/help-center/digital-trust-center/ai-data-safety.html',
   },
   {
     name: 'American Airlines',
@@ -1874,6 +2102,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Fort Worth, TX',
     m: [58, 62, 58, 58, 60, 56],
     note: 'AI in operations and revenue management; measured public commentary.',
+    source: 'https://news.aa.com/news/news-details/2025/Artificial-intelligence-at-American-CORP-OTH-01/default.aspx',
   },
   {
     name: 'Southwest Airlines',
@@ -1884,6 +2113,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Dallas, TX',
     m: [56, 60, 56, 56, 58, 54],
     note: 'Limited public AI narrative; operational focus.',
+    source: 'https://www.southwestairlinesinvestorrelations.com/news-events/press-releases/detail/1932/southwest-airlines-partners-with-amazon-web-services-aws-to-accelerate-ai-capabilities-and-technology-modernization',
   },
   {
     name: 'Union Pacific',
@@ -1894,6 +2124,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Omaha, NE',
     m: [60, 62, 60, 60, 62, 58],
     note: 'AI in rail operations (autonomous inspection); moderate public commentary.',
+    source: 'https://www.up.com/news/safety/ai-powered-vision-inspects-track-260522',
   },
   {
     name: 'CSX',
@@ -1904,6 +2135,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Jacksonville, FL',
     m: [56, 60, 56, 56, 58, 54],
     note: 'AI in rail operations; moderate public commentary.',
+    source: 'https://www.trains.com/pro/freight/class-i/csx-embraces-ai-in-drive-to-improve-operations/',
   },
   {
     name: 'Norfolk Southern',
@@ -1914,6 +2146,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Atlanta, GA',
     m: [54, 58, 54, 54, 56, 52],
     note: 'AI in rail operations; limited public gen-AI narrative.',
+    source: 'https://www.norfolksouthern.com/en/newsroom/story-yard/introducing-the-wheel-integrity-system--ns--latest-safety-revolution',
   },
   {
     name: 'J.B. Hunt',
@@ -1924,6 +2157,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Lowell, AR',
     m: [58, 62, 58, 58, 60, 56],
     note: 'Autonomous-trucking pilots and AI routing; moderate public narrative.',
+    source: 'https://www.jbhunt.com/blog/company/a-year-of-innovation-and-impact',
   },
   {
     name: 'C.H. Robinson',
@@ -1934,6 +2168,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Eden Prairie, MN',
     m: [56, 60, 56, 56, 58, 54],
     note: 'AI freight brokerage (Navisphere); moderate public narrative.',
+    source: 'https://www.chrobinson.com/en-us/about-us/newsroom/press-releases/2026/100-trillion-data-points-fuel-chrobinson-agentic-supply-chains/',
   },
 
   // ─────────────────────────────────────────────── TELECOM & MEDIA ───────────────────────────────────────────────
@@ -1946,6 +2181,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'New York, NY',
     m: [68, 72, 66, 68, 70, 66],
     note: 'AI in network operations and customer service; public statements on gen-AI agents and network AI.',
+    source: 'https://www.verizon.com/about/news/verizon-unveils-ai-strategy-power-next-gen-ai-demands',
   },
   {
     name: 'AT&T',
@@ -1956,6 +2192,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Dallas, TX',
     m: [66, 70, 66, 66, 68, 64],
     note: 'AI in network automation; public "AI-powered network" commentary with moderate gen-AI.',
+    source: 'https://about.att.com/innovation/ai-and-data-science',
   },
   {
     name: 'T-Mobile',
@@ -1966,6 +2203,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Bellevue, WA',
     m: [70, 72, 68, 70, 70, 68],
     note: 'T-AI / gen-AI customer service; public AI-first service positioning.',
+    source: 'https://www.t-mobile.com/news/business/t-mobile-launches-intentcx-with-openai',
   },
   {
     name: 'Comcast',
@@ -1976,6 +2214,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Philadelphia, PA',
     m: [64, 68, 64, 64, 66, 62],
     note: 'AI in connectivity and Xfinity; moderate public commentary.',
+    source: 'https://corporate.comcast.com/press/releases/comcast-pushes-ai-to-the-edge-to-power-the-nations-smartest-broadband-network',
   },
   {
     name: 'Charter',
@@ -1986,6 +2225,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Stamford, CT',
     m: [60, 64, 60, 60, 62, 58],
     note: 'AI in network operations; limited public gen-AI narrative.',
+    source: 'https://corporate.charter.com/newsroom/spectrum-agents-use-ai-tools-to-strengthen-customer-connection',
   },
   {
     name: 'Disney',
@@ -1996,6 +2236,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Burbank, CA',
     m: [58, 62, 56, 58, 60, 56],
     note: 'AI in streaming recommendation and gen-AI production debates; publicly balanced posture from Iger.',
+    source: 'https://www.hollywoodreporter.com/business/digital/disney-plus-gen-ai-user-generated-content-1236426135/',
   },
   {
     name: 'Netflix',
@@ -2006,6 +2247,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'Los Gatos, CA',
     m: [64, 72, 60, 68, 62, 68],
     note: 'ML-driven recommendation is core; public comments treat AI as an efficiency tool in content production, not a headline strategy.',
+    source: 'https://netflixtechblog.com/foundation-model-for-personalized-recommendation-1a0bd8e02d39',
   },
   {
     name: 'Warner Bros. Discovery',
@@ -2016,6 +2258,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'New York, NY',
     m: [50, 54, 48, 50, 52, 48],
     note: 'AI in streaming; limited public gen-AI narrative amid debt reduction.',
+    source: 'https://www.wbd.com/news/warner-bros-discovery-announces-agentic-ai-powered-advertising-technology-built-aws-its',
   },
   {
     name: 'Paramount',
@@ -2026,6 +2269,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'New York, NY',
     m: [48, 52, 48, 48, 52, 46],
     note: 'Limited public AI commentary; pending merger context.',
+    source: 'https://www.pymnts.com/streaming/2025/streamings-ai-front-door-is-getting-more-valuable-just-ask-netflix-and-paramount/',
   },
   {
     name: 'Fox',
@@ -2036,6 +2280,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'New York, NY',
     m: [52, 56, 50, 52, 54, 50],
     note: 'AI in streaming (Tubi) and production; moderate public commentary.',
+    source: 'https://www.foxcorporation.com/news/corp-press-releases/2025/fox-advertising-announces-plans-for-2026-upfront-presentation/',
   },
   {
     name: 'News Corp',
@@ -2046,6 +2291,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
     location: 'New York, NY',
     m: [50, 54, 48, 50, 52, 48],
     note: 'AI content-licensing deals (e.g. OpenAI); public commentary on AI licensing economics.',
+    source: 'https://newscorp.com/2024/05/22/news-corp-and-openai-sign-landmark-multi-year-global-partnership/',
   },
 ];
 
