@@ -28,7 +28,8 @@ declare global {
 type GalaxyHandle = Record<string, any>;
 
 async function waitForApp(page: Page) {
-  await page.goto('/');
+  // The galaxy lives at /galaxy; the root route is the explainer landing page.
+  await page.goto('/galaxy');
   await expect
     .poll(
       () =>
@@ -374,6 +375,22 @@ test('adding a company creates a persistent star and flies to it', async ({ page
   expect(persisted.length).toBe(1);
   expect(persisted[0].name).toBe('Meridian Logistics');
 
+  // The toast is several seconds old by now (camera flight + assertions).
+  // With remaining-window semantics a slow refresh can legitimately expire
+  // it — that expiry is covered by the dedicated toast tests below. Here we
+  // reset the persisted createdAt so the reload simulates an immediate
+  // refresh: the "See trajectory" prompt must survive it.
+  await page.evaluate(() => {
+    const raw = sessionStorage.getItem('primero-galaxy:pending-toasts');
+    if (raw) {
+      const now = Date.now();
+      sessionStorage.setItem(
+        'primero-galaxy:pending-toasts',
+        JSON.stringify((JSON.parse(raw) as any[]).map((t) => ({ ...t, createdAt: now })))
+      );
+    }
+  });
+
   // Reload: the star survives (hydrated from localStorage, count reflects it)
   await page.reload();
   // Handles are re-registered by the fresh mount — wait for them before
@@ -424,8 +441,20 @@ test('adding a company creates a persistent star and flies to it', async ({ page
   expect(persistedAfterSheet).toBe(0);
 
   // The removal toast survives a reload (sessionStorage), so Undo still works
-  // after an accidental refresh.
+  // after an accidental refresh. As with the "added" toast above, reset the
+  // persisted createdAt so the reload models an immediate refresh rather than
+  // racing the 8s remaining-window (expiry is covered by dedicated tests).
   await expect(page.getByText('Removed from the galaxy.')).toBeVisible();
+  await page.evaluate(() => {
+    const raw = sessionStorage.getItem('primero-galaxy:pending-toasts');
+    if (raw) {
+      const now = Date.now();
+      sessionStorage.setItem(
+        'primero-galaxy:pending-toasts',
+        JSON.stringify((JSON.parse(raw) as any[]).map((t) => ({ ...t, createdAt: now })))
+      );
+    }
+  });
   await page.reload();
   await expect
     .poll(

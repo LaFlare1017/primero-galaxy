@@ -36,6 +36,11 @@ npm install
 npm run dev        # http://localhost:3000
 ```
 
+- **`/`** — explainer landing page (what the galaxy is, how to read it, how to navigate), leading into the tool
+- **`/galaxy`** — the 3D galaxy itself
+
+> Tip: for the direct experience, open `http://localhost:3000/galaxy`.
+
 Other scripts:
 
 ```bash
@@ -58,7 +63,7 @@ The E2E suite proves the interaction pipeline with **real browser input**: boot 
 ## Project Structure
 
 ```
-app/            Next.js routes: page, layout, /api/companies
+app/            Next.js routes: page (landing), galaxy/ (the tool), layout, /api/companies
 components/
   galaxy/       3D scene: GalaxyScene, StarField, StarLabels, ConstellationLines,
                 TrajectoryPath, PlanetSystem, DustParticles, CameraRig, PostProcessing
