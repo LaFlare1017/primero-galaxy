@@ -111,30 +111,36 @@ export default function LandingPage() {
       </header>
 
       {/* --------------------------------------------------------------- Hero */}
-      <section className="relative flex min-h-[100dvh] flex-col items-center justify-center px-6 pb-24 text-center">
+      <section className="relative flex min-h-[100dvh] flex-col items-center justify-center px-6 pb-24 text-center md:items-start md:px-[8vw] md:text-left">
+        {/* Readability scrim: a soft radial fade darkens the space behind the
+            hero text so it stays legible over the animated lines. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_90%_70%_at_35%_50%,rgba(3,3,8,0.92),rgba(3,3,8,0.45)_48%,transparent_78%)]"
+        />
         <p className={EYEBROW} style={fade(0)}>
-          AI Transformation Maturity
+          AI Transformation Maturity Visualization
         </p>
         <h1
-          className="mt-5 max-w-4xl animate-fade-in text-5xl font-semibold tracking-title text-star-bright md:text-[72px] md:leading-[1.05]"
+          className="mt-5 max-w-4xl animate-fade-in text-4xl font-semibold leading-[1.05] tracking-title text-star-bright md:text-6xl"
           style={fade(0.1)}
         >
           The AI Transformation Galaxy
         </h1>
         <p
-          className="mt-6 text-xs uppercase tracking-label text-ui-muted md:text-sm"
+          className="mt-5 max-w-[62ch] text-base leading-relaxed text-star-bright/90 md:text-lg"
           style={fade(0.25)}
         >
-          {COMPANY_COUNT} Fortune 500 companies. One universe. Explore.
+          Each star is a Fortune 500 company embarking on an AI Transformation
+          journey. Explore.
         </p>
         <p
-          className="mt-6 max-w-xl text-[15px] leading-relaxed text-ui-dim"
+          className="mt-4 max-w-[62ch] text-[15px] leading-relaxed text-ui-dim"
           style={fade(0.4)}
         >
-          A living 3D map of how America&apos;s largest enterprises are becoming
-          AI-native. Every star is a company, its color its estimated AI
-          maturity. Zoom in and every star becomes a planet you can orbit,
-          inspect, and transform.
+          A living 3D map of America&apos;s largest enterprises becoming
+          AI-native. Color marks each company&apos;s estimated maturity — zoom in
+          and any star becomes a planet you can orbit, inspect, and transform.
         </p>
         <div
           className="mt-10 flex flex-col items-center gap-3 sm:flex-row"
@@ -162,7 +168,7 @@ export default function LandingPage() {
       </section>
 
       {/* ------------------------------------------------------ What it is */}
-      <section className="px-6 py-24">
+      <section className="bg-void/30 px-6 py-24">
         <div className="mx-auto max-w-5xl">
           <p className={EYEBROW}>What it is</p>
           <h2 className={`${SECTION_TITLE} mt-3`}>
@@ -311,7 +317,7 @@ export default function LandingPage() {
       </section>
 
       {/* ------------------------------------------------------- Navigation */}
-      <section className="px-6 py-24">
+      <section className="bg-void/30 px-6 py-24">
         <div className="mx-auto max-w-5xl">
           <p className={EYEBROW}>Explore</p>
           <h2 className={`${SECTION_TITLE} mt-3`}>Fly like a spacecraft.</h2>
@@ -490,7 +496,7 @@ export default function LandingPage() {
       </section>
 
       {/* ------------------------------------------------------- Final CTA */}
-      <section className="px-6 py-32 text-center">
+      <section className="bg-void/30 px-6 py-32 text-center">
         <h2 className="mx-auto max-w-2xl text-3xl font-semibold tracking-title text-star-bright md:text-4xl">
           Your company could be one of the stars.
         </h2>
