@@ -53,6 +53,46 @@ body::before {
   }
 }
 
+/* Legend "star bubble" (landing page): a hollow ring with a dark interior
+   and a glowing rim, breathing like the animated stars in the galaxy tool.
+   Per-dot colors come from --bubble (rim) and --bubble-glow (bloom) so each
+   maturity band keeps its red → amber → teal story. */
+.legend-bubble {
+  --bubble: #ff6b35;
+  --bubble-glow: rgba(255, 107, 53, 0.5);
+  width: 20px;
+  height: 20px;
+  border-radius: 9999px;
+  border: 1.5px solid var(--bubble);
+  background: radial-gradient(circle at 50% 50%, rgba(3, 3, 8, 0.9) 0 56%, transparent 57%);
+  box-shadow:
+    0 0 10px var(--bubble-glow),
+    inset 0 0 5px var(--bubble-glow);
+  animation: bubbleBreathe 3.6s ease-in-out infinite;
+}
+
+@keyframes bubbleBreathe {
+  0%,
+  100% {
+    transform: scale(1);
+    box-shadow:
+      0 0 8px var(--bubble-glow),
+      inset 0 0 4px var(--bubble-glow);
+  }
+  50% {
+    transform: scale(1.22);
+    box-shadow:
+      0 0 16px var(--bubble-glow),
+      inset 0 0 7px var(--bubble-glow);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .legend-bubble {
+    animation: none;
+  }
+}
+
 ::selection {
   background: rgba(0, 217, 192, 0.25);
   color: #ffffff;

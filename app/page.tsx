@@ -18,6 +18,34 @@ const fade = (delay: number): React.CSSProperties => ({
 const EYEBROW = 'text-[11px] font-semibold uppercase tracking-label text-trajectory';
 const SECTION_TITLE = 'text-3xl font-semibold tracking-title text-star-bright md:text-4xl';
 
+/**
+ * Legend dot: a hollow glowing "star bubble" that breathes like the animated
+ * stars in the galaxy tool. The rim/bloom colors arrive as CSS custom
+ * properties so each maturity band keeps its red → amber → teal story.
+ */
+function LegendBubble({
+  color,
+  glow,
+  delay = 0,
+}: {
+  color: string;
+  glow: string;
+  delay?: number;
+}) {
+  return (
+    <span
+      className="legend-bubble shrink-0"
+      style={
+        {
+          '--bubble': color,
+          '--bubble-glow': glow,
+          animationDelay: `${delay}s`,
+        } as React.CSSProperties
+      }
+    />
+  );
+}
+
 export default function LandingPage() {
   return (
     <main className="h-screen overflow-y-auto">
@@ -161,7 +189,7 @@ export default function LandingPage() {
 
           <div className="mt-10 grid gap-3 md:grid-cols-3">
             <div className="flex items-center gap-4 rounded-xl border border-border-subtle bg-void/60 p-5">
-              <span className="h-4 w-4 shrink-0 rounded-full bg-maturity-low shadow-[0_0_12px_rgba(255,107,53,0.5)]" />
+              <LegendBubble color="#FF6B35" glow="rgba(255,107,53,0.5)" />
               <div>
                 <h3 className="text-[13px] font-medium text-star-bright">
                   Low maturity · 0–40
@@ -172,7 +200,7 @@ export default function LandingPage() {
               </div>
             </div>
             <div className="flex items-center gap-4 rounded-xl border border-border-subtle bg-void/60 p-5">
-              <span className="h-4 w-4 shrink-0 rounded-full bg-maturity-mid shadow-[0_0_12px_rgba(247,197,72,0.5)]" />
+              <LegendBubble color="#F7C548" glow="rgba(247,197,72,0.5)" delay={-1.2} />
               <div>
                 <h3 className="text-[13px] font-medium text-star-bright">
                   Mid maturity · 40–70
@@ -183,7 +211,7 @@ export default function LandingPage() {
               </div>
             </div>
             <div className="flex items-center gap-4 rounded-xl border border-border-subtle bg-void/60 p-5">
-              <span className="h-4 w-4 shrink-0 rounded-full bg-maturity-high shadow-[0_0_12px_rgba(0,217,192,0.5)]" />
+              <LegendBubble color="#00D9C0" glow="rgba(0,217,192,0.5)" delay={-2.4} />
               <div>
                 <h3 className="text-[13px] font-medium text-star-bright">
                   High maturity · 70–100
