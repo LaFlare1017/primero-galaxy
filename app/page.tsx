@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ContactForm } from '@/components/ui/ContactForm';
+import InteractiveLines from '@/components/ui/InteractiveLines';
 import { breathTiming } from '@/lib/constants';
 import { COMPANY_COUNT } from '@/lib/fortune500-data';
 
@@ -79,6 +80,21 @@ function LegendBubble({
 export default function LandingPage() {
   return (
     <main className="h-[100dvh] overflow-y-auto">
+      {/* Fixed reactive-lines background (Originkit canvas, decorative): sits
+          behind the scrolling content, reacts to the cursor. Colors tuned to
+          the app tokens — void base, lavender lines. */}
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0">
+        <InteractiveLines
+          backgroundColor="#030308"
+          lineColor="#ABABC7"
+          lineWidth={0.5}
+          minLines={108}
+          maxLines={15}
+        />
+      </div>
+
+      {/* Page content above the background */}
+      <div className="relative z-10">
       {/* ---------------------------------------------------------------- Nav */}
       <header className="fixed inset-x-0 top-0 z-10 flex h-14 items-center justify-between border-b border-border-subtle/60 bg-void/70 px-6 backdrop-blur-md">
         <span className="text-[13px] font-semibold tracking-[0.18em] text-star-bright">
@@ -95,7 +111,7 @@ export default function LandingPage() {
       </header>
 
       {/* --------------------------------------------------------------- Hero */}
-      <section className="flex min-h-[100dvh] flex-col items-center justify-center px-6 pb-24 text-center">
+      <section className="relative flex min-h-[100dvh] flex-col items-center justify-center px-6 pb-24 text-center">
         <p className={EYEBROW} style={fade(0)}>
           AI Transformation Maturity
         </p>
@@ -501,6 +517,7 @@ export default function LandingPage() {
           </Link>
         </div>
       </footer>
+      </div>
     </main>
   );
 }
