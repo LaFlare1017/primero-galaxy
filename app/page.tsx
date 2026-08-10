@@ -28,7 +28,7 @@ export default function LandingPage() {
         </span>
         <nav aria-label="Primary">
           <Link
-            href="/galaxy"
+            href="/galaxy" prefetch={false}
             className="rounded-md border border-maturity-high/50 px-3 py-1.5 text-[12px] font-medium text-maturity-high transition-colors hover:bg-maturity-high/10"
           >
             Enter the galaxy →
@@ -66,7 +66,7 @@ export default function LandingPage() {
           style={fade(0.55)}
         >
           <Link
-            href="/galaxy"
+            href="/galaxy" prefetch={false}
             className="rounded-md bg-maturity-high px-6 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90"
           >
             Enter the galaxy
@@ -324,7 +324,7 @@ export default function LandingPage() {
           </p>
           <div className="mt-8 flex flex-col items-center gap-6">
             <Link
-              href="/galaxy"
+              href="/galaxy" prefetch={false}
               className="rounded-md bg-maturity-high px-6 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90"
             >
               Add your company to the galaxy
@@ -346,7 +346,7 @@ export default function LandingPage() {
           yourself in 500 stories of transformation.
         </p>
         <Link
-          href="/galaxy"
+          href="/galaxy" prefetch={false}
           className="mt-8 inline-block rounded-md bg-maturity-high px-8 py-3.5 text-sm font-semibold text-void transition-opacity hover:opacity-90"
         >
           Enter the galaxy
@@ -357,7 +357,7 @@ export default function LandingPage() {
         <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-3 text-[11px] text-ui-muted sm:flex-row">
           <span className="font-semibold tracking-[0.18em] text-ui-dim">PRIMERO GALAXY</span>
           <span>500 companies · 7 industries · 7 ERP systems</span>
-          <Link href="/galaxy" className="transition-colors hover:text-star-bright">
+          <Link href="/galaxy" prefetch={false} className="transition-colors hover:text-star-bright">
             Launch the galaxy ↗
           </Link>
         </div>
