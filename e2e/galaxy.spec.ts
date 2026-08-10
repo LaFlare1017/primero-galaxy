@@ -237,10 +237,14 @@ test('double-clicking a star opens planet view; trajectory + reset complete the 
   await waitForApp(page);
   const company = await getTargetCompany(page);
   await lookAtStar(page, company.id);
-  const point = await hoverStar(page, company.id, company.name);
+  await hoverStar(page, company.id, company.name);
 
-  // Real double-click on the star.
-  await page.mouse.dblclick(point.x, point.y);
+  // Real double-click on the star. The galaxy mesh rotates continuously
+  // (~0.008 rad/s), so the hover point goes stale before the click — under
+  // load the hover→click gap drifts the star off that pixel. Re-project at
+  // click time (the same freshness discipline hoverStar applies per attempt).
+  const { x, y } = await projectStar(page, company.id);
+  await page.mouse.dblclick(x, y);
 
   // Store flips to planet mode and the camera flies in.
   await expect
