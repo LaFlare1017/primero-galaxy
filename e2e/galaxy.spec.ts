@@ -946,6 +946,66 @@ test('removing the same company twice keeps one Removed toast; Undo restores it'
   });
 });
 
+test('the Add Company form rejects a duplicate company name', async ({ page }) => {
+  test.setTimeout(120_000);
+  await waitForApp(page);
+
+  // Seed a user star so the form has a name to collide with.
+  await page.evaluate((star) => {
+    localStorage.setItem('primero-galaxy:user-stars', JSON.stringify([star]));
+  }, makeSeedStar());
+  await page.reload();
+  await waitForGalaxyBoot(page);
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () => (window.__galaxy as GalaxyHandle).store.getState().userStars.length
+        ),
+      { timeout: 30_000 }
+    )
+    .toBe(1);
+
+  // Type the same company with different case and whitespace: the form must
+  // flag it (slug identity is case/whitespace-insensitive) and refuse to
+  // submit, without touching the store.
+  await page.getByRole('button', { name: 'Add Company' }).click();
+  await expect(page.getByRole('heading', { name: 'Add Your Company' })).toBeVisible();
+  const nameInput = page.getByLabel('Company name');
+  await nameInput.fill('  WINDOW TEST CO ');
+  await expect(
+    page.getByText('This company is already in your galaxy.')
+  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add to galaxy' })).toBeDisabled();
+  await expect(nameInput).toHaveAttribute('aria-invalid', 'true');
+  const countWhileBlocked = await page.evaluate(
+    () => (window.__galaxy as GalaxyHandle).store.getState().userStars.length
+  );
+  expect(countWhileBlocked).toBe(1);
+
+  // The store guard itself also refuses the duplicate, for any caller.
+  await page.evaluate((star) => {
+    (window.__galaxy as GalaxyHandle).store.getState().addUserStar(star);
+  }, makeSeedStar());
+  const countAfterGuard = await page.evaluate(
+    () => (window.__galaxy as GalaxyHandle).store.getState().userStars.length
+  );
+  expect(countAfterGuard).toBe(1);
+
+  // A genuinely new name clears the error and re-enables submit.
+  await nameInput.fill('Acme Logistics');
+  await expect(
+    page.getByText('This company is already in your galaxy.')
+  ).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Add to galaxy' })).toBeEnabled();
+
+  // Final cleanup: the suite must leave no user stars behind.
+  await page.evaluate(() => {
+    const s = (window.__galaxy as GalaxyHandle).store.getState();
+    s.userStars.forEach((u: any) => s.removeUserStar(u.id));
+  });
+});
+
 test('the landing page contact form renders and submits a pre-filled mailto', async ({ page }) => {
   // The root route is the explainer landing page.
   await page.goto('/');

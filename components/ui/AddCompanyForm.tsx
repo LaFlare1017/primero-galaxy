@@ -5,6 +5,7 @@ import { INDUSTRIES, Industry } from '@/types';
 import { useGalaxyStore } from '@/store/galaxyStore';
 import { createUserCompany } from '@/lib/user-company';
 import { maturityColor, maturityLabel } from '@/lib/constants';
+import { slugify } from '@/lib/utils';
 
 const EASE = [0.16, 1, 0.3, 1] as const;
 
@@ -48,7 +49,10 @@ export function AddCompanyForm({
     }
   }, [open]);
 
-  const canSubmit = name.trim().length > 0;
+  // Same slug as an existing star = the same company (the store keys on slug
+  // too, so toast dedupe and this check agree). Case- and whitespace-insensitive.
+  const duplicate = userStars.some((s) => s.slug === slugify(name));
+  const canSubmit = name.trim().length > 0 && !duplicate;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -104,16 +108,29 @@ export function AddCompanyForm({
             </div>
 
             {/* Company name */}
-            <label className="mb-4 block">
-              <span className={labelClass}>Company name</span>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Meridian Logistics"
-                autoFocus
-                className={fieldClass}
-              />
-            </label>
+            <div className="mb-4">
+              <label className="block">
+                <span className={labelClass}>Company name</span>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="e.g. Meridian Logistics"
+                  autoFocus
+                  aria-invalid={duplicate && name.trim().length > 0}
+                  aria-describedby={duplicate ? 'company-name-error' : undefined}
+                  className={fieldClass}
+                />
+              </label>
+              {duplicate && name.trim().length > 0 && (
+                <p
+                  id="company-name-error"
+                  role="alert"
+                  className="mt-1.5 text-xs font-medium text-[#F87171]"
+                >
+                  This company is already in your galaxy.
+                </p>
+              )}
+            </div>
 
             <div className="mb-4 grid grid-cols-1 gap-3">
               {/* Industry */}

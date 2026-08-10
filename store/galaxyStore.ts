@@ -177,6 +177,10 @@ export const useGalaxyStore = create<GalaxyState>((set) => ({
   },
   addUserStar: (star) =>
     set((state) => {
+      // No duplicate companies: the same slug (case/whitespace-insensitive
+      // name) is already a star — the form rejects it up front, and this
+      // guard covers any other caller.
+      if (state.userStars.some((s) => s.slug === star.slug)) return state;
       const userStars = [...state.userStars, star];
       persistUserStars(userStars);
       // Persist the "added" toast too, so the "See trajectory" prompt
