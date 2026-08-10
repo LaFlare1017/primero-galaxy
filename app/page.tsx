@@ -295,6 +295,38 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ------------------------------------------------------- Contact */}
+      <section
+        id="contact"
+        className="border-t border-border-subtle/60 bg-nebula/30 px-6 py-24"
+      >
+        <div className="mx-auto max-w-3xl text-center">
+          <p className={EYEBROW}>Get in touch</p>
+          <h2 className={`${SECTION_TITLE} mt-3`}>
+            Ready to map your own AI transformation?
+          </h2>
+          <p className="mx-auto mt-4 max-w-lg text-[14px] leading-relaxed text-ui-dim">
+            Add your company to the galaxy and see the trajectory you could
+            be on — or reach out to Primero for a full maturity assessment.
+          </p>
+          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+            <Link
+              href="/galaxy"
+              className="rounded-md bg-maturity-high px-6 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90"
+            >
+              Add your company to the galaxy
+            </Link>
+            {/* TODO: replace with the real Primero contact address */}
+            <a
+              href="mailto:contact@primero.example.com"
+              className="rounded-md border border-border-subtle px-6 py-3 text-sm font-medium text-ui-dim transition-colors hover:border-star-dim hover:text-star-bright"
+            >
+              contact@primero.example.com
+            </a>
+          </div>
+        </div>
+      </section>
+
       {/* ------------------------------------------------------- Final CTA */}
       <section className="px-6 py-32 text-center">
         <h2 className="mx-auto max-w-2xl text-3xl font-semibold tracking-title text-star-bright md:text-4xl">

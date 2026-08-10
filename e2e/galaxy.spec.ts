@@ -253,6 +253,13 @@ test('double-clicking a star opens planet view; trajectory + reset complete the 
   await expect(page.locator('svg[aria-label="Maturity radar chart"]')).toBeVisible();
   await expect(page.getByRole('button', { name: '← Back to Galaxy' })).toBeVisible();
 
+  // The Contact CTA leads to the landing page's contact section, not a dead
+  // #contact anchor.
+  await expect(page.getByRole('link', { name: 'Contact Primero' })).toHaveAttribute(
+    'href',
+    '/#contact'
+  );
+
   // Trajectory: the panel section reveals projections and a 3D path draws in.
   const seeTrajectory = page.getByRole('button', { name: 'See Trajectory' });
   await expect(seeTrajectory).toBeVisible();

@@ -244,8 +244,9 @@ export function PlanetPanel() {
 
             {/* CTAs */}
             <div className="mt-8 space-y-2">
+              {/* Leads to the landing page's #contact section (full navigation). */}
               <a
-                href="#contact"
+                href="/#contact"
                 className="block rounded-md bg-maturity-high px-4 py-2.5 text-center text-[13px] font-semibold text-void transition-opacity hover:opacity-90"
               >
                 Contact Primero
