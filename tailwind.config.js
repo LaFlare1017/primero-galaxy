@@ -15,7 +15,7 @@ module.exports = {
         'maturity-mid': '#F7C548',
         'maturity-high': '#00D9C0',
         trajectory: '#7B61FF',
-        'ui-muted': '#6B6B8A',
+        'ui-muted': '#8E8EAE', // ≥4.5:1 on void/nebula (was #6B6B8A @ 4.0:1)
         'ui-dim': '#B0B0C8',
         'border-subtle': '#1A1A3A',
       },

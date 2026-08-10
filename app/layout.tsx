@@ -2,7 +2,11 @@ import type { Metadata, Viewport } from 'next';
 import { GeistSans } from 'geist/font/sans';
 import './globals.css';
 
+// Absolute base for OG/twitter image URLs and the canonical link. Set
+// NEXT_PUBLIC_SITE_URL at deploy time (e.g. https://primero-galaxy.vercel.app);
+// the localhost fallback keeps local builds deterministic.
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'),
   title: 'Primero Galaxy — The AI Transformation Maturity Galaxy',
   description:
     'An explorable galaxy where every star is a company and every trajectory is a path to AI maturity. 500 companies. One universe. Explore.',

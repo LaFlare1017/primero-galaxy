@@ -14,7 +14,7 @@ export function ContactForm() {
   const [sent, setSent] = useState(false);
 
   const inputClass =
-    'w-full rounded-md border border-border-subtle bg-void/80 px-3 py-2.5 text-sm text-star-bright outline-none transition-colors placeholder:text-ui-muted/60 focus:border-star-dim';
+    'w-full rounded-md border border-border-subtle bg-void/80 px-3 py-2.5 text-sm text-star-bright outline-none transition-colors placeholder:text-ui-muted/85 focus:border-star-dim';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,6 +40,7 @@ export function ContactForm() {
   return (
     <form
       onSubmit={handleSubmit}
+      aria-label="Contact Primero"
       className="rounded-xl border border-border-subtle bg-void/60 p-6 text-left"
     >
       <div className="grid gap-4 sm:grid-cols-2">

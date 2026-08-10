@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   title: 'Primero Galaxy — An Explorable AI Transformation Galaxy',
   description:
     'Every star is a company. Every constellation is a transformation strategy. Every trajectory is a path to AI maturity. Explore 500 companies in 3D.',
+  alternates: { canonical: '/' },
 };
 
 /** Staggered fade-in helper: keyframes come from Tailwind (animate-fade-in). */
@@ -25,12 +26,14 @@ export default function LandingPage() {
         <span className="text-[13px] font-semibold tracking-[0.18em] text-star-bright">
           PRIMERO GALAXY
         </span>
-        <Link
-          href="/galaxy"
-          className="rounded-md border border-maturity-high/50 px-3 py-1.5 text-[12px] font-medium text-maturity-high transition-colors hover:bg-maturity-high/10"
-        >
-          Enter the galaxy →
-        </Link>
+        <nav aria-label="Primary">
+          <Link
+            href="/galaxy"
+            className="rounded-md border border-maturity-high/50 px-3 py-1.5 text-[12px] font-medium text-maturity-high transition-colors hover:bg-maturity-high/10"
+          >
+            Enter the galaxy →
+          </Link>
+        </nav>
       </header>
 
       {/* --------------------------------------------------------------- Hero */}
@@ -99,7 +102,10 @@ export default function LandingPage() {
 
           <div className="mt-12 grid gap-4 md:grid-cols-3">
             <div className="rounded-xl border border-border-subtle bg-nebula/40 p-6">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-border-subtle bg-void text-lg">
+              <div
+                aria-hidden="true"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-border-subtle bg-void text-lg"
+              >
                 ⭐
               </div>
               <h3 className="mt-4 text-[15px] font-semibold text-star-bright">
@@ -112,7 +118,10 @@ export default function LandingPage() {
               </p>
             </div>
             <div className="rounded-xl border border-border-subtle bg-nebula/40 p-6">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-border-subtle bg-void text-lg">
+              <div
+                aria-hidden="true"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-border-subtle bg-void text-lg"
+              >
                 🎨
               </div>
               <h3 className="mt-4 text-[15px] font-semibold text-star-bright">
@@ -125,7 +134,10 @@ export default function LandingPage() {
               </p>
             </div>
             <div className="rounded-xl border border-border-subtle bg-nebula/40 p-6">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-border-subtle bg-void text-lg">
+              <div
+                aria-hidden="true"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-border-subtle bg-void text-lg"
+              >
                 ✦
               </div>
               <h3 className="mt-4 text-[15px] font-semibold text-star-bright">
@@ -151,9 +163,9 @@ export default function LandingPage() {
             <div className="flex items-center gap-4 rounded-xl border border-border-subtle bg-void/60 p-5">
               <span className="h-4 w-4 shrink-0 rounded-full bg-maturity-low shadow-[0_0_12px_rgba(255,107,53,0.5)]" />
               <div>
-                <div className="text-[13px] font-medium text-star-bright">
+                <h3 className="text-[13px] font-medium text-star-bright">
                   Low maturity · 0–40
-                </div>
+                </h3>
                 <div className="mt-0.5 text-[12px] text-ui-muted">
                   Early AI adoption — data scattered, workflows manual.
                 </div>
@@ -162,9 +174,9 @@ export default function LandingPage() {
             <div className="flex items-center gap-4 rounded-xl border border-border-subtle bg-void/60 p-5">
               <span className="h-4 w-4 shrink-0 rounded-full bg-maturity-mid shadow-[0_0_12px_rgba(247,197,72,0.5)]" />
               <div>
-                <div className="text-[13px] font-medium text-star-bright">
+                <h3 className="text-[13px] font-medium text-star-bright">
                   Mid maturity · 40–70
-                </div>
+                </h3>
                 <div className="mt-0.5 text-[12px] text-ui-muted">
                   Standardizing workflows, first AI use cases in production.
                 </div>
@@ -173,9 +185,9 @@ export default function LandingPage() {
             <div className="flex items-center gap-4 rounded-xl border border-border-subtle bg-void/60 p-5">
               <span className="h-4 w-4 shrink-0 rounded-full bg-maturity-high shadow-[0_0_12px_rgba(0,217,192,0.5)]" />
               <div>
-                <div className="text-[13px] font-medium text-star-bright">
+                <h3 className="text-[13px] font-medium text-star-bright">
                   High maturity · 70–100
-                </div>
+                </h3>
                 <div className="mt-0.5 text-[12px] text-ui-muted">
                   Scaled AI deployment, governance in place, agents at work.
                 </div>
@@ -186,9 +198,9 @@ export default function LandingPage() {
           <div className="mt-6 flex items-center gap-4 rounded-xl border border-trajectory/30 bg-trajectory/5 p-5">
             <span className="h-0.5 w-8 shrink-0 rounded-full bg-trajectory" />
             <div>
-              <div className="text-[13px] font-medium text-trajectory">
+              <h3 className="text-[13px] font-medium text-trajectory">
                 Violet paths are trajectories
-              </div>
+              </h3>
               <div className="mt-0.5 text-[12px] text-ui-muted">
                 The projected route from where a company is to where it could
                 be — complete with milestones and ROI.
@@ -212,7 +224,7 @@ export default function LandingPage() {
               ['Esc', 'to return to the galaxy'],
             ].map(([k, v]) => (
               <div key={k} className="rounded-xl border border-border-subtle bg-void/60 p-5">
-                <div className="text-[13px] font-semibold text-star-bright">{k}</div>
+                <h3 className="text-[13px] font-semibold text-star-bright">{k}</h3>
                 <div className="mt-1 text-[12px] leading-relaxed text-ui-muted">{v}</div>
               </div>
             ))}
@@ -238,7 +250,7 @@ export default function LandingPage() {
                 ],
               ].map(([t, d]) => (
                 <div key={t}>
-                  <div className="text-[14px] font-semibold text-maturity-high">{t}</div>
+                  <h3 className="text-[14px] font-semibold text-maturity-high">{t}</h3>
                   <p className="mt-1.5 text-[13px] leading-relaxed text-ui-muted">{d}</p>
                 </div>
               ))}
@@ -283,7 +295,7 @@ export default function LandingPage() {
                 milestone-by-milestone plans drawn in 3D space.
               </p>
             </div>
-            <div className="rounded-xl border border-border-subtle bg-void/60 p-6 opacity-70">
+            <div className="rounded-xl border border-border-subtle bg-void/60 p-6 opacity-85">
               <h3 className="text-[15px] font-semibold text-star-bright">
                 PE portfolio mode
               </h3>

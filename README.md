@@ -41,6 +41,8 @@ npm run dev        # http://localhost:3000
 
 > Tip: for the direct experience, open `http://localhost:3000/galaxy`.
 
+**Environment** — set `NEXT_PUBLIC_SITE_URL` at deploy time (e.g. `https://primero-galaxy.vercel.app`). It becomes the `metadataBase` for the Open Graph / Twitter image URLs and the canonical link; without it, local builds fall back to `http://localhost:3000`.
+
 Other scripts:
 
 ```bash
