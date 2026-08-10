@@ -1,0 +1,96 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --void: #030308;
+  --nebula: #0a0a1a;
+  --star-bright: #ffffff;
+  --star-dim: #4a4a6a;
+  --maturity-low: #ff6b35;
+  --maturity-mid: #f7c548;
+  --maturity-high: #00d9c0;
+  --trajectory: #7b61ff;
+  --ui-muted: #6b6b8a;
+  --ui-dim: #b0b0c8;
+  --border-subtle: #1a1a3a;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--void);
+  color: var(--star-bright);
+  font-family: var(--font-geist-sans), Geist, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Faint breathing nebula gradient behind the 3D canvas (pure CSS, cheap). */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 62% 50% at 50% 46%,
+    rgba(10, 10, 26, 0.9) 0%,
+    rgba(3, 3, 8, 0) 68%
+  );
+  animation: nebulaBreathe 12s ease-in-out infinite;
+}
+
+@keyframes nebulaBreathe {
+  0%,
+  100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+::selection {
+  background: rgba(0, 217, 192, 0.25);
+  color: #ffffff;
+}
+
+/* Dark scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #1a1a3a transparent;
+}
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: #1a1a3a;
+  border-radius: 999px;
+}
+
+/* UI glass surfaces */
+.glass {
+  background: rgba(3, 3, 8, 0.9);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+}
+
+/* Reduce motion */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
