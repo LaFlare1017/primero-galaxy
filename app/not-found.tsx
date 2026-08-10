@@ -14,14 +14,15 @@ const VIDEO_SRC =
  * lockup centered at top, and a centered 404 column set in Geist Mono
  * SemiBold. Mobile (≤640px) scales the lockup to 75% and tightens the
  * content column. Adapted from the Vite + Tailwind v4 reference to this
- * Next.js + Tailwind v3 build: the mono face is the project's own
- * self-hosted Geist Mono (next/font) instead of the Figma-hosted URL.
+ * Next.js + Tailwind v3 build: the mono face is a system mono stack
+ * (Tailwind's default `font-mono`) rather than a downloaded webfont, so
+ * the error page keeps its compact mono character without adding a font
+ * preload to the critical path of / and /galaxy.
  */
 export default function NotFound() {
   return (
     <main
-      className="relative min-h-[100svh] overflow-y-auto bg-void"
-      style={{ fontFamily: 'var(--font-geist-mono)' }}
+      className="relative min-h-[100svh] overflow-y-auto bg-void font-mono"
     >
       {/* Full-viewport background video — lowest layer, its own motion is the
           only background animation. No tint, blur, or overlay of any kind. */}
