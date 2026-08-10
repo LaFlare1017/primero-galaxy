@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { ContactForm } from '@/components/ui/ContactForm';
 
 export const metadata: Metadata = {
   title: 'Primero Galaxy — An Explorable AI Transformation Galaxy',
@@ -309,20 +310,16 @@ export default function LandingPage() {
             Add your company to the galaxy and see the trajectory you could
             be on — or reach out to Primero for a full maturity assessment.
           </p>
-          <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+          <div className="mt-8 flex flex-col items-center gap-6">
             <Link
               href="/galaxy"
               className="rounded-md bg-maturity-high px-6 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90"
             >
               Add your company to the galaxy
             </Link>
-            {/* TODO: replace with the real Primero contact address */}
-            <a
-              href="mailto:contact@primero.example.com"
-              className="rounded-md border border-border-subtle px-6 py-3 text-sm font-medium text-ui-dim transition-colors hover:border-star-dim hover:text-star-bright"
-            >
-              contact@primero.example.com
-            </a>
+            <div className="w-full max-w-xl">
+              <ContactForm />
+            </div>
           </div>
         </div>
       </section>

@@ -81,7 +81,7 @@ The following handoff-spec features are stubbed in the UI as "Coming soon" and a
 
 - **PE Portfolio Mode** — multi-select 3–7 portfolio companies, then watch Standardize → Cluster → Deploy animations and results counters.
 - **Compare companies** — side-by-side maturity comparison.
-- **Contact Primero** — the CTA in planet view links to the landing page's `#contact` section; drop in the real contact email (currently a placeholder in `app/page.tsx`).
+- **Contact Primero** — the CTA in planet view links to the landing page's `#contact` section, which hosts a gated contact form (the address is only assembled on an actual submission, never rendered on the page).
 - **Ambient generative audio** with a mute control, plus a full `prefers-reduced-motion` pass.
 - **Mobile strategy** — a light 3D mode or 2D fallback for touch devices.
 
