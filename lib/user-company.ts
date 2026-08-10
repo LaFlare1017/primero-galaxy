@@ -1,10 +1,9 @@
-import { Company, ERPSystem, Industry, MaturityScores, Milestone, Position3D } from '@/types';
+import { Company, Industry, MaturityScores, Milestone, Position3D } from '@/types';
 import { clamp, round, slugify } from './utils';
 
 export interface UserCompanyInput {
   name: string;
   industry: Industry;
-  erpSystem: ERPSystem;
   /** Current AI status (0-100) — becomes the maturity overall score. */
   aiStatus: number;
 }
@@ -55,11 +54,10 @@ export function createUserCompany(input: UserCompanyInput): Company {
     name: input.name.trim(),
     slug: slugify(input.name),
     industry: input.industry,
-    erpSystem: input.erpSystem,
     size: '<50',
     maturity,
     position,
-    constellationId: `${input.industry}::${input.erpSystem}`,
+    constellationId: input.industry,
     founded: 2026,
     revenue,
     employees: 30 + Math.round(overall * 2.2),
@@ -95,7 +93,7 @@ function buildTrajectory(
     {
       month: 3,
       title: 'Workflow standardization complete',
-      description: 'SOPs unified across the ERP footprint',
+      description: 'Standard operating procedures unified across business units',
       impact: round(projectedEbitdaImpact * 0.3, 1),
     },
     {

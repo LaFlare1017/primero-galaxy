@@ -134,7 +134,7 @@ export default function OpengraphImage() {
               marginTop: 32,
             }}
           >
-            500 companies. One universe. Explore.
+            Fortune 500 enterprises. One universe. Explore.
           </div>
         </div>
       </div>

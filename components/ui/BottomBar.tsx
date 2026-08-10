@@ -35,7 +35,7 @@ export function BottomBar({
           PRIMERO GALAXY
         </span>
         <span className="text-[11px] text-ui-muted">
-          {companies.length} stars · 7 industries · 7 ERP systems
+          {companies.length} stars · {new Set(companies.map((c) => c.industry)).size} industries
         </span>
       </div>
 

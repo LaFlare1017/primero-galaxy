@@ -135,8 +135,49 @@ body::before {
   }
 }
 
+/* Trajectory indicator line (landing page): pulses its violet glow on the
+   same starBreath halo wave as the legend bubbles (glow = 12 + 4·sin(θ)), so
+   the whole legend breathes as one family. Duration/phase come from
+   breathTiming() at render time; the line itself keeps its shape (glow only).
+   The default duration is star 3's halo period (2π/1.6 ≈ 3.93s). */
+.trajectory-breathe {
+  --trajectory-glow: rgba(123, 97, 255, 0.5);
+  animation: trajectoryGlow 3.93s linear infinite;
+}
+
+@keyframes trajectoryGlow {
+  0% {
+    box-shadow: 0 0 12px var(--trajectory-glow);
+  }
+  12.5% {
+    box-shadow: 0 0 14.8px var(--trajectory-glow);
+  }
+  25% {
+    box-shadow: 0 0 16px var(--trajectory-glow);
+  }
+  37.5% {
+    box-shadow: 0 0 14.8px var(--trajectory-glow);
+  }
+  50% {
+    box-shadow: 0 0 12px var(--trajectory-glow);
+  }
+  62.5% {
+    box-shadow: 0 0 9.2px var(--trajectory-glow);
+  }
+  75% {
+    box-shadow: 0 0 8px var(--trajectory-glow);
+  }
+  87.5% {
+    box-shadow: 0 0 9.2px var(--trajectory-glow);
+  }
+  100% {
+    box-shadow: 0 0 12px var(--trajectory-glow);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .legend-bubble {
+  .legend-bubble,
+  .trajectory-breathe {
     animation: none;
   }
 }

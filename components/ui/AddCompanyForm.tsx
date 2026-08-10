@@ -1,21 +1,18 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ERPSystem, Industry } from '@/types';
+import { INDUSTRIES, Industry } from '@/types';
 import { useGalaxyStore } from '@/store/galaxyStore';
 import { createUserCompany } from '@/lib/user-company';
 import { maturityColor, maturityLabel } from '@/lib/constants';
-
-const INDUSTRIES: Industry[] = ['Manufacturing', 'Healthcare', 'SaaS', 'Fintech', 'Logistics', 'Retail', 'Energy'];
-const ERPS: ERPSystem[] = ['NetSuite', 'SAP', 'Oracle', 'Workday', 'Microsoft Dynamics', 'Sage', 'Custom'];
 
 const EASE = [0.16, 1, 0.3, 1] as const;
 
 /**
  * "Add Your Company" flow (handoff §5.6): a minimal bottom sheet with name,
- * industry, ERP, and a current-AI-status slider. On submit the new star is
- * added to the store (persisted to localStorage), selected (camera flies to
- * it), and the store pushes the "Your company is here" toast.
+ * industry, and a current-AI-status slider. On submit the new star is added
+ * to the store (persisted to localStorage), selected (camera flies to it),
+ * and the store pushes the "Your company is here" toast.
  */
 export function AddCompanyForm({
   open,
@@ -30,8 +27,7 @@ export function AddCompanyForm({
   const removeUserStar = useGalaxyStore((s) => s.removeUserStar);
 
   const [name, setName] = useState('');
-  const [industry, setIndustry] = useState<Industry>('Manufacturing');
-  const [erpSystem, setErpSystem] = useState<ERPSystem>('NetSuite');
+  const [industry, setIndustry] = useState<Industry>('Technology');
   const [aiStatus, setAiStatus] = useState(45);
 
   // Esc closes the sheet
@@ -57,7 +53,7 @@ export function AddCompanyForm({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
-    const company = createUserCompany({ name, industry, erpSystem, aiStatus });
+    const company = createUserCompany({ name, industry, aiStatus });
     addUserStar(company); // also pushes the "Your company is here" toast
     selectStar(company); // flies the camera to the new star
     onClose();
@@ -119,7 +115,7 @@ export function AddCompanyForm({
               />
             </label>
 
-            <div className="mb-4 grid grid-cols-2 gap-3">
+            <div className="mb-4 grid grid-cols-1 gap-3">
               {/* Industry */}
               <label className="block">
                 <span className={labelClass}>Industry</span>
@@ -131,22 +127,6 @@ export function AddCompanyForm({
                   {INDUSTRIES.map((i) => (
                     <option key={i} value={i} className="bg-nebula">
                       {i}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              {/* ERP system */}
-              <label className="block">
-                <span className={labelClass}>ERP system</span>
-                <select
-                  value={erpSystem}
-                  onChange={(e) => setErpSystem(e.target.value as ERPSystem)}
-                  className={fieldClass}
-                >
-                  {ERPS.map((e) => (
-                    <option key={e} value={e} className="bg-nebula">
-                      {e}
                     </option>
                   ))}
                 </select>

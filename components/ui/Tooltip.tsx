@@ -4,10 +4,11 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useGalaxyStore } from '@/store/galaxyStore';
 import { maturityColor, maturityLabel } from '@/lib/constants';
 import { lerp } from '@/lib/utils';
+import { CompanyLogo } from './CompanyLogo';
 
 /**
  * Cursor-following tooltip with ~50ms lerp lag. Shows the hovered company's
- * name, industry/ERP, maturity score, and an exploration hint.
+ * name, industry, maturity score, and an exploration hint.
  */
 export function Tooltip() {
   const hovered = useGalaxyStore((s) => s.hoveredStar);
@@ -46,10 +47,13 @@ export function Tooltip() {
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.96 }}
           transition={{ duration: 0.2, ease: 'easeOut' }}
-        >
-          <div className="text-base font-semibold text-star-bright">{hovered.name}</div>
+        >          <div className="flex items-center gap-2">
+            <CompanyLogo company={hovered} size="sm" />
+            <div className="text-base font-semibold text-star-bright">{hovered.name}</div>
+          </div>
           <div className="mt-0.5 text-sm text-ui-dim">
-            {hovered.industry} · {hovered.erpSystem}
+            {hovered.industry}
+            {hovered.ticker ? ` · ${hovered.ticker}` : ''}
           </div>
           <div className="mt-2.5 flex items-center gap-2">
             <span

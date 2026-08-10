@@ -1,22 +1,34 @@
 // Full TypeScript interfaces for the Primero Galaxy data model.
 
 export type Industry =
-  | 'Manufacturing'
+  | 'Technology'
+  | 'Financial Services'
+  | 'Insurance'
   | 'Healthcare'
-  | 'SaaS'
-  | 'Fintech'
-  | 'Logistics'
   | 'Retail'
-  | 'Energy';
+  | 'Consumer Goods'
+  | 'Automotive'
+  | 'Aerospace & Defense'
+  | 'Energy & Utilities'
+  | 'Industrial & Manufacturing'
+  | 'Transportation & Logistics'
+  | 'Telecom & Media';
 
-export type ERPSystem =
-  | 'NetSuite'
-  | 'SAP'
-  | 'Oracle'
-  | 'Workday'
-  | 'Microsoft Dynamics'
-  | 'Sage'
-  | 'Custom';
+/** The industry taxonomy as an ordered list (form dropdowns, counts). */
+export const INDUSTRIES: Industry[] = [
+  'Technology',
+  'Financial Services',
+  'Insurance',
+  'Healthcare',
+  'Retail',
+  'Consumer Goods',
+  'Automotive',
+  'Aerospace & Defense',
+  'Energy & Utilities',
+  'Industrial & Manufacturing',
+  'Transportation & Logistics',
+  'Telecom & Media',
+];
 
 export type CompanySize = '<50' | '50-200' | '200-500' | '500-1000' | '1000+';
 
@@ -58,7 +70,6 @@ export interface Company {
   name: string;
   slug: string;
   industry: Industry;
-  erpSystem: ERPSystem;
   size: CompanySize;
 
   maturity: MaturityScores;
@@ -78,6 +89,21 @@ export interface Company {
   revenue: number; // Annual revenue (USD, millions)
   employees: number;
   location: string;
+  /** Stock ticker (e.g. "NVDA") — dataset stars only. */
+  ticker?: string;
+  /** Company website domain (logo fetch + profile link) — dataset stars only. */
+  domain?: string;
+  /** Rank by revenue within the dataset (1 = largest) — dataset stars only. */
+  revenueRank?: number;
+
+  /**
+   * Public AI positioning — a one-line research note on what the company has
+   * actually said or done about AI (earnings-call commentary, product
+   * launches, reported deployments). For the curated Fortune 500 dataset
+   * these are compiled from public disclosures; for user-added stars it is
+   * omitted.
+   */
+  aiPositioning?: string;
 
   // Flags
   isFeatured: boolean; // Highlighted in galaxy

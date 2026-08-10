@@ -12,7 +12,7 @@ declare global {
  * input (Playwright mouse events are trusted, so R3F receives proper
  * offsetX/offsetY and raycasts work):
  *
- *   1. the app boots and renders 500 stars
+ *   1. the app boots and renders the Fortune 500 dataset
  *   2. hovering a star (raycast → store → React) shows the tooltip
  *   3. double-clicking that star flies the camera to planet view and slides
  *      in the detail panel with radar chart
@@ -26,6 +26,9 @@ declare global {
 
 // The window.__galaxy handle is typed loosely in page context.
 type GalaxyHandle = Record<string, any>;
+
+// The galaxy renders the curated Fortune 500 dataset (lib/fortune500-data.ts).
+const STAR_COUNT = 196;
 
 /** Poll until the freshly mounted galaxy re-registers its debug handles. */
 async function waitForGalaxyBoot(page: Page) {
@@ -182,7 +185,7 @@ async function waitForHover(page: Page, companyName: string, timeoutMs: number) 
   return last;
 }
 
-test('boots the galaxy and renders 500 stars', async ({ page }) => {
+test('boots the galaxy and renders the Fortune 500 dataset', async ({ page }) => {
   await waitForApp(page);
 
   await expect(page.locator('canvas')).toBeVisible();
@@ -198,13 +201,13 @@ test('boots the galaxy and renders 500 stars', async ({ page }) => {
     return { mode: g.store.getState().mode, starCount, zoom: Math.round(g.store.getState().zoomLevel) };
   });
   expect(state.mode).toBe('galaxy');
-  expect(state.starCount).toBe(500);
+  expect(state.starCount).toBe(STAR_COUNT);
   expect(state.zoom).toBeGreaterThan(700);
 
   const apiCount = await page.evaluate(() =>
     fetch('/api/companies').then((r) => r.json()).then((j: unknown[]) => j.length)
   );
-  expect(apiCount).toBe(500);
+  expect(apiCount).toBe(STAR_COUNT);
 });
 
 test('hovering a star shows the tooltip (raycast → store → UI)', async ({ page }) => {
@@ -257,6 +260,15 @@ test('double-clicking a star opens planet view; trajectory + reset complete the 
   await expect(page.getByText('Planet view')).toBeVisible();
   await expect(page.locator('svg[aria-label="Maturity radar chart"]')).toBeVisible();
   await expect(page.getByRole('button', { name: '← Back to Galaxy' })).toBeVisible();
+
+  // The profile header carries the research chrome: key stats, the sector
+  // median reference (radar overlay + dimension ticks), and a website link.
+  await expect(page.getByText('Revenue', { exact: true })).toBeVisible();
+  await expect(page.getByText('Employees', { exact: true })).toBeVisible();
+  await expect(page.getByText('sector median').first()).toBeVisible();
+  const profileLink = page.getByRole('link', { name: /↗$/ });
+  await expect(profileLink).toBeVisible();
+  await expect(profileLink).toHaveAttribute('target', '_blank');
 
   // The Contact CTA leads to the landing page's contact section, not a dead
   // #contact anchor.
@@ -312,10 +324,9 @@ test('adding a company creates a persistent star and flies to it', async ({ page
   await page.getByRole('button', { name: 'Add Company' }).click();
   await expect(page.getByRole('heading', { name: 'Add Your Company' })).toBeVisible();
 
-  // Fill the form: name, industry, ERP, AI status slider
+  // Fill the form: name, industry, AI status slider
   await page.getByLabel('Company name').fill('Meridian Logistics');
-  await page.getByLabel('Industry').selectOption('Logistics');
-  await page.getByLabel('ERP system').selectOption('SAP');
+  await page.getByLabel('Industry').selectOption('Transportation & Logistics');
   const slider = page.getByLabel('Current AI status');
   await slider.evaluate((el) => {
     const setter = Object.getOwnPropertyDescriptor(
@@ -341,7 +352,6 @@ test('adding a company creates a persistent star and flies to it', async ({ page
       count: s.userStars.length,
       name: s.selectedStar?.name,
       industry: s.selectedStar?.industry,
-      erp: s.selectedStar?.erpSystem,
       maturity: s.selectedStar?.maturity.overall,
       isUserAdded: s.selectedStar?.isUserAdded,
       hasTrajectory: Boolean(s.selectedStar?.trajectory),
@@ -350,8 +360,7 @@ test('adding a company creates a persistent star and flies to it', async ({ page
   expect(star.count).toBe(1);
   expect(star).toMatchObject({
     name: 'Meridian Logistics',
-    industry: 'Logistics',
-    erp: 'SAP',
+    industry: 'Transportation & Logistics',
     maturity: 72,
     isUserAdded: true,
     hasTrajectory: true,
@@ -422,7 +431,7 @@ test('adding a company creates a persistent star and flies to it', async ({ page
       timeout: 30_000,
     })
     .toBe(1);
-  await expect(page.getByText('501 stars')).toBeVisible();
+  await expect(page.getByText(`${STAR_COUNT + 1} stars`)).toBeVisible();
 
   // The post-add "See trajectory" prompt also survives the reload
   // (persisted to sessionStorage with the removed toasts).
@@ -514,8 +523,7 @@ test('adding a company creates a persistent star and flies to it', async ({ page
 
   // Re-add a star so the planet-panel delete phase has one to remove.
   await page.getByLabel('Company name').fill('Meridian Logistics');
-  await page.getByLabel('Industry').selectOption('Logistics');
-  await page.getByLabel('ERP system').selectOption('SAP');
+  await page.getByLabel('Industry').selectOption('Transportation & Logistics');
   const slider2 = page.getByLabel('Current AI status');
   await slider2.evaluate((el) => {
     const setter = Object.getOwnPropertyDescriptor(
@@ -749,8 +757,7 @@ function makeSeedStar(name = 'Window Test Co'): any {
     id: 'window-test-star',
     name,
     slug: 'window-test-co',
-    industry: 'SaaS',
-    erpSystem: 'NetSuite',
+    industry: 'Technology',
     size: '50-200',
     maturity: {
       overall: 55,
@@ -761,7 +768,7 @@ function makeSeedStar(name = 'Window Test Co'): any {
       talent: 58,
     },
     position: { x: 10, y: 20, z: 30 },
-    constellationId: 'SaaS-NetSuite',
+    constellationId: 'Technology',
     founded: 2010,
     revenue: 40,
     employees: 120,
@@ -1008,6 +1015,6 @@ test('every landing-page CTA lands in the galaxy tool at /galaxy', async ({ page
       });
       return count;
     });
-    expect(starCount, `${label} CTA should land in the 500-star galaxy`).toBe(500);
+    expect(starCount, `${label} CTA should land in the ${STAR_COUNT}-star galaxy`).toBe(STAR_COUNT);
   }
 });

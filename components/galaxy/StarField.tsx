@@ -52,7 +52,7 @@ function makeRingGlowTexture(): THREE.CanvasTexture {
 }
 
 /**
- * All 500 data stars in a single InstancedMesh draw call.
+ * All data stars in a single InstancedMesh draw call.
  * Per-instance: position, maturity color (brightness-tuned for bloom),
  * scale (maturity + hover + featured pulse), staggered appear animation,
  * and a dim "focus" effect while in planet view.

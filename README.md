@@ -1,18 +1,18 @@
 # Primero Galaxy
 
-**The AI Transformation Maturity Galaxy** — an explorable 3D galaxy where every star is a company, every constellation is a transformation strategy, and every trajectory is a path to AI maturity. Built as an Awwwards-level data visualization: the galaxy *is* the interface.
+**The AI Transformation Maturity Galaxy** — an explorable 3D galaxy where every star is a real Fortune 500 enterprise, every constellation is a transformation strategy, and every trajectory is a path to AI maturity. Built as an Awwwards-level data visualization: the galaxy *is* the interface.
 
-500 companies. One universe. Explore.
+Real companies. One universe. Explore.
 
 ## Features
 
-- **500-star 3D galaxy** — instanced `IcosahedronGeometry` rendering with per-star maturity color (orange → amber → teal), bloom post-processing, and static dust particles for parallax depth.
+- **Fortune 500 3D galaxy** — instanced `IcosahedronGeometry` rendering of ~193 curated enterprises with per-star maturity color (orange → amber → teal), bloom post-processing, and static dust particles for parallax depth.
 - **Force-directed layout** — `d3-force-3d` positions companies so same-industry companies cluster and high-maturity leaders repel; the layout is pre-computed and served by the API.
 - **Camera as spacecraft** — `camera-controls` with smooth inertia: drag to orbit, scroll to dolly, double-click a star to fly to planet view, `Esc` to return.
-- **Hover → tooltip** — raycaster-driven hover shows company, industry, ERP, and maturity score in a cursor-following glass tooltip.
+- **Hover → tooltip** — raycaster-driven hover shows company, industry, and maturity score in a cursor-following glass tooltip.
 - **Planet view** — camera flies in, the star scales up with orbital rings, and a slide-in panel shows the full maturity breakdown: overall score, 5-dimension radar chart (SVG), animated dimension bars, and transformation trajectory with EBITDA impact, exit multiple, holding-period reduction, and milestone timeline.
 - **Trajectory paths** — violet Catmull-Rom splines draw from a company to its projected future state in 3D space.
-- **Add Your Company** — a minimal form (name, industry, ERP, AI status slider) places a new persistent star in the galaxy, saves it to `localStorage`, flies the camera to it, and offers a trajectory prompt. User stars can be removed from the galaxy with a two-step confirm and an Undo toast.
+- **Add Your Company** — a minimal form (name, industry, AI status slider) places a new persistent star in the galaxy, saves it to `localStorage`, flies the camera to it, and offers a trajectory prompt. User stars can be removed from the galaxy with a two-step confirm and an Undo toast.
 - **Toast system** — added/removed notifications survive a refresh (sessionStorage) but keep only their remaining window; expired toasts never resurrect.
 - **Landing sequence** — staggered star appear, title fade in/out, bottom bar with mode indicator (Galaxy / Constellation / Planet) and star count.
 
@@ -59,7 +59,7 @@ CI also enforces the Lighthouse accessibility/SEO scores (currently **100/100 on
 
 ## How It Works
 
-- **Data** — `/api/companies` serves 500 deterministically generated companies (7 industries, 7 ERP systems, realistic maturity distributions, 50 PE-backed, 10 featured, seeded for reproducible tests). Layout positions are pre-computed with the force simulation.
+- **Data** — `/api/companies` serves a curated dataset of ~193 real Fortune 500 enterprises (`lib/fortune500-data.ts`). Each company carries estimated AI-maturity scores (0–100 across five dimensions) plus a researched note on its public AI positioning, compiled from earnings-call commentary, product launches, and reported deployments (research estimates, not audited). Layout positions are pre-computed with the force simulation; 12 AI flagship companies are marked featured.
 - **Rendering** — all 500 stars share one `InstancedMesh` (one draw call); per-instance color and scale are set from maturity. Only hovered/selected stars get individual meshes. Dust is a static `Points` cloud.
 - **LOD** — labels and constellation lines fade in based on camera distance, so the galaxy stays uncluttered at overview and data-rich up close.
 - **Persistence** — user stars live in `localStorage`; pending toasts in `sessionStorage` (survive refresh, die with the tab).

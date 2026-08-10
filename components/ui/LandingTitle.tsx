@@ -53,7 +53,7 @@ export function LandingTitle() {
         animate={{ y: 0 }}
         transition={{ delay: 0.5, duration: 0.8, ease: 'easeOut' }}
       >
-        500 companies. One universe. Explore.
+        Fortune 500 companies. One universe. Explore.
       </motion.p>
     </div>
   );

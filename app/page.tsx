@@ -1,12 +1,13 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ContactForm } from '@/components/ui/ContactForm';
-import { breathFrequency, breathPhase, starBreath } from '@/lib/constants';
+import { breathTiming } from '@/lib/constants';
+import { COMPANY_COUNT } from '@/lib/fortune500-data';
 
 export const metadata: Metadata = {
   title: 'Primero Galaxy — An Explorable AI Transformation Galaxy',
   description:
-    'Every star is a company. Every constellation is a transformation strategy. Every trajectory is a path to AI maturity. Explore 500 companies in 3D.',
+    'Every star is a Fortune 500 enterprise. Every constellation is a transformation strategy. Every trajectory is a path to AI maturity. Explore real companies in 3D.',
   alternates: { canonical: '/' },
 };
 
@@ -18,6 +19,27 @@ const fade = (delay: number): React.CSSProperties => ({
 
 const EYEBROW = 'text-[11px] font-semibold uppercase tracking-label text-trajectory';
 const SECTION_TITLE = 'text-3xl font-semibold tracking-title text-star-bright md:text-4xl';
+
+/**
+ * Trajectory indicator line: pulses its violet glow on the same halo wave as
+ * the legend bubbles (star 3 of the shared breathing family), glow-only so
+ * the line keeps its shape.
+ */
+function TrajectoryLine() {
+  const { duration, delay } = breathTiming(3);
+  return (
+    <span
+      className="trajectory-breathe h-0.5 w-8 shrink-0 rounded-full bg-trajectory"
+      style={
+        {
+          '--trajectory-glow': 'rgba(123,97,255,0.5)',
+          animationDuration: `${duration}s`,
+          animationDelay: `${delay}s`,
+        } as React.CSSProperties
+      }
+    />
+  );
+}
 
 /**
  * Legend dot: a hollow glowing "star bubble" that breathes on the exact wave
@@ -38,8 +60,7 @@ function LegendBubble({
   // Same sine wave as the galaxy: scale = 1 + amplitude·sin(ωt + phase).
   // animationDelay is negative so the bubble is mid-cycle at first paint,
   // exactly like an already-animating star.
-  const omega = breathFrequency(starIndex, starBreath.halo);
-  const phase = breathPhase(starIndex) + starBreath.halo.phaseBias;
+  const { duration, delay } = breathTiming(starIndex);
   return (
     <span
       className="legend-bubble shrink-0"
@@ -47,8 +68,8 @@ function LegendBubble({
         {
           '--bubble': color,
           '--bubble-glow': glow,
-          animationDuration: `${(2 * Math.PI) / omega}s`,
-          animationDelay: `${-phase / omega}s`,
+          animationDuration: `${duration}s`,
+          animationDelay: `${delay}s`,
         } as React.CSSProperties
       }
     />
@@ -88,15 +109,16 @@ export default function LandingPage() {
           className="mt-6 text-xs uppercase tracking-label text-ui-muted md:text-sm"
           style={fade(0.25)}
         >
-          500 companies. One universe. Explore.
+          {COMPANY_COUNT} Fortune 500 companies. One universe. Explore.
         </p>
         <p
           className="mt-6 max-w-xl text-[15px] leading-relaxed text-ui-dim"
           style={fade(0.4)}
         >
-          A living 3D map of how companies become AI-native. Every star is a
-          company, its color its AI maturity. Zoom in and every star becomes a
-          planet you can orbit, inspect, and transform.
+          A living 3D map of how America&apos;s largest enterprises are becoming
+          AI-native. Every star is a company, its color its estimated AI
+          maturity. Zoom in and every star becomes a planet you can orbit,
+          inspect, and transform.
         </p>
         <div
           className="mt-10 flex flex-col items-center gap-3 sm:flex-row"
@@ -132,9 +154,9 @@ export default function LandingPage() {
           </h2>
           <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-ui-dim">
             No dashboards, no sidebars, no panels. Every star earns its place —
-            and every one of them tells the story of a company&apos;s AI
-            transformation. The closer you look, the more the data reveals
-            itself.
+            and every one of them tells the story of a Fortune 500 company&apos;s
+            AI transformation, estimated from what it has publicly said and
+            shipped. The closer you look, the more the data reveals itself.
           </p>
 
           <div className="mt-12 grid gap-4 md:grid-cols-3">
@@ -146,12 +168,13 @@ export default function LandingPage() {
                 ⭐
               </div>
               <h3 className="mt-4 text-[15px] font-semibold text-star-bright">
-                A star is a company
+                A star is a Fortune 500 company
               </h3>
               <p className="mt-2 text-[13px] leading-relaxed text-ui-muted">
-                500 companies across 7 industries — Manufacturing, Healthcare,
-                SaaS, Fintech, Logistics, Retail, and Energy — each with its
-                own ERP, size, and maturity profile.
+                {COMPANY_COUNT} real enterprises across 12 industries —
+                Technology, Financial Services, Healthcare, Retail, Energy and
+                more — each with an estimated AI maturity profile compiled
+                from public disclosures.
               </p>
             </div>
             <div className="rounded-xl border border-border-subtle bg-nebula/40 p-6">
@@ -233,7 +256,7 @@ export default function LandingPage() {
           </div>
 
           <div className="mt-6 flex items-center gap-4 rounded-xl border border-trajectory/30 bg-trajectory/5 p-5">
-            <span className="h-0.5 w-8 shrink-0 rounded-full bg-trajectory" />
+            <TrajectoryLine />
             <div>
               <h3 className="text-[13px] font-medium text-trajectory">
                 Violet paths are trajectories
@@ -272,23 +295,39 @@ export default function LandingPage() {
               Three levels of detail
             </div>
             <div className="mt-4 grid gap-6 md:grid-cols-3">
+              {/* Zoom levels carry the same hollow breathing bubbles as the
+                  legend (stars 4–6 of the shared breathing family), so the
+                  whole page undulates on one wave. The color ladder mirrors
+                  the legend: orange → amber → teal as you zoom in. */}
               {[
-                [
-                  'Galaxy',
-                  '500 stars in pure space. Color and size tell the maturity story at a glance.',
-                ],
-                [
-                  'Constellation',
-                  'Zoom in and names appear. Faint lines connect related companies across the sky.',
-                ],
-                [
-                  'Planet',
-                  'Inspect one company — a radar chart of five maturity dimensions, its trajectory, and projected ROI.',
-                ],
-              ].map(([t, d]) => (
-                <div key={t}>
-                  <h3 className="text-[14px] font-semibold text-maturity-high">{t}</h3>
-                  <p className="mt-1.5 text-[13px] leading-relaxed text-ui-muted">{d}</p>
+                {
+                  title: 'Galaxy',
+                  body: `${COMPANY_COUNT} stars in pure space. Color and size tell the maturity story at a glance.`,
+                  color: '#FF6B35',
+                  glow: 'rgba(255,107,53,0.5)',
+                  starIndex: 4,
+                },
+                {
+                  title: 'Constellation',
+                  body: 'Zoom in and names appear. Faint lines connect related companies across the sky.',
+                  color: '#F7C548',
+                  glow: 'rgba(247,197,72,0.5)',
+                  starIndex: 5,
+                },
+                {
+                  title: 'Planet',
+                  body: 'Inspect one company — a radar chart of five maturity dimensions, its trajectory, and projected ROI.',
+                  color: '#00D9C0',
+                  glow: 'rgba(0,217,192,0.5)',
+                  starIndex: 6,
+                },
+              ].map(({ title, body, color, glow, starIndex }) => (
+                <div key={title} className="flex items-start gap-3">
+                  <LegendBubble starIndex={starIndex} color={color} glow={glow} />
+                  <div>
+                    <h3 className="text-[14px] font-semibold text-maturity-high">{title}</h3>
+                    <p className="mt-1.5 text-[13px] leading-relaxed text-ui-muted">{body}</p>
+                  </div>
                 </div>
               ))}
             </div>
@@ -308,7 +347,7 @@ export default function LandingPage() {
                 Add your company
               </h3>
               <p className="mt-2 text-[13px] leading-relaxed text-ui-muted">
-                A three-field form places your company as a star in the galaxy,
+                A two-field form places your company as a star in the galaxy,
                 saves it to your browser, and shows you the trajectory you
                 could be on.
               </p>
@@ -380,7 +419,7 @@ export default function LandingPage() {
         </h2>
         <p className="mx-auto mt-4 max-w-lg text-[14px] leading-relaxed text-ui-dim">
           Fly in, look around, and add yourself to the map — or just lose
-          yourself in 500 stories of transformation.
+          yourself in {COMPANY_COUNT} stories of transformation.
         </p>
         <Link
           href="/galaxy" prefetch={false}
@@ -393,7 +432,9 @@ export default function LandingPage() {
       <footer className="border-t border-border-subtle/60 px-6 py-8">
         <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-3 text-[11px] text-ui-muted sm:flex-row">
           <span className="font-semibold tracking-[0.18em] text-ui-dim">PRIMERO GALAXY</span>
-          <span>500 companies · 7 industries · 7 ERP systems</span>
+          <span>
+            {COMPANY_COUNT} companies · 12 industries · AI maturity estimates
+          </span>
           <Link href="/galaxy" prefetch={false} className="transition-colors hover:text-star-bright">
             Launch the galaxy ↗
           </Link>

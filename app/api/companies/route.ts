@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getCompanies } from '@/lib/data-generator';
-import { COMPANY_COUNT } from '@/lib/constants';
+import { COMPANY_COUNT } from '@/lib/fortune500-data';
 
 export const dynamic = 'force-dynamic';
 

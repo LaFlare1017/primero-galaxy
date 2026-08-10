@@ -3,7 +3,10 @@ import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useGalaxyStore } from '@/store/galaxyStore';
 import { DIMENSIONS, maturityColor, maturityLabel } from '@/lib/constants';
+import { formatCompact, formatRevenue } from '@/lib/utils';
+import { COMPANY_COUNT, SECTOR_MEDIAN } from '@/lib/fortune500-data';
 import { RadarChart } from './RadarChart';
+import { CompanyLogo } from './CompanyLogo';
 
 const EASE = [0.16, 1, 0.3, 1] as const;
 
@@ -52,24 +55,62 @@ export function PlanetPanel() {
 
           <div className="flex-1 px-6 py-6">
             {/* Header */}
-            <h2 className="text-xl font-semibold tracking-title text-star-bright">{selected.name}</h2>
-            <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
-              <span className="rounded-full border border-border-subtle px-2 py-0.5 text-ui-dim">
-                {selected.industry}
-              </span>
-              <span className="rounded-full border border-border-subtle px-2 py-0.5 text-ui-dim">
-                {selected.erpSystem}
-              </span>
-              {selected.peFirm && (
-                <span className="rounded-full border border-trajectory/40 px-2 py-0.5 text-trajectory">
-                  {selected.peFirm}
-                </span>
+            <div className="flex items-start gap-3">
+              <CompanyLogo company={selected} />
+              <div className="min-w-0 flex-1">
+                <h2 className="text-xl font-semibold tracking-title text-star-bright">{selected.name}</h2>
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+                  <span className="rounded-full border border-border-subtle px-2 py-0.5 text-ui-dim">
+                    {selected.industry}
+                  </span>
+                  {selected.ticker && (
+                    <span className="rounded-full border border-border-subtle px-2 py-0.5 font-mono text-ui-dim">
+                      {selected.ticker}
+                    </span>
+                  )}
+                  {selected.peFirm && (
+                    <span className="rounded-full border border-trajectory/40 px-2 py-0.5 text-trajectory">
+                      {selected.peFirm}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Key stats */}
+            <div className="mt-4 grid grid-cols-2 gap-2">
+              <Stat label="Revenue" value={formatRevenue(selected.revenue)} />
+              <Stat label="Employees" value={formatCompact(selected.employees)} />
+              <Stat label="Founded" value={String(selected.founded)} />
+              {selected.revenueRank ? (
+                <Stat label="Revenue rank" value={`#${selected.revenueRank} of ${COMPANY_COUNT}`} />
+              ) : (
+                <Stat label="Headquarters" value={selected.location} />
               )}
             </div>
-            <p className="mt-2 text-[12px] text-ui-muted">
-              {selected.location} · Founded {selected.founded} · {selected.size} employees · $
-              {selected.revenue}M revenue
-            </p>
+
+            {selected.domain && (
+              <a
+                href={`https://${selected.domain}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2.5 inline-flex items-center gap-1 text-[11px] text-ui-dim transition-colors hover:text-star-bright"
+              >
+                {selected.domain} ↗
+              </a>
+            )}
+
+            {/* Public AI positioning — research note compiled from disclosures */}
+            {selected.aiPositioning && (
+              <div className="mt-4 rounded-lg border border-border-subtle bg-nebula/60 p-3">
+                <div className="text-[10px] font-medium uppercase tracking-label text-ui-muted">
+                  Public AI positioning
+                </div>
+                <p className="mt-1 text-[12px] leading-relaxed text-ui-dim">
+                  {selected.aiPositioning}
+                </p>
+              </div>
+            )}
 
             {/* Overall maturity */}
             <div className="mt-6">
@@ -100,42 +141,76 @@ export function PlanetPanel() {
                   }}
                 />
               </div>
+              {!selected.isUserAdded && (
+                <p className="mt-1.5 text-[10px] text-ui-muted/60">
+                  Directional estimate from public AI disclosures — research use only
+                </p>
+              )}
             </div>
 
             {/* Radar */}
-            <div className="mt-6 flex justify-center">
-              <RadarChart company={selected} />
+            <div className="mt-6">
+              <div className="flex justify-center">
+                <RadarChart company={selected} />
+              </div>
+              <div className="mt-1 flex items-center justify-center gap-1.5 text-[10px] text-ui-muted/70">
+                <svg width="18" height="8" aria-hidden="true">
+                  <line
+                    x1="0"
+                    y1="4"
+                    x2="18"
+                    y2="4"
+                    stroke="#6B6B8A"
+                    strokeWidth="1"
+                    strokeDasharray="3 3"
+                  />
+                </svg>
+                sector median
+              </div>
             </div>
 
             {/* Dimension bars */}
-            <div className="mt-6 space-y-3">
-              {DIMENSIONS.map((d, i) => {
-                const score = selected.maturity[d.key];
-                return (
-                  <div key={d.key}>
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="text-ui-dim">{d.label}</span>
-                      <span className="font-medium" style={{ color: maturityColor(score) }}>
-                        {score}
-                      </span>
+            <div className="mt-6">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-[11px] font-medium uppercase tracking-label text-ui-muted">
+                  Maturity dimensions
+                </span>
+                <span className="flex items-center gap-1.5 text-[10px] text-ui-muted/70">
+                  <span className="h-px w-3 bg-ui-muted/70" />
+                  sector median
+                </span>
+              </div>
+              <div className="space-y-3">
+                {DIMENSIONS.map((d, i) => {
+                  const score = selected.maturity[d.key];
+                  const median = SECTOR_MEDIAN[selected.industry][i + 1];
+                  return (
+                    <div key={d.key}>
+                      <div className="flex items-center justify-between text-[11px]">
+                        <span className="text-ui-dim">{d.label}</span>
+                        <span className="font-medium" style={{ color: maturityColor(score) }}>
+                          {score}
+                        </span>
+                      </div>
+                      <div className="relative mt-1 h-1 overflow-hidden rounded-full bg-border-subtle">
+                        <motion.div
+                          className="h-full rounded-full"
+                          style={{ backgroundColor: maturityColor(score) }}
+                          initial={{ width: 0 }}
+                          animate={{ width: `${score}%` }}
+                          transition={{ duration: 0.7, delay: 0.2 + i * 0.06, ease: EASE }}
+                        />
+                        {/* Sector-median marker on the track */}
+                        <span
+                          className="absolute -top-[3px] h-[10px] w-px bg-ui-muted/80"
+                          style={{ left: `calc(${median}% - 0.5px)` }}
+                          aria-hidden="true"
+                        />
+                      </div>
                     </div>
-                    <motion.div
-                      className="mt-1 h-1 overflow-hidden rounded-full bg-border-subtle"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      transition={{ delay: 0.15 + i * 0.06 }}
-                    >
-                      <motion.div
-                        className="h-full rounded-full"
-                        style={{ backgroundColor: maturityColor(score) }}
-                        initial={{ width: 0 }}
-                        animate={{ width: `${score}%` }}
-                        transition={{ duration: 0.7, delay: 0.2 + i * 0.06, ease: EASE }}
-                      />
-                    </motion.div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
 
             {/* Trajectory */}
@@ -244,6 +319,7 @@ export function PlanetPanel() {
 
             {/* CTAs */}
             <div className="mt-8 space-y-2">
+
               {/* Leads to the landing page's #contact section (full navigation). */}
               <a
                 href="/#contact"
@@ -263,5 +339,15 @@ export function PlanetPanel() {
         </motion.aside>
       )}
     </AnimatePresence>
+  );
+}
+
+/** A labeled stat tile in the profile header. */
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-border-subtle bg-void/40 px-3 py-2">
+      <div className="text-[9px] font-medium uppercase tracking-label text-ui-muted">{label}</div>
+      <div className="mt-0.5 truncate text-[13px] font-semibold text-star-bright">{value}</div>
+    </div>
   );
 }

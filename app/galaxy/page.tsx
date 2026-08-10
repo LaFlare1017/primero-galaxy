@@ -1,5 +1,5 @@
 import { getCompanies } from '@/lib/data-generator';
-import { COMPANY_COUNT } from '@/lib/constants';
+import { COMPANY_COUNT } from '@/lib/fortune500-data';
 import GalaxyApp from '@/components/galaxy/GalaxyApp';
 
 export default function GalaxyPage() {

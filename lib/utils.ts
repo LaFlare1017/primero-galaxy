@@ -47,3 +47,35 @@ export function slugify(name: string): string {
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '');
 }
+
+/** Compact a raw number into human units: 317000 → "317k", 2100000 → "2.1M". */
+export function formatCompact(value: number): string {
+  if (value >= 1_000_000) return `${round(value / 1_000_000, 1)}M`;
+  if (value >= 1_000) return `${round(value / 1_000, 1)}k`;
+  return `${value}`;
+}
+
+/** Format an annual-revenue figure stored in $M: 681000 → "$681B", 41000 → "$41B". */
+export function formatRevenue(revenueM: number): string {
+  if (revenueM >= 1_000) return `$${round(revenueM / 1_000, 1)}B`;
+  return `$${revenueM}M`;
+}
+
+/**
+ * Company-logo URL via the Google favicon service (free, no key). Returns a
+ * high-res site icon for the company's official domain.
+ */
+export function faviconUrl(domain: string, size = 128): string {
+  return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=${size}`;
+}
+
+/** Initials monogram from a company name — the fallback when no logo loads. */
+export function monogram(name: string): string {
+  const words = name
+    .replace(/[^a-zA-Z0-9 .'-]/g, ' ')
+    .split(/[\s.]+/)
+    .filter(Boolean);
+  if (words.length === 0) return name.slice(0, 2).toUpperCase();
+  if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+  return (words[0][0] + words[1][0]).toUpperCase();
+}

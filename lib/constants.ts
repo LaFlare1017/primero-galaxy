@@ -30,10 +30,6 @@ export const ZOOM = {
   constellationMode: 400,
 } as const;
 
-export const COMPANY_COUNT = 500;
-export const FEATURED_COUNT = 10;
-export const PE_BACKED_COUNT = 50;
-
 /**
  * Star breathing — the single source of truth for the organic undulation of
  * the galaxy's stars AND the landing page's legend bubbles, so both animate
@@ -77,6 +73,17 @@ export function breathFrequency(
   band: { baseFrequency: number; frequencyStep: number; frequencyMod: number }
 ): number {
   return band.baseFrequency + (i % band.frequencyMod) * band.frequencyStep;
+}
+
+/**
+ * CSS animation timing (s) that puts a breathing element on star i's halo
+ * wave: one full period per cycle, with a negative delay so it sits mid-cycle
+ * at first paint, exactly like an already-animating galaxy star.
+ */
+export function breathTiming(i: number): { duration: number; delay: number } {
+  const omega = breathFrequency(i, starBreath.halo);
+  const phase = breathPhase(i) + starBreath.halo.phaseBias;
+  return { duration: (2 * Math.PI) / omega, delay: -phase / omega };
 }
 
 /** Maturity color for a 0-100 score (hex). */

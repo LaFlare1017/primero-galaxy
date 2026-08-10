@@ -2,6 +2,7 @@
 import { motion } from 'framer-motion';
 import { Company } from '@/types';
 import { DIMENSIONS } from '@/lib/constants';
+import { SECTOR_MEDIAN } from '@/lib/fortune500-data';
 
 const SIZE = 220;
 const CENTER = SIZE / 2;
@@ -19,6 +20,14 @@ function polar(score: number, angle: number, r = RADIUS) {
 export function RadarChart({ company }: { company: Company }) {
   const polygonPoints = DIMENSIONS.map((d, i) => {
     const p = polar(company.maturity[d.key], ANGLES[i]);
+    return `${p.x},${p.y}`;
+  }).join(' ');
+
+  // The sector-median profile (dashed, muted) — where the median company in
+  // this industry sits on the same five axes.
+  const sector = SECTOR_MEDIAN[company.industry];
+  const medianPoints = DIMENSIONS.map((_, i) => {
+    const p = polar(sector[i + 1], ANGLES[i]);
     return `${p.x},${p.y}`;
   }).join(' ');
 
@@ -50,6 +59,17 @@ export function RadarChart({ company }: { company: Company }) {
         );
       })}
 
+      {/* Sector-median reference polygon (dashed, muted) */}
+      <polygon
+        points={medianPoints}
+        fill="rgba(107, 107, 138, 0.06)"
+        stroke="#6B6B8A"
+        strokeWidth={1}
+        strokeDasharray="3 3"
+        strokeLinejoin="round"
+        opacity={0.7}
+      />
+
       {/* Data polygon */}
       <motion.polygon
         points={polygonPoints}
@@ -66,6 +86,14 @@ export function RadarChart({ company }: { company: Company }) {
         const p = polar(company.maturity[d.key], ANGLES[i]);
         return <circle key={d.key} cx={p.x} cy={p.y} r={2.5} fill="#00D9C0" />;
       })}
+
+      {/* Center overall score */}
+      <text x={CENTER} y={CENTER - 1} textAnchor="middle" fontSize={22} fontWeight={600} fill="#FFFFFF">
+        {company.maturity.overall}
+      </text>
+      <text x={CENTER} y={CENTER + 13} textAnchor="middle" fontSize={7} fill="#6B6B8A">
+        / 100
+      </text>
 
       {/* Labels */}
       {DIMENSIONS.map((d, i) => {

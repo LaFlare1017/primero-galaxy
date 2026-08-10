@@ -12,12 +12,13 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: 'Primero Galaxy — The AI Transformation Maturity Galaxy',
   description:
-    'An explorable galaxy where every star is a company and every trajectory is a path to AI maturity. 500 companies. One universe. Explore.',
+    'An explorable galaxy where every star is a Fortune 500 enterprise and every trajectory is a path to AI maturity. Real companies. One universe. Explore.',
   keywords: [
     'AI transformation',
+    'AI maturity',
+    'Fortune 500 AI',
+    'enterprise AI adoption',
     'maturity model',
-    'ERP',
-    'NetSuite',
     'data visualization',
     '3D galaxy',
     'Primero',
@@ -25,14 +26,14 @@ export const metadata: Metadata = {
   authors: [{ name: 'Primero' }],
   openGraph: {
     title: 'Primero Galaxy — The AI Transformation Maturity Galaxy',
-    description: '500 companies. One universe. Explore.',
+    description: 'A 3D galaxy of Fortune 500 enterprises, scored on estimated AI maturity from public disclosures. One universe. Explore.',
     type: 'website',
     siteName: 'Primero Galaxy',
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Primero Galaxy — The AI Transformation Maturity Galaxy',
-    description: '500 companies. One universe. Explore.',
+    description: 'A 3D galaxy of Fortune 500 enterprises, scored on estimated AI maturity from public disclosures.',
   },
 };
 
