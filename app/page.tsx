@@ -277,15 +277,51 @@ export default function LandingPage() {
           <h2 className={`${SECTION_TITLE} mt-3`}>Fly like a spacecraft.</h2>
 
           <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {/* The four spacecraft controls carry the same hollow breathing
+                bubbles (stars 7–10 of the shared family), completing the
+                page-wide indicator system. Esc uses the trajectory violet as
+                a nod to returning along the path. */}
             {[
-              ['Drag', 'to orbit the galaxy'],
-              ['Scroll', 'to zoom from galaxy to constellation to planet'],
-              ['Double-click a star', 'to fly in and open its full profile'],
-              ['Esc', 'to return to the galaxy'],
-            ].map(([k, v]) => (
-              <div key={k} className="rounded-xl border border-border-subtle bg-void/60 p-5">
-                <h3 className="text-[13px] font-semibold text-star-bright">{k}</h3>
-                <div className="mt-1 text-[12px] leading-relaxed text-ui-muted">{v}</div>
+              {
+                title: 'Drag',
+                body: 'to orbit the galaxy',
+                color: '#FF6B35',
+                glow: 'rgba(255,107,53,0.5)',
+                starIndex: 7,
+              },
+              {
+                title: 'Scroll',
+                body: 'to zoom from galaxy to constellation to planet',
+                color: '#F7C548',
+                glow: 'rgba(247,197,72,0.5)',
+                starIndex: 8,
+              },
+              {
+                title: 'Double-click a star',
+                body: 'to fly in and open its full profile',
+                color: '#00D9C0',
+                glow: 'rgba(0,217,192,0.5)',
+                starIndex: 9,
+              },
+              {
+                title: 'Esc',
+                body: 'to return to the galaxy',
+                color: '#7B61FF',
+                glow: 'rgba(123,97,255,0.5)',
+                starIndex: 10,
+              },
+            ].map(({ title, body, color, glow, starIndex }) => (
+              <div
+                key={title}
+                className="rounded-xl border border-border-subtle bg-void/60 p-5"
+              >
+                <div className="flex items-start gap-3">
+                  <LegendBubble starIndex={starIndex} color={color} glow={glow} />
+                  <div>
+                    <h3 className="text-[13px] font-semibold text-star-bright">{title}</h3>
+                    <div className="mt-1 text-[12px] leading-relaxed text-ui-muted">{body}</div>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
