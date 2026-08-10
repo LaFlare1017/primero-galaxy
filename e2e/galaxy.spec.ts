@@ -174,6 +174,30 @@ async function hoverStar(page: Page, companyId: string, companyName: string) {
   );
 }
 
+/**
+ * Double-click the star with real input, retrying with a fresh projection.
+ * The galaxy mesh rotates continuously (~0.008 rad/s), so a projection can
+ * go stale between compute and click under load; each retry re-projects at
+ * click time and stops as soon as the store flips to planet mode, so a
+ * single stale frame can never fail the suite.
+ */
+async function doubleClickStar(page: Page, companyId: string) {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const { x, y } = await projectStar(page, companyId);
+    await page.mouse.dblclick(x, y);
+    const landed = await page
+      .waitForFunction(
+        () => (window.__galaxy as GalaxyHandle).store.getState().mode === 'planet',
+        undefined,
+        { timeout: 2_000, polling: 200 }
+      )
+      .then(() => true)
+      .catch(() => false);
+    if (landed) return true;
+  }
+  return false;
+}
+
 /** Poll the store until the intended star is hovered (or timeout with the last value). */
 async function waitForHover(page: Page, companyName: string, timeoutMs: number) {
   const deadline = Date.now() + timeoutMs;
@@ -239,12 +263,10 @@ test('double-clicking a star opens planet view; trajectory + reset complete the 
   await lookAtStar(page, company.id);
   await hoverStar(page, company.id, company.name);
 
-  // Real double-click on the star. The galaxy mesh rotates continuously
-  // (~0.008 rad/s), so the hover point goes stale before the click — under
-  // load the hover→click gap drifts the star off that pixel. Re-project at
-  // click time (the same freshness discipline hoverStar applies per attempt).
-  const { x, y } = await projectStar(page, company.id);
-  await page.mouse.dblclick(x, y);
+  // Real double-click on the star. Retries re-project at click time (the
+  // galaxy mesh rotates ~0.008 rad/s), so a single stale frame — the flake
+  // that failed this test under load — can never fail the suite.
+  expect(await doubleClickStar(page, company.id)).toBe(true);
 
   // Store flips to planet mode and the camera flies in.
   await expect
