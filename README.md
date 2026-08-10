@@ -13,6 +13,7 @@ Real companies. One universe. Explore.
 - **Planet view** — camera flies in, the star scales up with orbital rings, and a slide-in panel shows the full maturity breakdown: overall score, 5-dimension radar chart (SVG), animated dimension bars, and transformation trajectory with EBITDA impact, exit multiple, holding-period reduction, and milestone timeline.
 - **Trajectory paths** — violet Catmull-Rom splines draw from a company to its projected future state in 3D space.
 - **Add Your Company** — a minimal form (name, industry, AI status slider) places a new persistent star in the galaxy, saves it to `localStorage`, flies the camera to it, and offers a trajectory prompt. User stars can be removed from the galaxy with a two-step confirm and an Undo toast.
+- **Company search** — a search palette in the galaxy: type a name and fly straight to the star, with keyboard navigation (arrows + Enter) and results for both dataset and user-added stars.
 - **Toast system** — added/removed notifications survive a refresh (sessionStorage) but keep only their remaining window; expired toasts never resurrect.
 - **Landing sequence** — staggered star appear, title fade in/out, bottom bar with mode indicator (Galaxy / Constellation / Planet) and star count.
 
@@ -81,9 +82,8 @@ e2e/            Playwright specs
 
 ## Roadmap
 
-The following handoff-spec features are stubbed in the UI as "Coming soon" and are the natural next milestones:
+The following handoff-spec features are the natural next milestones:
 
-- **PE Portfolio Mode** — multi-select 3–7 portfolio companies, then watch Standardize → Cluster → Deploy animations and results counters.
 - **Compare companies** — side-by-side maturity comparison.
 - **Contact Primero** — the CTA in planet view links to the landing page's `#contact` section, which hosts a gated contact form (the address is only assembled on an actual submission, never rendered on the page).
 - **Ambient generative audio** with a mute control, plus a full `prefers-reduced-motion` pass.

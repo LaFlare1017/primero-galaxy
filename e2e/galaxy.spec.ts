@@ -344,6 +344,69 @@ test('double-clicking a star opens planet view; trajectory + reset complete the 
     .toBeGreaterThan(700);
 });
 
+test('searching a company by name flies to its star and opens its profile', async ({ page }) => {
+  test.setTimeout(120_000);
+  await waitForApp(page);
+
+  // Pick a distinctive dataset company (unique name → unambiguous result).
+  const companies = await page.evaluate(() =>
+    fetch('/api/companies').then((r) => r.json())
+  );
+  const target = companies.find((c: any) => c.name === 'Nvidia');
+  expect(target).toBeTruthy();
+
+  // Open the search palette from the bottom bar.
+  await page.getByRole('button', { name: 'Search' }).click();
+  const input = page.getByRole('combobox', { name: 'Search companies' });
+  await expect(input).toBeVisible();
+
+  // Esc closes the palette without selecting anything (the global Esc
+  // handler closes the search before clearing the selection).
+  await input.fill('Nvidia');
+  await page.keyboard.press('Escape');
+  await expect(input).toBeHidden({ timeout: 5000 });
+  expect(
+    await page.evaluate(() => (window.__galaxy as GalaxyHandle).store.getState().mode)
+  ).toBe('galaxy');
+
+  // Reopen and type the name: the matching result row renders with its
+  // details, and Enter (keyboard selection) picks it — no raycast, so no
+  // camera/rotation timing dependence like the dblclick path.
+  await page.getByRole('button', { name: 'Search' }).click();
+  await expect(input).toBeVisible();
+  await input.fill('Nvidia');
+  const option = page.getByRole('option', { name: /Nvidia/ });
+  await expect(option).toBeVisible();
+  await expect(option).toContainText('Technology');
+  await input.press('Enter');
+
+  // Store flips to planet mode, the camera flies in, and the profile panel
+  // opens on the searched company.
+  await expect
+    .poll(() => page.evaluate(() => (window.__galaxy as GalaxyHandle).store.getState().mode), {
+      timeout: 15_000,
+    })
+    .toBe('planet');
+  await expect(page.getByRole('heading', { name: 'Nvidia' })).toBeVisible();
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() =>
+          Math.round((window.__galaxy as GalaxyHandle).store.getState().zoomLevel)
+        ),
+      { timeout: 30_000 }
+    )
+    .toBeLessThan(120);
+
+  // Esc returns to the galaxy (the palette is already closed by selection).
+  await page.keyboard.press('Escape');
+  await expect
+    .poll(() => page.evaluate(() => (window.__galaxy as GalaxyHandle).store.getState().mode), {
+      timeout: 15_000,
+    })
+    .toBe('galaxy');
+});
+
 test('adding a company creates a persistent star and flies to it', async ({ page }) => {
   // The delete phase adds a camera round-trip, so budget past the 90s default.
   test.setTimeout(180_000);

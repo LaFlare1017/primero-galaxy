@@ -61,8 +61,6 @@ export interface GalaxyToast {
   id: string;
   kind: 'added' | 'removed';
   star: Company;
-  /** For `removed` toasts: whether the star was in the PE portfolio. */
-  inPortfolio?: boolean;
   /** For `removed` toasts: whether it was deleted from planet view (undo restores that view). */
   wasSelected?: boolean;
   /** Epoch ms when the toast was created — hydration uses it to compute the remaining window. */
@@ -87,8 +85,6 @@ interface GalaxyState {
   mode: GalaxyMode;
   selectedStar: Company | null;
   hoveredStar: Company | null;
-  portfolioStars: Company[];
-  isPEMode: boolean;
   cameraTarget: Position3D | null;
   zoomLevel: number; // camera distance to focus point
   showTrajectory: boolean;
@@ -99,8 +95,6 @@ interface GalaxyState {
   setMode: (mode: GalaxyMode) => void;
   selectStar: (star: Company | null) => void;
   hoverStar: (star: Company | null) => void;
-  togglePortfolioStar: (star: Company) => void;
-  setPEMode: (active: boolean) => void;
   setCameraTarget: (target: Position3D | null) => void;
   setZoomLevel: (level: number) => void;
   setShowTrajectory: (show: boolean) => void;
@@ -117,8 +111,6 @@ export const useGalaxyStore = create<GalaxyState>((set) => ({
   mode: 'galaxy',
   selectedStar: null,
   hoveredStar: null,
-  portfolioStars: [],
-  isPEMode: false,
   cameraTarget: null,
   zoomLevel: 800,
   showTrajectory: false,
@@ -136,16 +128,6 @@ export const useGalaxyStore = create<GalaxyState>((set) => ({
       showTrajectory: false,
     }),
   hoverStar: (star) => set({ hoveredStar: star }),
-  togglePortfolioStar: (star) =>
-    set((state) => {
-      const exists = state.portfolioStars.some((s) => s.id === star.id);
-      if (exists) {
-        return { portfolioStars: state.portfolioStars.filter((s) => s.id !== star.id) };
-      }
-      if (state.portfolioStars.length >= 7) return state;
-      return { portfolioStars: [...state.portfolioStars, star] };
-    }),
-  setPEMode: (active) => set({ isPEMode: active }),
   setCameraTarget: (target) => set({ cameraTarget: target }),
   setZoomLevel: (level) => set({ zoomLevel: level }),
   setShowTrajectory: (show) => set({ showTrajectory: show }),
@@ -199,8 +181,6 @@ export const useGalaxyStore = create<GalaxyState>((set) => ({
     set((state) => {
       const star = state.userStars.find((s) => s.id === id) ?? null;
       const userStars = state.userStars.filter((s) => s.id !== id);
-      // A deleted star can't stay in the PE portfolio either.
-      const portfolioStars = state.portfolioStars.filter((s) => s.id !== id);
       persistUserStars(userStars);
       // Keep the removed star in the toast stack so the UI can offer Undo.
       // `wasSelected` remembers it was deleted from planet view, so Undo can
@@ -211,7 +191,6 @@ export const useGalaxyStore = create<GalaxyState>((set) => ({
             id: makeToastId(),
             kind: 'removed',
             star,
-            inPortfolio: state.portfolioStars.some((s) => s.id === id),
             wasSelected,
             createdAt: Date.now(),
           })
@@ -221,7 +200,6 @@ export const useGalaxyStore = create<GalaxyState>((set) => ({
       persistPendingToasts(toasts);
       return {
         userStars,
-        portfolioStars,
         toasts,
         ...(wasSelected
           ? {
@@ -263,9 +241,6 @@ export const useGalaxyStore = create<GalaxyState>((set) => ({
       persistPendingToasts(rest);
       return {
         userStars,
-        portfolioStars: toast.inPortfolio
-          ? [...state.portfolioStars, toast.star]
-          : state.portfolioStars,
         toasts: rest,
         ...restoreView,
       };

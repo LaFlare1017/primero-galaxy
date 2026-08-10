@@ -431,13 +431,14 @@ export default function LandingPage() {
                 milestone-by-milestone plans drawn in 3D space.
               </p>
             </div>
-            <div className="rounded-xl border border-border-subtle bg-void/60 p-6 opacity-85">
+            <div className="rounded-xl border border-border-subtle bg-void/60 p-6">
               <h3 className="text-[15px] font-semibold text-star-bright">
-                PE portfolio mode
+                Search the galaxy
               </h3>
               <p className="mt-2 text-[13px] leading-relaxed text-ui-muted">
-                Coming soon — select 3–7 portfolio companies and watch
-                standardize → cluster → deploy play out across the galaxy.
+                Type any company name and fly straight to its star — every one
+                of the {COMPANY_COUNT} is a few keystrokes from its full
+                profile.
               </p>
             </div>
           </div>

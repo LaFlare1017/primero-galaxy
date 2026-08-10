@@ -7,9 +7,11 @@ import { ModeIndicator } from './ModeIndicator';
 
 export function BottomBar({
   companies,
+  onSearch,
   onAddCompany,
 }: {
   companies: Company[];
+  onSearch: () => void;
   onAddCompany: () => void;
 }) {
   const clearSelection = useGalaxyStore((s) => s.clearSelection);
@@ -57,11 +59,11 @@ export function BottomBar({
           Reset view
         </button>
         <button
-          disabled
-          className="cursor-not-allowed rounded-md border border-border-subtle px-3 py-1.5 text-[12px] font-medium text-ui-muted opacity-50"
-          title="Coming soon"
+          onClick={onSearch}
+          className="rounded-md border border-border-subtle px-3 py-1.5 text-[12px] font-medium text-ui-dim transition-colors hover:border-star-dim hover:text-star-bright"
+          title="Search companies by name"
         >
-          PE Portfolio
+          Search
         </button>
         <button
           onClick={onAddCompany}
