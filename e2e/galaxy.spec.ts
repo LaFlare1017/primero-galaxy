@@ -879,3 +879,52 @@ test('the landing page contact form renders and submits a pre-filled mailto', as
     page.getByText('Opening your email app — your message is ready to send.')
   ).toBeVisible();
 });
+
+test('the contact address ships nowhere in the served page or JS (only base64)', async ({ page }) => {
+  // The address is concealed: it exists only as base64 inside the client
+  // bundle and is decoded at submit time. If anyone later renders it (or the
+  // minifier folds the encoded string back to plaintext), this test catches
+  // it. The plaintext is decoded at runtime here too, so it never appears as
+  // a literal in the repo — mirroring the app's concealment.
+  const JS_BASE64 = 'SG9kbGVyb25AZ21haWwuY29t'; // base64 of the gated address
+  const ADDRESS = atob(JS_BASE64);
+  const NAME = ADDRESS.split('@')[0];
+
+  // Collect every JS response the landing page (and any prefetched routes)
+  // actually fetches.
+  const jsUrls = new Set<string>();
+  page.on('response', (res) => {
+    const type = res.headers()['content-type'] ?? '';
+    if (type.includes('javascript')) jsUrls.add(res.url());
+  });
+
+  await page.goto('/');
+  await page.waitForLoadState('networkidle');
+
+  // Union with every script/preload reference in the served HTML, so the
+  // scan covers the full static chunk list regardless of fetch timing.
+  const html = await page.content();
+  for (const m of html.matchAll(/(?:src|href)="([^"]+\.js(?:[?#][^"]*)?)"/g)) {
+    jsUrls.add(new URL(m[1], page.url()).toString());
+  }
+
+  const jsBodies = (
+    await Promise.all(
+      [...jsUrls].map(async (u) => {
+        const res = await page.request.get(u);
+        return res.ok() ? res.text() : '';
+      })
+    )
+  ).join('\n');
+
+  // The rendered page: no address, no name, and not even the base64 form.
+  expect(html).not.toContain(ADDRESS);
+  expect(html).not.toContain(NAME);
+  expect(html).not.toContain(JS_BASE64);
+
+  // The bundles: the only trace is the base64 form. The positive assertion
+  // proves the scan actually covered the encoded address (not vacuous).
+  expect(jsBodies).toContain(JS_BASE64);
+  expect(jsBodies).not.toContain(ADDRESS);
+  expect(jsBodies).not.toContain(NAME);
+});
