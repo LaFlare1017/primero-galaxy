@@ -78,7 +78,7 @@ function LegendBubble({
 
 export default function LandingPage() {
   return (
-    <main className="h-screen overflow-y-auto">
+    <main className="h-[100dvh] overflow-y-auto">
       {/* ---------------------------------------------------------------- Nav */}
       <header className="fixed inset-x-0 top-0 z-10 flex h-14 items-center justify-between border-b border-border-subtle/60 bg-void/70 px-6 backdrop-blur-md">
         <span className="text-[13px] font-semibold tracking-[0.18em] text-star-bright">
@@ -87,7 +87,7 @@ export default function LandingPage() {
         <nav aria-label="Primary">
           <Link
             href="/galaxy" prefetch={false}
-            className="rounded-md border border-maturity-high/50 px-3 py-1.5 text-[12px] font-medium text-maturity-high transition-colors hover:bg-maturity-high/10"
+            className="rounded-md border border-maturity-high/50 px-3 py-1.5 text-[12px] font-medium text-maturity-high transition hover:bg-maturity-high/10 active:scale-[0.98]"
           >
             Enter the galaxy →
           </Link>
@@ -95,7 +95,7 @@ export default function LandingPage() {
       </header>
 
       {/* --------------------------------------------------------------- Hero */}
-      <section className="flex min-h-screen flex-col items-center justify-center px-6 pb-24 text-center">
+      <section className="flex min-h-[100dvh] flex-col items-center justify-center px-6 pb-24 text-center">
         <p className={EYEBROW} style={fade(0)}>
           AI Transformation Maturity
         </p>
@@ -126,13 +126,13 @@ export default function LandingPage() {
         >
           <Link
             href="/galaxy" prefetch={false}
-            className="rounded-md bg-maturity-high px-6 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90"
+            className="rounded-md bg-maturity-high px-6 py-3 text-sm font-semibold text-void transition hover:opacity-90 active:scale-[0.98]"
           >
             Enter the galaxy
           </Link>
           <a
             href="#how"
-            className="rounded-md border border-border-subtle px-6 py-3 text-sm font-medium text-ui-dim transition-colors hover:border-star-dim hover:text-star-bright"
+            className="rounded-md border border-border-subtle px-6 py-3 text-sm font-medium text-ui-dim transition hover:border-star-dim hover:text-star-bright active:scale-[0.98]"
           >
             How to read it
           </a>
@@ -163,9 +163,19 @@ export default function LandingPage() {
             <div className="rounded-xl border border-border-subtle bg-nebula/40 p-6">
               <div
                 aria-hidden="true"
-                className="flex h-9 w-9 items-center justify-center rounded-lg border border-border-subtle bg-void text-lg"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-border-subtle bg-void"
               >
-                ⭐
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-5 w-5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M12 3.5 L14 10 L20.5 12 L14 14 L12 20.5 L10 14 L3.5 12 L10 10 Z" />
+                </svg>
               </div>
               <h3 className="mt-4 text-[15px] font-semibold text-star-bright">
                 A star is a Fortune 500 company
@@ -180,9 +190,13 @@ export default function LandingPage() {
             <div className="rounded-xl border border-border-subtle bg-nebula/40 p-6">
               <div
                 aria-hidden="true"
-                className="flex h-9 w-9 items-center justify-center rounded-lg border border-border-subtle bg-void text-lg"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-border-subtle bg-void"
               >
-                🎨
+                <svg viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
+                  <circle cx="7" cy="16" r="3.5" fill="#FF6B35" />
+                  <circle cx="12" cy="18.5" r="3.5" fill="#F7C548" />
+                  <circle cx="16.5" cy="12" r="3.5" fill="#00D9C0" />
+                </svg>
               </div>
               <h3 className="mt-4 text-[15px] font-semibold text-star-bright">
                 Color is maturity
@@ -196,9 +210,19 @@ export default function LandingPage() {
             <div className="rounded-xl border border-border-subtle bg-nebula/40 p-6">
               <div
                 aria-hidden="true"
-                className="flex h-9 w-9 items-center justify-center rounded-lg border border-border-subtle bg-void text-lg"
+                className="flex h-9 w-9 items-center justify-center rounded-lg border border-border-subtle bg-void"
               >
-                ✦
+                <svg
+                  viewBox="0 0 24 24"
+                  className="h-5 w-5"
+                  fill="none"
+                  stroke="#7B61FF"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                >
+                  <path d="M4 17.5 C 10 17.5, 12 6.5, 20 6.5" />
+                  <circle cx="20" cy="6.5" r="1.6" fill="#7B61FF" stroke="none" />
+                </svg>
               </div>
               <h3 className="mt-4 text-[15px] font-semibold text-star-bright">
                 Trajectories are transformation
@@ -437,7 +461,7 @@ export default function LandingPage() {
           <div className="mt-8 flex flex-col items-center gap-6">
             <Link
               href="/galaxy" prefetch={false}
-              className="rounded-md bg-maturity-high px-6 py-3 text-sm font-semibold text-void transition-opacity hover:opacity-90"
+              className="rounded-md bg-maturity-high px-6 py-3 text-sm font-semibold text-void transition hover:opacity-90 active:scale-[0.98]"
             >
               Add your company to the galaxy
             </Link>
@@ -459,7 +483,7 @@ export default function LandingPage() {
         </p>
         <Link
           href="/galaxy" prefetch={false}
-          className="mt-8 inline-block rounded-md bg-maturity-high px-8 py-3.5 text-sm font-semibold text-void transition-opacity hover:opacity-90"
+          className="mt-8 inline-block rounded-md bg-maturity-high px-8 py-3.5 text-sm font-semibold text-void transition hover:opacity-90 active:scale-[0.98]"
         >
           Enter the galaxy
         </Link>
