@@ -89,15 +89,15 @@ export interface Company {
   revenue: number; // Annual revenue (USD, millions)
   employees: number;
   location: string;
-  /** Stock ticker (e.g. "NVDA") — dataset stars only. */
+  /** Stock ticker (e.g. "NVDA"); dataset stars only. */
   ticker?: string;
-  /** Company website domain (logo fetch + profile link) — dataset stars only. */
+  /** Company website domain (logo fetch + profile link); dataset stars only. */
   domain?: string;
-  /** Rank by revenue within the dataset (1 = largest) — dataset stars only. */
+  /** Rank by revenue within the dataset (1 = largest); dataset stars only. */
   revenueRank?: number;
 
   /**
-   * Public AI positioning — a one-line research note on what the company has
+   * Public AI positioning: a one-line research note on what the company has
    * actually said or done about AI (earnings-call commentary, product
    * launches, reported deployments). For the curated Fortune 500 dataset
    * these are compiled from public disclosures; for user-added stars it is

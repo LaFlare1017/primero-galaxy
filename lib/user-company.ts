@@ -4,7 +4,7 @@ import { clamp, round, slugify } from './utils';
 export interface UserCompanyInput {
   name: string;
   industry: Industry;
-  /** Current AI status (0-100) — becomes the maturity overall score. */
+  /** Current AI status (0-100), which becomes the maturity overall score. */
   aiStatus: number;
 }
 

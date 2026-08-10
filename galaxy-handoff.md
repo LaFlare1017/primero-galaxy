@@ -1,6 +1,6 @@
 # PRIMERO GALAXY
 ## Complete Build Specification
-### AI Transformation Maturity Galaxy — Awwwards-Level 3D Experience
+### AI Transformation Maturity Galaxy: Awwwards-Level 3D Experience
 ### Version 1.0 | August 2026
 
 ---
@@ -26,17 +26,17 @@
 ## 1. CREATIVE VISION
 
 ### One-Sentence Pitch
-An explorable, living galaxy where every star is a company, every constellation is a transformation strategy, and every trajectory is a path to AI maturity — built to be the most beautiful data visualization on the internet.
+An explorable, living galaxy where every star is a company, every constellation is a transformation strategy, and every trajectory is a path to AI maturity, built to be the most beautiful data visualization on the internet.
 
 ### Emotional Target
-**Awe, then understanding.** The user should gasp on landing, then stay because the data is genuinely useful. The galaxy is not a gimmick — it is the interface.
+**Awe, then understanding.** The user should gasp on landing, then stay because the data is genuinely useful. The galaxy is not a gimmick; it is the interface.
 
 ### Aesthetic References
-- **NASA Eyes on the Solar System** — scientific accuracy, smooth camera work
-- **Stripe Press book covers** — restrained typography, generous whitespace
-- **Monocle magazine** — editorial confidence, no shouting
-- **Ryoji Ikeda installations** — data as beauty, minimal color
-- **Ethiopian illuminated manuscripts** — geometric precision, sacred geometry
+- **NASA Eyes on the Solar System**: scientific accuracy, smooth camera work
+- **Stripe Press book covers**: restrained typography, generous whitespace
+- **Monocle magazine**: editorial confidence, no shouting
+- **Ryoji Ikeda installations**: data as beauty, minimal color
+- **Ethiopian illuminated manuscripts**: geometric precision, sacred geometry
 
 ### Design Philosophy
 - **The 3D space is the UI.** No sidebars. No dashboards. No panels. The galaxy IS the interface.
@@ -48,21 +48,21 @@ An explorable, living galaxy where every star is a company, every constellation 
 
 ## 2. VISUAL DESIGN SYSTEM
 
-### 2.1 Color Palette — Deep Space Edition
+### 2.1 Color Palette: Deep Space Edition
 
 The galaxy exists in darkness. The palette is restrained to 6 colors plus white. No gradients in UI. Subtle gradients ONLY in 3D atmospheric effects.
 
 | Token | Hex | RGB | Usage |
 |-------|-----|-----|-------|
-| `--void` | `#030308` | 3, 3, 8 | Background — deep space black with blue undertone |
-| `--nebula` | `#0A0A1A` | 10, 10, 26 | Secondary background — distant galaxy regions |
+| `--void` | `#030308` | 3, 3, 8 | Background: deep space black with blue undertone |
+| `--nebula` | `#0A0A1A` | 10, 10, 26 | Secondary background: distant galaxy regions |
 | `--star-bright` | `#FFFFFF` | 255, 255, 255 | Primary stars, active elements, text |
 | `--star-dim` | `#4A4A6A` | 74, 74, 106 | Distant stars, inactive elements |
-| `--maturity-low` | `#FF6B35` | 255, 107, 53 | Low AI maturity — warm, warning |
-| `--maturity-mid` | `#F7C548` | 247, 197, 72 | Medium AI maturity — amber, transition |
-| `--maturity-high` | `#00D9C0` | 0, 217, 192 | High AI maturity — teal, achieved |
-| `--trajectory` | `#7B61FF` | 123, 97, 255 | Transformation paths — violet, aspirational |
-| `--accent-glow` | `rgba(0, 217, 192, 0.15)` | — | Bloom halos around high-maturity stars |
+| `--maturity-low` | `#FF6B35` | 255, 107, 53 | Low AI maturity: warm, warning |
+| `--maturity-mid` | `#F7C548` | 247, 197, 72 | Medium AI maturity: amber, transition |
+| `--maturity-high` | `#00D9C0` | 0, 217, 192 | High AI maturity: teal, achieved |
+| `--trajectory` | `#7B61FF` | 123, 97, 255 | Transformation paths: violet, aspirational |
+| `--accent-glow` | `rgba(0, 217, 192, 0.15)` | n/a | Bloom halos around high-maturity stars |
 
 **Rules:**
 - Stars are NEVER rainbow. They are white, dim, or one of three maturity colors.
@@ -100,12 +100,12 @@ The galaxy exists in darkness. The palette is restrained to 6 colors plus white.
 
 **Ethiopian Cross Constellations:**
 - When stars cluster by industry, faint geometric lines connect them in Ethiopian cross patterns.
-- Lines are `#1A1A3A` at 30% opacity — visible on close inspection, invisible at distance.
+- Lines are `#1A1A3A` at 30% opacity: visible on close inspection, invisible at distance.
 - Pattern emerges only when zoomed to constellation level.
 
 **Jamaican Quilt Grid:**
 - Background grid at galaxy periphery uses quilt-block tessellation.
-- Grid is `#0A0A1A` on `#030308` — nearly invisible, adds texture on pan.
+- Grid is `#0A0A1A` on `#030308`: nearly invisible, adds texture on pan.
 
 ---
 
@@ -114,8 +114,8 @@ The galaxy exists in darkness. The palette is restrained to 6 colors plus white.
 ### 3.1 The Stars
 
 **Visual Properties:**
-- **Geometry:** Icosahedron with 2 subdivisions (80 faces) — not perfect spheres, slightly faceted for premium feel.
-- **Material:** `MeshBasicMaterial` with additive blending. No lighting needed — stars are self-illuminating.
+- **Geometry:** Icosahedron with 2 subdivisions (80 faces), not perfect spheres, slightly faceted for premium feel.
+- **Material:** `MeshBasicMaterial` with additive blending. No lighting needed; stars are self-illuminating.
 - **Size:** Base radius 1.5 units. Scales with maturity (1.0 for low, 2.0 for high).
 - **Color:** White (`#FFFFFF`) by default. Maturity colors applied as emissive tint.
 
@@ -153,9 +153,9 @@ The galaxy exists in darkness. The palette is restrained to 6 colors plus white.
 ### 3.3 The Nebula / Atmosphere
 
 **Background:**
-- Solid `#030308` — no stars, no texture. Pure void.
+- Solid `#030308`: no stars, no texture. Pure void.
 - Faint radial gradient from center: `#0A0A1A` (center, 10% opacity) to `#030308` (edge).
-- Gradient is CSS background, not 3D — performance optimization.
+- Gradient is CSS background, not 3D; performance optimization.
 
 **Dust Particles:**
 - 2,000 tiny points (`Points` geometry, not `PointsMaterial`).
@@ -761,7 +761,7 @@ function computeGalaxyLayout(companies: Company[]) {
 **Desktop-first, graceful degradation:**
 - Mobile gets simplified 2D canvas fallback (D3 force-directed graph, not Three.js).
 - Or: Mobile shows pre-rendered video of galaxy with touch-to-explore hotspots.
-- Or: Mobile gets "light mode" — 100 stars instead of 500, no bloom, no dust.
+- Or: Mobile gets "light mode": 100 stars instead of 500, no bloom, no dust.
 
 **Decision:** Build desktop first. Mobile fallback decided in Week 3 based on performance testing.
 
@@ -825,7 +825,7 @@ primero-galaxy/
 ├── types/
 │   └── index.ts                      # TypeScript interfaces
 ├── public/
-│   └── (no assets — everything procedural)
+│   └── (no assets: everything procedural)
 ├── next.config.js
 ├── tailwind.config.js
 ├── tsconfig.json

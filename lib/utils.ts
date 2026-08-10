@@ -69,7 +69,7 @@ export function faviconUrl(domain: string, size = 128): string {
   return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=${size}`;
 }
 
-/** Initials monogram from a company name — the fallback when no logo loads. */
+/** Initials monogram from a company name, the fallback when no logo loads. */
 export function monogram(name: string): string {
   const words = name
     .replace(/[^a-zA-Z0-9 .'-]/g, ' ')

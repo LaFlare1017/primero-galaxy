@@ -44,7 +44,7 @@ function TrajectoryLine() {
 
 /**
  * Legend dot: a hollow glowing "star bubble" that breathes on the exact wave
- * of the star it stands for — the halo breathing of galaxy star `starIndex`
+ * of the star it stands for; the halo breathing of galaxy star `starIndex`
  * (frequency and phase from the shared starBreath constants). The rim/bloom
  * colors arrive as CSS custom properties so each maturity band keeps its
  * red → amber → teal story.
@@ -82,7 +82,7 @@ export default function LandingPage() {
     <main className="h-[100dvh] overflow-y-auto">
       {/* Fixed reactive-lines background (Originkit canvas, decorative): sits
           behind the scrolling content, reacts to the cursor. Colors tuned to
-          the app tokens — void base, lavender lines. */}
+          the app tokens: void base, lavender lines. */}
       <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0">
         <InteractiveLines
           backgroundColor="#030308"

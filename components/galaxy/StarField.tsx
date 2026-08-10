@@ -14,7 +14,7 @@ interface StarFieldProps {
 }
 
 // Glow halo: every star gets a camera-facing, additive ring that breathes
-// with it — the reference look is a hollow, glowing bubble (bright rim, dark
+// with it; the reference look is a hollow, glowing bubble (bright rim, dark
 // interior). The ring texture supplies the rim; additive blending + bloom
 // supply the radiance; the instance color keeps the red/yellow/green
 // maturity story.
@@ -146,7 +146,7 @@ export function StarField({ companies, onStarHover, onStarSelect }: StarFieldPro
 
       let scale = baseScales[i] * appear;
 
-      // Every star breathes — phase- and frequency-offset so the whole field
+      // Every star breathes, phase- and frequency-offset so the whole field
       // undulates organically instead of pulsing in lockstep.
       scale *= 1 + starBreath.core.amplitude * Math.sin(t * breathFrequency(i, starBreath.core) + phases[i]);
 
@@ -215,7 +215,7 @@ export function StarField({ companies, onStarHover, onStarSelect }: StarFieldPro
     }
 
     // The raycast's coarse bounding-sphere guard lazily computes the mesh's
-    // boundingSphere the first time it fires — and if that happens while the
+    // boundingSphere the first time it fires, and if that happens while the
     // appear animation still has every instance matrix at identity, it caches
     // a unit sphere at the origin. Every ray that doesn't pass within ~1 unit
     // of the galaxy center is then rejected early: hover is dead almost

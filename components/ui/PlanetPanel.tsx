@@ -100,7 +100,7 @@ export function PlanetPanel() {
               </a>
             )}
 
-            {/* Public AI positioning — research note compiled from disclosures */}
+            {/* Public AI positioning: research note compiled from disclosures */}
             {selected.aiPositioning && (
               <div className="mt-4 rounded-lg border border-border-subtle bg-nebula/60 p-3">
                 <div className="text-[10px] font-medium uppercase tracking-label text-ui-muted">

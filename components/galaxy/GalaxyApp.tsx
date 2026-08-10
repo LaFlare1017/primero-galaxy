@@ -11,7 +11,7 @@ import { AddCompanyForm } from '@/components/ui/AddCompanyForm';
 import { CompanySearch } from '@/components/ui/CompanySearch';
 import { ToastStack } from '@/components/ui/ToastStack';
 
-// Three.js must never run on the server — load it client-side only.
+// Three.js must never run on the server; load it client-side only.
 const GalaxyScene = dynamic(() => import('./GalaxyScene'), {
   ssr: false,
   loading: () => <div className="fixed inset-0 bg-void" />,

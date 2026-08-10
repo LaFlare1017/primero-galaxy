@@ -12,7 +12,7 @@
  */
 import { readFileSync } from 'node:fs';
 
-// 100% — the score the app holds today. Lower this floor deliberately only
+// 100%: the score the app holds today. Lower this floor deliberately only
 // if a future design decision trades a small a11y/SEO cost for something
 // bigger; the point of the gate is that the change is conscious.
 const MIN_SCORE = 1.0;

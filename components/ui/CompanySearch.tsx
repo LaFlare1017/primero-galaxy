@@ -11,7 +11,7 @@ const MAX_RESULTS = 8;
 /**
  * "Search by company": a floating search palette at the top of the galaxy.
  * Type a name and the results narrow to matching stars (dataset + user-added);
- * clicking one (or Enter) selects it — the camera flies in and the full
+ * clicking one (or Enter) selects it; the camera flies in and the full
  * profile panel opens. The galaxy stays visible behind the panel, and the
  * transparent click-catcher closes it on any outside click (Esc too).
  */

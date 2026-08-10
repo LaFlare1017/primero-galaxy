@@ -8,7 +8,7 @@ const VIDEO_SRC =
   'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260801_001207_ec20d138-aa45-4b2b-ab8c-bdc71607f240.mp4';
 
 /**
- * 404 — full-viewport error screen.
+ * 404: full-viewport error screen.
  *
  * Composition: the background video (lowest layer, no overlays), the LGPSM
  * lockup centered at top, and a centered 404 column set in Geist Mono
@@ -24,7 +24,7 @@ export default function NotFound() {
     <main
       className="relative min-h-[100svh] overflow-y-auto bg-void font-mono"
     >
-      {/* Full-viewport background video — lowest layer, its own motion is the
+      {/* Full-viewport background video: lowest layer, its own motion is the
           only background animation. No tint, blur, or overlay of any kind. */}
       <video
         className="absolute inset-0 h-full w-full object-cover"
@@ -36,7 +36,7 @@ export default function NotFound() {
         src={VIDEO_SRC}
       />
 
-      {/* Brand lockup — LGPSM mark + logotype (233px × 40px frame). */}
+      {/* Brand lockup: LGPSM mark + logotype (233px × 40px frame). */}
       <div
         aria-label="LGPSM"
         role="img"
@@ -61,7 +61,7 @@ export default function NotFound() {
         </div>
       </div>
 
-      {/* Centered 404 column — 483px, 44px gaps (28px on mobile). */}
+      {/* Centered 404 column: 483px, 44px gaps (28px on mobile). */}
       <div className="absolute left-1/2 top-1/2 z-10 flex w-[483px] -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-[44px] pb-10 text-center max-[640px]:w-[min(100%-40px,360px)] max-[640px]:gap-[28px]">
         <h1 className="bg-[linear-gradient(247.33deg,rgb(255,255,255)_2.53%,rgba(255,255,255,0.4)_93.61%)] bg-clip-text pb-[0.04em] text-[295.751px] font-semibold leading-[1.1] tracking-[-24.6459px] text-transparent max-[640px]:min-h-0 max-[640px]:text-[clamp(140px,52vw,200px)] max-[640px]:tracking-[-0.09em]">
           404

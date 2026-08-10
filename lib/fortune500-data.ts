@@ -6,11 +6,11 @@ import type { Industry } from '@/types';
  *
  * A curated snapshot of ~200 of the most prominent U.S. Fortune 500
  * enterprises, each scored 0–100 on AI transformation maturity and annotated
- * with its PUBLIC AI POSITIONING — what the company has actually said or done
+ * with its PUBLIC AI POSITIONING: what the company has actually said or done
  * about AI (earnings-call commentary, product launches, reported deployment
  * numbers, partnerships, governance posture).
  *
- * METHODOLOGY — read before using the scores:
+ * METHODOLOGY: read before using the scores:
  *   - Scores are DIRECTIONAL ANALYST-STYLE ESTIMATES, not audited metrics.
  *     They are synthesized from public disclosures: earnings-call transcripts,
  *     shareholder letters, product announcements, reported deployment/headcount
@@ -18,11 +18,11 @@ import type { Industry } from '@/types';
  *     Fortune 500 on M365 Copilot; JPMorgan: ~$2B annual AI spend and 400+
  *     production use cases; Walmart: AI tools for ~1.5M associates).
  *   - The five dimensions mirror the galaxy's maturity model:
- *       1. dataInfrastructure   — cloud/data platform readiness
- *       2. workflowStandardization — process standardization at scale
- *       3. aiDeployment        — live AI use cases in production
- *       4. governance          — responsible-AI policy & ethics posture
- *       5. talent              — AI/ML headcount, research depth, upskilling
+ *       1. dataInfrastructure   (cloud/data platform readiness)
+ *       2. workflowStandardization (process standardization at scale)
+ *       3. aiDeployment        (live AI use cases in production)
+ *       4. governance          (responsible-AI policy & ethics posture)
+ *       5. talent              (AI/ML headcount, research depth, upskilling)
  *   - `overall` is a weighted judgment of the five, not a strict average.
  *   - revenue ($M) and employees are approximate recent public figures.
  *   - Fortune 500 membership is drawn from the most recent published list;
@@ -48,7 +48,7 @@ export interface Fortune500AIEntry {
   m: MaturityTuple;
   /** Marks the AI flagship companies (pulse in the galaxy). */
   featured?: boolean;
-  /** Public AI positioning — what the company has said/done, with anchors. */
+  /** Public AI positioning: what the company has said/done, with anchors. */
   note: string;
 }
 
@@ -2049,7 +2049,7 @@ export const FORTUNE500_AI_COMPANIES: Fortune500AIEntry[] = [
   },
 ];
 
-/** Number of curated enterprises — the galaxy renders exactly this many stars. */
+/** Number of curated enterprises: the galaxy renders exactly this many stars. */
 export const COMPANY_COUNT = FORTUNE500_AI_COMPANIES.length;
 
 // ---------------------------------------------------------------------------
@@ -2118,7 +2118,7 @@ export const COMPANY_META: Record<string, { ticker: string; domain: string }> = 
   MetLife: { ticker: 'MET', domain: 'metlife.com' },
   'Prudential Financial': { ticker: 'PRU', domain: 'prudential.com' },
   AIG: { ticker: 'AIG', domain: 'aig.com' },
-  'Liberty Mutual': { ticker: '', domain: 'libertymutual.com' }, // mutual — no public ticker
+  'Liberty Mutual': { ticker: '', domain: 'libertymutual.com' }, // mutual; no public ticker
   'The Hartford': { ticker: 'HIG', domain: 'thehartford.com' },
   'UnitedHealth Group': { ticker: 'UNH', domain: 'unitedhealthgroup.com' },
   'Eli Lilly': { ticker: 'LLY', domain: 'lilly.com' },
@@ -2257,7 +2257,7 @@ export const COMPANY_META: Record<string, { ticker: string; domain: string }> = 
 };
 
 // ---------------------------------------------------------------------------
-// Sector medians — the maturity profile of the median company in each
+// Sector medians: the maturity profile of the median company in each
 // industry, computed from the dataset itself. The planet profile compares a
 // company against its sector's median (radar overlay + dimension ticks).
 // ---------------------------------------------------------------------------

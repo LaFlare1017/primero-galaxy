@@ -32,7 +32,7 @@ function buildCompanies(count: number): Company[] {
       },
       position: { x: 0, y: 0, z: 0 }, // filled by the layout algorithm
       constellationId: e.industry,
-      peFirm: undefined, // public companies — no PE backing
+      peFirm: undefined, // public companies; no PE backing
       founded: e.founded,
       revenue: e.revenue,
       employees: e.employees,
@@ -45,7 +45,7 @@ function buildCompanies(count: number): Company[] {
     };
   });
 
-  // Revenue rank within the dataset (1 = largest) — a quick orienting stat
+  // Revenue rank within the dataset (1 = largest), a quick orienting stat
   // for the profile header.
   [...companies]
     .sort((a, b) => b.revenue - a.revenue)

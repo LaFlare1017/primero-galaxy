@@ -15,7 +15,7 @@ const UNMOUNT_ZOOM = 540;
 
 // Per-star distance fades (world units from the camera). The band is narrow
 // and the visibility threshold high: only a foreground shell of stars ever
-// carries visible labels (readable AND cheap — troika render cost scales
+// carries visible labels (readable AND cheap; troika render cost scales
 // with visible text count).
 const FAR_FADE_START = 260; // labels fully invisible beyond this
 const FAR_FADE_END = 165; // fully visible within this
@@ -24,14 +24,14 @@ const NEAR_FADE_END = 150;
 const VISIBLE_OPACITY = 0.3; // below this a text is culled entirely
 
 // Declutter: labels render only for the nearest stars whose billboards do
-// not overlap on screen, capped per frame — a dense industry cluster can't
+// not overlap on screen, capped per frame, so a dense industry cluster can't
 // collapse into a wall of text. The separation required is computed per
 // candidate from its own camera distance: billboards are world-sized, so
 // their on-screen width grows as you approach (≈0.55 × chars × fontSize).
 const MAX_LABELS = 12;
 
 // Opacity smoothing rate (per second): label opacity eases toward its
-// target instead of snapping — most visible when the declutter drops or
+// target instead of snapping; most visible when the declutter drops or
 // admits a label, which is a binary target jump. ~100ms response.
 const SMOOTH_RATE = 10;
 
@@ -43,7 +43,7 @@ const PLANET_CONTEXT = 0.15; // labels reduce to a faint hint in planet view
 const NAME_FILL = '#D6D6E8';
 const NAME_OUTLINE = '#030308';
 const SCORE_DIM = 0.72; // keep maturity colors under the bloom threshold
-// troika (drei <Text>) needs a TTF — woff2 is not supported
+// troika (drei <Text>) needs a TTF, and woff2 is not supported
 const FONT_URL = '/fonts/Geist-Medium.ttf';
 
 type LabelText = THREE.Object3D & { fillOpacity: number };
@@ -129,7 +129,7 @@ function Labels({
     const { mode, selectedStar } = useGalaxyStore.getState();
     const selectedId = mode === 'planet' ? selectedStar?.id : null;
 
-    // Pass 1 — camera distance + screen projection + front/back for every star.
+    // Pass 1: camera distance + screen projection + front/back for every star.
     camera.getWorldDirection(dirVec.current);
     for (let i = 0; i < stars.length; i++) {
       worldPos.current.copy(stars[i].position);
@@ -146,7 +146,7 @@ function Labels({
       screenY.current[i] = ndc.current.y;
     }
 
-    // Pass 2 — choose which labels actually show: nearest star first, skip
+    // Pass 2: choose which labels actually show: nearest star first, skip
     // any whose billboard would overlap an already-kept one on screen. The
     // required separation scales with the candidate's distance, since the
     // billboard's pixel width grows as the camera approaches.
@@ -161,7 +161,7 @@ function Labels({
       if (kept.current.size >= MAX_LABELS) break;
       // Only stars in the visible shell are label candidates: in front of the
       // camera, inside the far-fade band, and on screen. Behind/too-close
-      // stars are near-faded to nothing — keeping them would only shadow the
+      // stars are near-faded to nothing, so keeping them would only shadow the
       // readable ones via the separation check.
       if (
         frontZ.current[i] < 0 ||
@@ -189,7 +189,7 @@ function Labels({
       keptScreen.current.push({ x: screenX.current[i], y: screenY.current[i] });
     }
 
-    // Pass 3 — per-label opacity: kept labels fade normally, the rest go dark.
+    // Pass 3 (per-label opacity): kept labels fade normally, the rest go dark.
     for (let i = 0; i < stars.length; i++) {
       const star = stars[i];
       const far = smoothstep(FAR_FADE_START, FAR_FADE_END, camDist.current[i]);

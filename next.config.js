@@ -8,7 +8,7 @@ const nextConfig = {
   distDir: process.env.NEXT_E2E_DIST_DIR || '.next',
   images: {
     // Company logos come from the Google favicon service (tiny 128px tiles,
-    // unoptimized — no image-optimizer round-trip needed).
+    // unoptimized, so no image-optimizer round-trip needed).
     remotePatterns: [{ protocol: 'https', hostname: 'www.google.com' }],
   },
 };

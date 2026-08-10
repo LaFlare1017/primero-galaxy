@@ -1,5 +1,5 @@
-// Reactive Lines — Originkit
-// Originkit — defaults rewritten to match preview.
+// Reactive Lines: Originkit
+// Originkit, defaults rewritten to match preview.
 "use client";
 
 import { useEffect, useRef } from "react";
@@ -88,7 +88,7 @@ function useCanvasAnimation({
     const st = stateRef.current;
 
     // Under prefers-reduced-motion the canvas draws one static frame (on
-    // mount and after resizes) and never starts the animation loop — matching
+    // mount and after resizes) and never starts the animation loop, matching
     // the app's CSS handling of the legend bubbles. Evaluated once at mount.
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const drawStatic = () => {
@@ -112,7 +112,7 @@ function useCanvasAnimation({
     };
 
     const start = () => {
-      if (reduceMotion) return; // static frame only — never animate
+      if (reduceMotion) return; // static frame only, never animate
       if (!st.animationId && st.isVisible && st.isPageVisible) {
         st.animationId = requestAnimationFrame(loop);
       }
@@ -201,8 +201,9 @@ export default function InteractiveLines({
   const cfgRef = useRef({ linesNum: 40, bias: 0.5 });
 
   const { containerRef, canvasRef, stateRef } = useCanvasAnimation({
-    // Start on load: the background must be visible without a mouse move —
-    // touch devices never fire one, so deferring would leave a blank canvas.
+    // Start on load: the background must be visible without a mouse move,
+    // since touch devices never fire one and deferring would leave a blank
+    // canvas.
     deferStart: false,
 
     onSetup: (e, t) => {
@@ -326,7 +327,7 @@ export default function InteractiveLines({
 
     // Mouse AND touch drive the pattern: touchmove keeps the background
     // interactive on devices with no cursor. The loop starts on load, so
-    // this only re-targets the pointer/finger — nothing here gates whether
+    // this only re-targets the pointer/finger; nothing here gates whether
     // the animation runs.
     let target = (clientX: number, clientY: number) => {
       if (!stateRef.current.isVisible) return;
@@ -353,7 +354,7 @@ export default function InteractiveLines({
     window.addEventListener("scroll", i, { passive: true });
 
     // Debug handle (harmless in prod): expose the pattern's pointer target so
-    // tests can assert mouse/touch input reaches it — pixel hashes alone
+    // tests can assert mouse/touch input reaches it; pixel hashes alone
     // can't, because the line count converges asymptotically after load.
     const handle = window as unknown as Record<string, unknown>;
     handle.__lines = {

@@ -33,7 +33,7 @@ type GalaxyHandle = Record<string, any>;
 // The galaxy renders the curated Fortune 500 dataset (lib/fortune500-data.ts).
 const STAR_COUNT = 196;
 
-// Toast auto-dismiss window — keep in sync with store/galaxyStore.ts.
+// Toast auto-dismiss window: keep in sync with store/galaxyStore.ts.
 const TOAST_DURATION_MS = 12000;
 
 /** Poll until the freshly mounted galaxy re-registers its debug handles. */
@@ -267,8 +267,8 @@ test('double-clicking a star opens planet view; trajectory + reset complete the 
   await hoverStar(page, company.id, company.name);
 
   // Real double-click on the star. Retries re-project at click time (the
-  // galaxy mesh rotates ~0.008 rad/s), so a single stale frame — the flake
-  // that failed this test under load — can never fail the suite.
+  // galaxy mesh rotates ~0.008 rad/s), so a single stale frame (the flake
+  // that failed this test under load) can never fail the suite.
   expect(await doubleClickStar(page, company.id)).toBe(true);
 
   // Store flips to planet mode and the camera flies in.
@@ -373,7 +373,7 @@ test('searching a company by name flies to its star and opens its profile', asyn
   ).toBe('galaxy');
 
   // Reopen and type the name: the matching result row renders with its
-  // details, and Enter (keyboard selection) picks it — no raycast, so no
+  // details, and Enter (keyboard selection) picks it (no raycast, so no
   // camera/rotation timing dependence like the dblclick path.
   await page.getByRole('button', { name: 'Search' }).click();
   await expect(input).toBeVisible();
@@ -493,7 +493,7 @@ test('adding a company creates a persistent star and flies to it', async ({ page
 
   // The toast is several seconds old by now (camera flight + assertions).
   // With remaining-window semantics a slow refresh can legitimately expire
-  // it — that expiry is covered by the dedicated toast tests below. Here we
+  // it; that expiry is covered by the dedicated toast tests below. Here we
   // reset the persisted createdAt so the reload simulates an immediate
   // refresh: the "See trajectory" prompt must survive it.
   await page.evaluate(() => {
@@ -509,7 +509,7 @@ test('adding a company creates a persistent star and flies to it', async ({ page
 
   // Reload: the star survives (hydrated from localStorage, count reflects it)
   await page.reload();
-  // Handles are re-registered by the fresh mount — wait for them before
+  // Handles are re-registered by the fresh mount; wait for them before
   // driving the camera (the hydration poll alone only proves `store`).
   await expect
     .poll(
@@ -582,7 +582,7 @@ test('adding a company creates a persistent star and flies to it', async ({ page
       { timeout: 30_000 }
     )
     .toBe(true);
-  // Hydration restores the pending toast — Undo is still offered.
+  // Hydration restores the pending toast; Undo is still offered.
   await expect(page.getByText('Removed from the galaxy.')).toBeVisible();
   await page.getByRole('button', { name: 'Undo' }).click();
   await expect
@@ -597,7 +597,7 @@ test('adding a company creates a persistent star and flies to it', async ({ page
   });
   expect(persistedAfterUndo).toBe(1);
 
-  // Deleted from the list (not planet view) — Undo must NOT restore the view.
+  // Deleted from the list (not planet view); Undo must NOT restore the view.
   await expect
     .poll(() => page.evaluate(() => (window.__galaxy as GalaxyHandle).store.getState().mode))
     .toBe('galaxy');
@@ -704,7 +704,7 @@ test('adding a company creates a persistent star and flies to it', async ({ page
 
   // Project the star and move the mouse with nudges until the raycast
   // actually lands on the user star. Its position is random, so it can sit
-  // behind another star — poll hover rather than blind-dblclicking.
+  // behind another star, so poll hover rather than blind-dblclicking.
   const dblNudges = [
     [0, 0],
     [8, 8],
@@ -723,7 +723,7 @@ test('adding a company creates a persistent star and flies to it', async ({ page
     const hovered = await waitForHover(page, userStar.name, 2000);
     if (hovered !== userStar.name) continue;
     // waitForHover accepts a transient hit from an intermediate move step
-    // (mouse.move steps interpolate) — the endpoint may not be over the star.
+    // (mouse.move steps interpolate), so the endpoint may not be over the star.
     // Re-move without interpolation and confirm the hover persists first.
     await page.mouse.move(x + dx, y + dy);
     const confirmed = await page.evaluate(
@@ -806,7 +806,7 @@ test('adding a company creates a persistent star and flies to it', async ({ page
     )
     .toBeGreaterThan(700);
 
-  // The panel delete triggers the same Undo toast — and because the star was
+  // The panel delete triggers the same Undo toast, and because the star was
   // deleted from planet view, Undo restores the view: panel + camera fly-in.
   await expect(page.getByText('Removed from the galaxy.')).toBeVisible();
   await page.getByRole('button', { name: 'Undo' }).click();
@@ -878,7 +878,7 @@ test('a hydrated toast keeps only its remaining window (no fresh duration)', asy
   await waitForApp(page);
 
   // Seed a user star + an "added" toast whose window is already mostly gone.
-  // After the reload it must auto-dismiss in the ~4s that remain — not a
+  // After the reload it must auto-dismiss in the ~4s that remain, not a
   // fresh full window from hydration.
   await page.evaluate(
     ({ star, ms }) => {
@@ -926,7 +926,7 @@ test('a toast that expired while away does not resurrect on reload', async ({ pa
   await waitForApp(page);
 
   // Seed a "removed" (Undo) toast that expired before the reload: created
-  // well past the auto-dismiss window. Hydration must drop it — no fresh
+  // well past the auto-dismiss window. Hydration must drop it: no fresh
   // window.
   await page.evaluate(
     ({ star, ms }) => {
@@ -971,7 +971,7 @@ test('removing the same company twice keeps one Removed toast; Undo restores it'
 
   // Seed a user star plus a pending "removed" toast for it. Its createdAt is
   // set slightly in the future so the 12s auto-dismiss window is guaranteed
-  // to still be open when the UI remove below fires — the test must not
+  // to still be open when the UI remove below fires, so the test must not
   // depend on machine speed racing the dismiss timer.
   await page.evaluate((star) => {
     localStorage.setItem('primero-galaxy:user-stars', JSON.stringify([star]));
@@ -998,7 +998,7 @@ test('removing the same company twice keeps one Removed toast; Undo restores it'
   await expect(removedToast).toBeVisible();
 
   // Remove the same company through the sheet's "Your stars" list: the new
-  // removal must SUPERSEDE the seeded toast (same kind + slug) — never stack
+  // removal must SUPERSEDE the seeded toast (same kind + slug); never stack
   // a duplicate, even though the first toast is still on screen.
   await page.getByRole('button', { name: 'Add Company' }).click();
   await expect(page.getByRole('heading', { name: 'Add Your Company' })).toBeVisible();
@@ -1006,7 +1006,7 @@ test('removing the same company twice keeps one Removed toast; Undo restores it'
   await expect(removeButton).toBeVisible();
   await removeButton.click();
 
-  // Exactly one Removed toast remains — no stacked duplicate — in both the
+  // Exactly one Removed toast remains, no stacked duplicate, in both the
   // DOM and the store (the store check is the airtight one: it runs moments
   // after the click, while the seeded toast's window is still open).
   await expect(removedToast).toHaveCount(1, { timeout: 5000 });
@@ -1127,13 +1127,13 @@ test('the landing page contact form renders and submits a pre-filled mailto', as
   await expect(send).toBeEnabled();
 
   // Submitting opens the visitor's mail app pre-filled. Chromium surfaces
-  // the mailto navigation as a (failed, external-protocol) request — assert
+  // the mailto navigation as a (failed, external-protocol) request; assert
   // on that instead of a real navigation.
   const mailto = page.waitForEvent('request', (r) => r.url().startsWith('mailto:'));
   await send.click();
   const mailtoUrl = new URL((await mailto).url());
 
-  // The gated Primero address is the recipient — kept base64 here, mirroring
+  // The gated Primero address is the recipient; kept base64 here, mirroring
   // the app, so the address never appears as plaintext in the repo.
   expect(mailtoUrl.pathname).toBe(atob('SG9kbGVyb25AZ21haWwuY29t'));
   expect(mailtoUrl.searchParams.get('subject')).toBe(
@@ -1154,7 +1154,7 @@ test('the contact address ships nowhere in the served page or JS (only base64)',
   // bundle and is decoded at submit time. If anyone later renders it (or the
   // minifier folds the encoded string back to plaintext), this test catches
   // it. The plaintext is decoded at runtime here too, so it never appears as
-  // a literal in the repo — mirroring the app's concealment.
+  // a literal in the repo, mirroring the app's concealment.
   const JS_BASE64 = 'SG9kbGVyb25AZ21haWwuY29t'; // base64 of the gated address
   const ADDRESS = atob(JS_BASE64);
   const NAME = ADDRESS.split('@')[0];
@@ -1285,7 +1285,7 @@ test('the reactive-lines background paints and animates immediately on load (con
   await page.goto('/');
   await page.waitForLoadState('networkidle');
 
-  // The frame painted on mount with NO interaction — the animation is not
+  // The frame painted on mount with NO interaction; the animation is not
   // deferred until a mouse move (the void background is painted, not a
   // blank black canvas).
   await expect
@@ -1332,7 +1332,7 @@ test('the reactive-lines background draws one static frame under reduced motion'
   await page.goto('/');
   await page.waitForLoadState('networkidle');
 
-  // A single static frame painted on mount — no mouse interaction needed.
+  // A single static frame painted on mount, with no mouse interaction needed.
   await expect
     .poll(async () => (await readCanvasFrame(page)).voidPx, { timeout: 10_000 })
     .toBeGreaterThan(0);

@@ -7,7 +7,7 @@ import { SCENE } from '@/lib/constants';
 const DUST_COUNT = 2000;
 
 /**
- * Static background dust — reference points that give the camera parallax
+ * Static background dust: reference points that give the camera parallax
  * depth. Deterministic positions so the void looks the same every visit.
  */
 export function DustParticles() {

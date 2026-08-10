@@ -23,7 +23,7 @@ export function RadarChart({ company }: { company: Company }) {
     return `${p.x},${p.y}`;
   }).join(' ');
 
-  // The sector-median profile (dashed, muted) — where the median company in
+  // The sector-median profile (dashed, muted): where the median company in
   // this industry sits on the same five axes.
   const sector = SECTOR_MEDIAN[company.industry];
   const medianPoints = DIMENSIONS.map((_, i) => {

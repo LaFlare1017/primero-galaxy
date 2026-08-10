@@ -34,5 +34,5 @@ test-results/
 playwright-report/
 playwright/.cache/
 
-# freebuff session data (local conversation database — never upload)
+# freebuff session data (local conversation database, never uploaded)
 .freebuff/

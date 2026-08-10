@@ -5,7 +5,7 @@ import { useGalaxyStore, TOAST_DURATION_MS } from '@/store/galaxyStore';
 import { maturityColor } from '@/lib/constants';
 
 /**
- * One notification area for both kinds of feedback — "added" (post-add
+ * One notification area for both kinds of feedback: "added" (post-add
  * prompt with See trajectory) and "removed" (with Undo). Toasts live in the
  * store queue, so several can be visible at once: the stack is anchored to
  * the bottom bar and newer toasts appear below older ones, pushing them up.
@@ -20,7 +20,7 @@ export function ToastStack() {
 
   // One timer per toast; timers for dismissed toasts are cleaned up. A toast
   // that survived a refresh keeps only its remaining window (its createdAt is
-  // persisted) — floored so it doesn't race the first render.
+  // persisted), floored so it doesn't race the first render.
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   useEffect(() => {
     const live = new Set(toasts.map((t) => t.id));

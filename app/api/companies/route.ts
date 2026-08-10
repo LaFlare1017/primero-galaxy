@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/companies
- * Returns the pre-computed galaxy dataset (deterministic — the same galaxy
+ * Returns the pre-computed galaxy dataset (deterministic: the same galaxy
  * on every request).
  */
 export async function GET() {

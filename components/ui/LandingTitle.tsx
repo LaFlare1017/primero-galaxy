@@ -15,7 +15,7 @@ import { motion } from 'framer-motion';
  * the CSS animations to near-instant).
  *
  * Timing invariant: the overlay must unmount (4.2s) strictly BEFORE the
- * BottomBar starts fading in (4.4s) — both live at z-20, so a late fade
+ * BottomBar starts fading in (4.4s); both live at z-20, so a late fade
  * would briefly stack the two layers. Keep the two components in sync if
  * either timing changes.
  */

@@ -14,7 +14,7 @@ const PENDING_TOASTS_KEY = 'primero-galaxy:pending-toasts';
 
 /** How long a toast stays actionable before auto-dismissing (ms).
  * 12s gives a user time to actually reach the "See trajectory" / Undo
- * actions after a camera flight — and keeps the e2e assertions clear of the
+ * actions after a camera flight, and keeps the e2e assertions clear of the
  * auto-dismiss race on slow/loaded machines. */
 export const TOAST_DURATION_MS = 12000;
 
@@ -33,7 +33,7 @@ export function persistUserStars(stars: Company[]): void {
   try {
     window.localStorage.setItem(USER_STARS_KEY, JSON.stringify(stars));
   } catch {
-    // Storage full / unavailable — the in-memory star still works this session.
+    // Storage full / unavailable: the in-memory star still works this session.
   }
 }
 
@@ -52,7 +52,7 @@ export function persistPendingToasts(toasts: GalaxyToast[]): void {
   try {
     window.sessionStorage.setItem(PENDING_TOASTS_KEY, JSON.stringify(toasts));
   } catch {
-    // Storage unavailable — the in-memory toast still works this session.
+    // Storage unavailable: the in-memory toast still works this session.
   }
 }
 
@@ -63,7 +63,7 @@ export interface GalaxyToast {
   star: Company;
   /** For `removed` toasts: whether it was deleted from planet view (undo restores that view). */
   wasSelected?: boolean;
-  /** Epoch ms when the toast was created — hydration uses it to compute the remaining window. */
+  /** Epoch ms when the toast was created; hydration uses it to compute the remaining window. */
   createdAt: number;
 }
 
@@ -89,7 +89,7 @@ interface GalaxyState {
   zoomLevel: number; // camera distance to focus point
   showTrajectory: boolean;
   userStars: Company[]; // added via "Add Your Company"
-  /** Notification stack — each toast carries its own data (incl. Undo). */
+  /** Notification stack: each toast carries its own data (incl. Undo). */
   toasts: GalaxyToast[];
 
   setMode: (mode: GalaxyMode) => void;
@@ -146,7 +146,7 @@ export const useGalaxyStore = create<GalaxyState>((set) => ({
   hydratePendingToasts: () => {
     const loaded = loadPendingToasts();
     const now = Date.now();
-    // Only keep toasts still inside their window — one that expired while the
+    // Only keep toasts still inside their window; one that expired while the
     // tab was closed or a reload was in flight gets no fresh 8 seconds.
     const toasts = loaded.filter(
       (t) => typeof t.createdAt === 'number' && now - t.createdAt < TOAST_DURATION_MS
@@ -160,7 +160,7 @@ export const useGalaxyStore = create<GalaxyState>((set) => ({
   addUserStar: (star) =>
     set((state) => {
       // No duplicate companies: the same slug (case/whitespace-insensitive
-      // name) is already a star — the form rejects it up front, and this
+      // name) is already a star; the form rejects it up front, and this
       // guard covers any other caller.
       if (state.userStars.some((s) => s.slug === star.slug)) return state;
       const userStars = [...state.userStars, star];

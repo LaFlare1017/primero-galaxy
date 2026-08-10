@@ -31,7 +31,7 @@ export const ZOOM = {
 } as const;
 
 /**
- * Star breathing — the single source of truth for the organic undulation of
+ * Star breathing: the single source of truth for the organic undulation of
  * the galaxy's stars AND the landing page's legend bubbles, so both animate
  * on the exact same waves. Each star breathes on a sine wave with a per-star
  * phase and frequency offset (instead of pulsing in lockstep):

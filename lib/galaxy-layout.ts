@@ -27,7 +27,7 @@ interface LinkDatum extends SimulationLinkDatum<SimNode> {
  *  - chain links within each industry group (constellationId = industry)
  *  - a couple of shortcuts per group (Ethiopian-cross style geometry)
  *  - weak links between groups that share an industry (no-op today, since
- *    constellationId IS the industry — kept for future sub-clustering)
+ *    constellationId IS the industry (kept for future sub-clustering)
  */
 export function buildConstellationLinks(nodes: SimNode[]): LinkDatum[] {
   const links: LinkDatum[] = [];
