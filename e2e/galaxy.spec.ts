@@ -828,3 +828,54 @@ test('a toast that expired while away does not resurrect on reload', async ({ pa
   });
   expect(pending).toEqual([]);
 });
+
+test('the landing page contact form renders and submits a pre-filled mailto', async ({ page }) => {
+  // The root route is the explainer landing page.
+  await page.goto('/');
+
+  // The form lives in the #contact section, below the fold.
+  await expect(
+    page.getByText('Ready to map your own AI transformation?')
+  ).toBeVisible();
+
+  // All three fields render, and the submit button is inert until a message
+  // is typed (the textarea is required).
+  const name = page.getByLabel('Your name');
+  const email = page.getByLabel('Your email');
+  const message = page.getByLabel('Message');
+  const send = page.getByRole('button', { name: 'Send message' });
+  await expect(name).toBeVisible();
+  await expect(email).toBeVisible();
+  await expect(message).toBeVisible();
+  await expect(send).toBeVisible();
+  await expect(send).toBeDisabled();
+
+  await name.fill('Jane Smith');
+  await email.fill('jane@company.com');
+  await message.fill(
+    'We would love a full maturity assessment for our logistics arm.'
+  );
+  await expect(send).toBeEnabled();
+
+  // Submitting opens the visitor's mail app pre-filled. Chromium surfaces
+  // the mailto navigation as a (failed, external-protocol) request — assert
+  // on that instead of a real navigation.
+  const mailto = page.waitForEvent('request', (r) => r.url().startsWith('mailto:'));
+  await send.click();
+  const mailtoUrl = new URL((await mailto).url());
+
+  // The gated Primero address is the recipient — kept base64 here, mirroring
+  // the app, so the address never appears as plaintext in the repo.
+  expect(mailtoUrl.pathname).toBe(atob('SG9kbGVyb25AZ21haWwuY29t'));
+  expect(mailtoUrl.searchParams.get('subject')).toBe(
+    'Primero Galaxy — contact from Jane Smith'
+  );
+  const body = mailtoUrl.searchParams.get('body');
+  expect(body).toContain('We would love a full maturity assessment');
+  expect(body).toContain('— Jane Smith (jane@company.com)');
+
+  // The confirmation renders after submit.
+  await expect(
+    page.getByText('Opening your email app — your message is ready to send.')
+  ).toBeVisible();
+});
