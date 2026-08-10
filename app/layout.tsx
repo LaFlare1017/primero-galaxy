@@ -37,7 +37,7 @@ export const viewport: Viewport = {
   themeColor: '#030308',
   width: 'device-width',
   initialScale: 1,
-  maximumScale: 1,
+  // No maximum-scale: pinching to zoom must stay available (WCAG 1.4.4).
 };
 
 export default function RootLayout({
