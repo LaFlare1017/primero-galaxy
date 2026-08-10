@@ -25,9 +25,10 @@ const VISIBLE_OPACITY = 0.3; // below this a text is culled entirely
 
 // Declutter: labels render only for the nearest stars whose billboards do
 // not overlap on screen, capped per frame — a dense industry cluster can't
-// collapse into a wall of text. MIN_SEPARATION is in NDC (~50px at 1440w).
+// collapse into a wall of text. The separation required is computed per
+// candidate from its own camera distance: billboards are world-sized, so
+// their on-screen width grows as you approach (≈0.55 × chars × fontSize).
 const MAX_LABELS = 12;
-const MIN_SEPARATION = 0.07;
 
 // Opacity smoothing rate (per second): label opacity eases toward its
 // target instead of snapping — most visible when the declutter drops or
@@ -35,6 +36,7 @@ const MIN_SEPARATION = 0.07;
 const SMOOTH_RATE = 10;
 
 const NAME_SIZE = 4.2;
+const NAME_CHAR_WIDTH = NAME_SIZE * 0.55; // avg world width of one name char
 const SCORE_SIZE = 3.0;
 const PLANET_CONTEXT = 0.15; // labels reduce to a faint hint in planet view
 
@@ -91,8 +93,11 @@ function Labels({
   const worldPos = useRef(new THREE.Vector3());
   const ndc = useRef(new THREE.Vector3());
   const camDist = useRef(new Float32Array(companies.length));
+  const frontZ = useRef(new Float32Array(companies.length)); // view-space z (neg = in front of camera)
   const screenX = useRef(new Float32Array(companies.length));
   const screenY = useRef(new Float32Array(companies.length));
+  const dirVec = useRef(new THREE.Vector3());
+  const tmpVec = useRef(new THREE.Vector3());
   const kept = useRef(new Set<number>());
   const keptScreen = useRef<{ x: number; y: number }[]>([]);
   const mountStart = useRef(0);
@@ -124,18 +129,29 @@ function Labels({
     const { mode, selectedStar } = useGalaxyStore.getState();
     const selectedId = mode === 'planet' ? selectedStar?.id : null;
 
-    // Pass 1 — camera distance + screen projection for every star.
+    // Pass 1 — camera distance + screen projection + front/back for every star.
+    camera.getWorldDirection(dirVec.current);
     for (let i = 0; i < stars.length; i++) {
       worldPos.current.copy(stars[i].position);
       if (groupRef.current) groupRef.current.localToWorld(worldPos.current);
       camDist.current[i] = camera.position.distanceTo(worldPos.current);
+      // Positive = in front of the camera (behind-camera stars mirror to the
+      // wrong screen position and must never be labeled).
+      frontZ.current[i] = tmpVec.current
+        .copy(worldPos.current)
+        .sub(camera.position)
+        .dot(dirVec.current);
       ndc.current.copy(worldPos.current).project(camera);
       screenX.current[i] = ndc.current.x;
       screenY.current[i] = ndc.current.y;
     }
 
     // Pass 2 — choose which labels actually show: nearest star first, skip
-    // any whose billboard would overlap an already-kept one on screen.
+    // any whose billboard would overlap an already-kept one on screen. The
+    // required separation scales with the candidate's distance, since the
+    // billboard's pixel width grows as the camera approaches.
+    // The app always uses a perspective camera.
+    const fovScale = 2 * Math.tan(((camera as THREE.PerspectiveCamera).fov * Math.PI) / 360);
     const order = Array.from({ length: stars.length }, (_, i) => i).sort(
       (a, b) => camDist.current[a] - camDist.current[b]
     );
@@ -143,19 +159,29 @@ function Labels({
     keptScreen.current.length = 0;
     for (const i of order) {
       if (kept.current.size >= MAX_LABELS) break;
-      // Off-screen stars carry pure troika fill cost — never keep them.
+      // Only stars in the visible shell are label candidates: in front of the
+      // camera, inside the far-fade band, and on screen. Behind/too-close
+      // stars are near-faded to nothing — keeping them would only shadow the
+      // readable ones via the separation check.
       if (
+        frontZ.current[i] < 0 ||
+        camDist.current[i] < NEAR_FADE_END ||
+        camDist.current[i] > FAR_FADE_START ||
         screenX.current[i] < -1.05 ||
         screenX.current[i] > 1.05 ||
         screenY.current[i] < -1.05 ||
         screenY.current[i] > 1.05
       )
         continue;
+      // NDC separation needed so this name billboard clears already-kept ones.
+      const pxPerUnit = state.size.height / (fovScale * camDist.current[i]);
+      const requiredSep =
+        (stars[i].name.length * NAME_CHAR_WIDTH * pxPerUnit) / state.size.width;
       if (
         keptScreen.current.some(
           (k) =>
             Math.hypot(k.x - screenX.current[i], k.y - screenY.current[i]) <
-            MIN_SEPARATION
+            requiredSep
         )
       )
         continue;

@@ -13,6 +13,44 @@ interface StarFieldProps {
   onStarSelect: (company: Company) => void;
 }
 
+// Glow halo: every star gets a camera-facing, additive ring that breathes
+// with it — the reference look is a hollow, glowing bubble (bright rim, dark
+// interior). The ring texture supplies the rim; additive blending + bloom
+// supply the radiance; the instance color keeps the red/yellow/green
+// maturity story.
+const HALO_RATIO = 3.4; // halo diameter relative to the star core
+const HALO_BRIGHTNESS = 1.35; // pushes the ring over the bloom threshold
+
+/** 256px soft ring-glow texture: hollow center, bright rim, fading edge. */
+function makeRingGlowTexture(): THREE.CanvasTexture {
+  const size = 256;
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  const img = ctx.createImageData(size, size);
+  const data = img.data;
+  const center = (size - 1) / 2;
+  const radius = center;
+  const peak = 0.6; // ring peak position (0 center → 1 edge)
+  const width = 0.28; // ring half-width (narrower = more rim, less blob)
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const d = Math.hypot(x - center, y - center) / radius;
+      let a = 1 - Math.abs(d - peak) / width;
+      a = a > 0 ? Math.pow(a, 1.6) : 0;
+      const i4 = (y * size + x) * 4;
+      data[i4] = 255;
+      data[i4 + 1] = 255;
+      data[i4 + 2] = 255;
+      data[i4 + 3] = Math.round(a * 255);
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
+}
+
 /**
  * All 500 data stars in a single InstancedMesh draw call.
  * Per-instance: position, maturity color (brightness-tuned for bloom),
@@ -21,6 +59,7 @@ interface StarFieldProps {
  */
 export function StarField({ companies, onStarHover, onStarSelect }: StarFieldProps) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
+  const haloRef = useRef<THREE.InstancedMesh>(null);
   const hoveredIndex = useRef(-1);
   const dimFactor = useRef(0);
   const sphereFor = useRef<THREE.InstancedMesh | null>(null);
@@ -68,6 +107,21 @@ export function StarField({ companies, onStarHover, onStarSelect }: StarFieldPro
     []
   );
 
+  const haloGeometry = useMemo(() => new THREE.PlaneGeometry(1, 1), []);
+  const haloTexture = useMemo(() => makeRingGlowTexture(), []);
+  const haloMaterial = useMemo(
+    () =>
+      new THREE.MeshBasicMaterial({
+        map: haloTexture,
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        toneMapped: false,
+      }),
+    [haloTexture]
+  );
+
   useFrame((state, delta) => {
     const mesh = meshRef.current;
     if (!mesh) return;
@@ -82,6 +136,7 @@ export function StarField({ companies, onStarHover, onStarSelect }: StarFieldPro
     const dummy = new THREE.Object3D();
     const color = new THREE.Color();
     const quat = new THREE.Quaternion();
+    const camQuat = state.camera.quaternion; // shared billboard orientation for every halo
     let written = 0;
 
     for (let i = 0; i < companies.length; i++) {
@@ -91,9 +146,13 @@ export function StarField({ companies, onStarHover, onStarSelect }: StarFieldPro
 
       let scale = baseScales[i] * appear;
 
+      // Every star breathes — phase- and frequency-offset so the whole field
+      // undulates organically instead of pulsing in lockstep.
+      scale *= 1 + 0.07 * Math.sin(t * (1.1 + (i % 7) * 0.12) + phases[i]);
+
       if (featured[i]) {
-        // Steady 4s breathe on the featured stars
-        scale *= 1 + 0.07 * Math.sin(t * 1.57 + phases[i]);
+        // Featured stars breathe a little stronger (extra bloom drive)
+        scale *= 1 + 0.05 * Math.sin(t * 1.57 + phases[i] * 1.3);
       } else {
         // Subtle irregular flicker on low-maturity stars (simulated instability)
         const m = companies[i].maturity.overall;
@@ -110,15 +169,42 @@ export function StarField({ companies, onStarHover, onStarSelect }: StarFieldPro
       dummy.updateMatrix();
       mesh.setMatrixAt(i, dummy.matrix);
 
-      // Color: base * dim, with featured brightness pulsing to drive bloom
-      let b = dim;
+      // Color: base * dim, with a gentle universal shimmer and a stronger
+      // featured pulse to drive bloom
+      let b = dim * (0.92 + 0.08 * Math.sin(t * 1.3 + phases[i] * 1.7));
       if (featured[i]) b *= 0.85 + 0.15 * Math.sin(t * 1.57 + phases[i]);
       color.setRGB(baseColors[i * 3] * b, baseColors[i * 3 + 1] * b, baseColors[i * 3 + 2] * b);
       mesh.setColorAt(i, color);
+
+      // Glow halo: breathes with the core (slightly out of phase), billboarded
+      // toward the camera, maturity-colored so red/yellow/green stays intact.
+      const halo = haloRef.current;
+      if (halo) {
+        const haloScale =
+          scale *
+          HALO_RATIO *
+          (1 + 0.16 * Math.sin(t * (1.3 + (i % 7) * 0.1) + phases[i] + 1.1));
+        dummy.position.set(p.x, p.y, p.z);
+        dummy.quaternion.copy(camQuat);
+        dummy.scale.setScalar(haloScale);
+        dummy.updateMatrix();
+        halo.setMatrixAt(i, dummy.matrix);
+
+        let hb =
+          dim * HALO_BRIGHTNESS * (0.85 + 0.15 * Math.sin(t * 1.3 + phases[i] + 1.1));
+        if (featured[i]) hb *= 1.2;
+        color.set(maturityColor(companies[i].maturity.overall)).multiplyScalar(hb);
+        halo.setColorAt(i, color);
+      }
     }
 
     mesh.instanceMatrix.needsUpdate = true;
     if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+    const halo = haloRef.current;
+    if (halo) {
+      halo.instanceMatrix.needsUpdate = true;
+      if (halo.instanceColor) halo.instanceColor.needsUpdate = true;
+    }
 
     // The raycast's coarse bounding-sphere guard lazily computes the mesh's
     // boundingSphere the first time it fires — and if that happens while the
@@ -163,13 +249,21 @@ export function StarField({ companies, onStarHover, onStarSelect }: StarFieldPro
   };
 
   return (
-    <instancedMesh
-      ref={meshRef}
-      args={[geometry, material, companies.length]}
-      frustumCulled={false}
-      onPointerMove={handlePointerMove}
-      onPointerOut={handlePointerOut}
-      onDoubleClick={handleDoubleClick}
-    />
+    <>
+      {/* Halos render first so the solid cores sit on top of their rings. */}
+      <instancedMesh
+        ref={haloRef}
+        args={[haloGeometry, haloMaterial, companies.length]}
+        frustumCulled={false}
+      />
+      <instancedMesh
+        ref={meshRef}
+        args={[geometry, material, companies.length]}
+        frustumCulled={false}
+        onPointerMove={handlePointerMove}
+        onPointerOut={handlePointerOut}
+        onDoubleClick={handleDoubleClick}
+      />
+    </>
   );
 }
