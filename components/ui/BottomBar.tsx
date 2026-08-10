@@ -17,6 +17,9 @@ export function BottomBar({
   const clearSelection = useGalaxyStore((s) => s.clearSelection);
   const [visible, setVisible] = useState(false);
 
+  // Fade in at 4.4s — strictly AFTER the LandingTitle overlay unmounts
+  // (4.2s), so the two z-20 layers never share the screen. Keep in sync
+  // with LandingTitle's sequence if either timing changes.
   useEffect(() => {
     const timer = setTimeout(() => setVisible(true), 4400);
     return () => clearTimeout(timer);

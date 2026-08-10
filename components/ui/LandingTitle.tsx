@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 
 /**
- * Landing sequence: title rises in → holds → fades out (~4.2s) → unmounts.
+ * Landing sequence: title rises in → holds → fades out (3.4→4.0s) →
+ * unmounts at 4.2s.
  *
  * The entrance animates ONLY the transform, never opacity: the title paints
  * at full opacity the moment the HTML renders, so the page's LCP lands at
@@ -12,6 +13,11 @@ import { motion } from 'framer-motion';
  * timed fade-out is the only JS-driven part. Honors prefers-reduced-motion
  * by cutting the sequence short (the global CSS media query also collapses
  * the CSS animations to near-instant).
+ *
+ * Timing invariant: the overlay must unmount (4.2s) strictly BEFORE the
+ * BottomBar starts fading in (4.4s) — both live at z-20, so a late fade
+ * would briefly stack the two layers. Keep the two components in sync if
+ * either timing changes.
  */
 export function LandingTitle() {
   const [visible, setVisible] = useState(true);
@@ -23,8 +29,8 @@ export function LandingTitle() {
       const timer = setTimeout(() => setVisible(false), 1600);
       return () => clearTimeout(timer);
     }
-    const fadeOut = setTimeout(() => setPhase('out'), 4200);
-    const unmount = setTimeout(() => setVisible(false), 5200);
+    const fadeOut = setTimeout(() => setPhase('out'), 3400);
+    const unmount = setTimeout(() => setVisible(false), 4200);
     return () => {
       clearTimeout(fadeOut);
       clearTimeout(unmount);
