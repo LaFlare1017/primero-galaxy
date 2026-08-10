@@ -29,6 +29,11 @@ const VISIBLE_OPACITY = 0.3; // below this a text is culled entirely
 const MAX_LABELS = 12;
 const MIN_SEPARATION = 0.07;
 
+// Opacity smoothing rate (per second): label opacity eases toward its
+// target instead of snapping — most visible when the declutter drops or
+// admits a label, which is a binary target jump. ~100ms response.
+const SMOOTH_RATE = 10;
+
 const NAME_SIZE = 4.2;
 const SCORE_SIZE = 3.0;
 const PLANET_CONTEXT = 0.15; // labels reduce to a faint hint in planet view
@@ -109,6 +114,12 @@ function Labels({
     if (mountStart.current === 0) mountStart.current = t;
     const mountFade = smoothstep(mountStart.current, mountStart.current + 0.9, t);
 
+    // Frame-rate-independent exponential smoothing: opacity eases toward its
+    // target rather than snapping (getDelta is unused elsewhere, so this is
+    // the frame's true delta).
+    const delta = Math.min(state.clock.getDelta(), 0.1);
+    const alpha = 1 - Math.exp(-delta * SMOOTH_RATE);
+
     const camera = state.camera;
     const { mode, selectedStar } = useGalaxyStore.getState();
     const selectedId = mode === 'planet' ? selectedStar?.id : null;
@@ -165,19 +176,21 @@ function Labels({
       const name = nameRefs.current[i];
       if (name) {
         const prev = nameOpacity.current[i];
-        if (Math.abs(target - prev) > 0.02) {
-          nameOpacity.current[i] = target;
-          name.fillOpacity = target;
-          name.visible = target > VISIBLE_OPACITY;
+        const next = prev + (target - prev) * alpha;
+        if (Math.abs(next - prev) > 0.0005) {
+          nameOpacity.current[i] = next;
+          name.fillOpacity = next;
+          name.visible = next > VISIBLE_OPACITY;
         }
       }
       const score = scoreRefs.current[i];
       if (score) {
         const prev = scoreOpacity.current[i];
-        if (Math.abs(target - prev) > 0.02) {
-          scoreOpacity.current[i] = target;
-          score.fillOpacity = target;
-          score.visible = target > VISIBLE_OPACITY;
+        const next = prev + (target - prev) * alpha;
+        if (Math.abs(next - prev) > 0.0005) {
+          scoreOpacity.current[i] = next;
+          score.fillOpacity = next;
+          score.visible = next > VISIBLE_OPACITY;
         }
       }
     }
