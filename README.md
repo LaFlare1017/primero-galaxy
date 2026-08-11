@@ -92,3 +92,7 @@ The following handoff-spec features are the natural next milestones:
 ## License
 
 [MIT](LICENSE) © Primero. The design specification lives in `galaxy-handoff.md`.
+
+## Logo attribution
+
+The brand marks in `public/logos/` belong to their respective companies and are used nominatively to identify them. Per-file sources are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
