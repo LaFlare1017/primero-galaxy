@@ -2,7 +2,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ContactForm } from '@/components/ui/ContactForm';
 import InteractiveLines from '@/components/ui/InteractiveLines';
-import { breathTiming } from '@/lib/constants';
+import { breathTiming, DIMENSIONS } from '@/lib/constants';
 import { COMPANY_COUNT } from '@/lib/fortune500-data';
 
 export const metadata: Metadata = {
@@ -311,6 +311,66 @@ export default function LandingPage() {
                 The projected route from where a company is to where it could
                 be, complete with milestones and ROI.
               </div>
+            </div>
+          </div>
+
+          {/* How each star is scored: the same five pillars the tool shows on
+              every planet profile, so the scoring is legible before entering.
+              Copy mirrors the methodology expander inside the galaxy. */}
+          <div className="mt-12 border-t border-border-subtle/60 pt-10">
+            <p className={EYEBROW}>How it&apos;s scored</p>
+            <h3 className={`${SECTION_TITLE} mt-3`}>Five pillars, one number.</h3>
+            <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-ui-dim">
+              Every star&apos;s color comes from a single overall maturity score, a
+              weighted judgment of five dimensions. Open any planet in the
+              galaxy and each bar links to the public evidence it was derived
+              from.
+            </p>
+
+            <div className="mt-8 grid gap-3 md:grid-cols-2">
+              {DIMENSIONS.map((d, i) => (
+                <div
+                  key={d.key}
+                  className="rounded-xl border border-border-subtle bg-void/60 p-5"
+                >
+                  <div className="flex items-start gap-3">
+                    <span
+                      aria-hidden="true"
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border-subtle text-[11px] font-medium text-ui-muted"
+                    >
+                      {i + 1}
+                    </span>
+                    <div>
+                      <h4 className="text-[13px] font-semibold text-star-bright">
+                        {d.label}
+                      </h4>
+                      <p className="mt-1 text-[12px] leading-relaxed text-ui-muted">
+                        {d.description}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 rounded-xl border border-border-subtle bg-nebula/40 p-5">
+              <h4 className="text-[13px] font-medium text-ui-dim">
+                Where the scores come from
+              </h4>
+              <p className="mt-1 text-[12px] leading-relaxed text-ui-muted">
+                Directional 0-100 estimates synthesized from public AI
+                disclosures: earnings-call commentary, product launches,
+                reported deployments, and responsible-AI pages. Every score
+                links to the evidence it is derived from. Research use only,
+                not investment advice.
+              </p>
+              <Link
+                href="/methodology"
+                prefetch={false}
+                className="mt-3 inline-block text-[12px] font-medium text-trajectory transition-colors hover:text-star-bright"
+              >
+                Read the full methodology and research trail →
+              </Link>
             </div>
           </div>
         </div>

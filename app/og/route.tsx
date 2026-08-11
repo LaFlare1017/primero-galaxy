@@ -1,15 +1,15 @@
 import { ImageResponse } from 'next/og';
 
-export const alt = 'Primero Galaxy: The AI Transformation Maturity Galaxy';
-export const size = { width: 1200, height: 630 };
-export const contentType = 'image/png';
+export const runtime = 'edge';
 
 /**
- * Social-share image, rendered at build time from the design tokens:
- * void background, nebula glow, a cluster of maturity-colored stars and a
- * violet trajectory, plus the title. No binary assets to maintain.
+ * Social-share image served at /og. Rendered from the design tokens: void
+ * background, nebula glow, a cluster of maturity-colored stars and a violet
+ * trajectory, plus the title. A route handler (instead of the
+ * opengraph-image.tsx file convention) so the URL is clean: several unfurl
+ * crawlers, notably LinkedIn, refuse og:image URLs carrying query strings.
  */
-export default function OpengraphImage() {
+export function GET() {
   // [x, y, size, color]
   const stars: [number, number, number, string][] = [
     [180, 150, 7, '#4A4A6A'],
@@ -139,6 +139,6 @@ export default function OpengraphImage() {
         </div>
       </div>
     ),
-    { ...size }
+    { width: 1200, height: 630 }
   );
 }

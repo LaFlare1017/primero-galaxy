@@ -1350,3 +1350,43 @@ test('the reactive-lines background draws one static frame under reduced motion'
   await page.waitForTimeout(300);
   expect((await readCanvasFrame(page)).hash).toBe(first.hash);
 });
+
+test('the share button invokes the native Web Share API when available', async ({ page }) => {
+  let shared: { title?: string; text?: string; url?: string } | null = null;
+  await page.addInitScript(() => {
+    // Stub the native share sheet: capture the payload instead of opening UI.
+    (window as any).__sharedPayload = null;
+    Object.defineProperty(window.navigator, 'share', {
+      configurable: true,
+      value: async (data: any) => {
+        (window as any).__sharedPayload = data;
+      },
+    });
+  });
+  await waitForApp(page);
+
+  await page.getByRole('button', { name: 'Share galaxy' }).click();
+
+  shared = await page.evaluate(() => (window as any).__sharedPayload);
+  expect(shared).not.toBeNull();
+  expect(shared!.title).toContain('AI Transformation Galaxy');
+  expect(shared!.text).toContain('Fortune 500');
+  expect(shared!.url).toMatch(/\/galaxy$/);
+});
+
+test('the share button copies the URL when the Web Share API is unavailable', async ({ page, context }) => {
+  // No navigator.share in headless Chromium by default, which is exactly the
+  // fallback path: the button must copy the current URL to the clipboard.
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await waitForApp(page);
+
+  const share = page.getByRole('button', { name: 'Share galaxy' });
+  await expect(share).toBeVisible();
+  await share.click();
+
+  // The button flips to a transient "Copied" state for screen readers and
+  // the visible label; the clipboard holds the galaxy URL.
+  await expect(share).toContainText('Copied');
+  const clip = await page.evaluate(() => navigator.clipboard.readText());
+  expect(clip).toMatch(/\/galaxy$/);
+});

@@ -29,11 +29,29 @@ export const metadata: Metadata = {
     description: 'A 3D galaxy of Fortune 500 enterprises, scored on estimated AI maturity from public disclosures. One universe. Explore.',
     type: 'website',
     siteName: 'Primero Galaxy',
+    // Clean, query-string-free URL: several unfurl crawlers (notably
+    // LinkedIn) refuse og:image URLs that carry cache-busting query params.
+    images: [
+      {
+        url: '/og',
+        width: 1200,
+        height: 630,
+        alt: 'Primero Galaxy: The AI Transformation Maturity Galaxy',
+      },
+    ],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'Primero Galaxy: The AI Transformation Maturity Galaxy',
     description: 'A 3D galaxy of Fortune 500 enterprises, scored on estimated AI maturity from public disclosures.',
+    images: ['/og'],
+  },
+  // iOS standalone mode: installed from the home screen, the galaxy opens
+  // without Safari chrome and paints over the status bar on the void color.
+  appleWebApp: {
+    capable: true,
+    title: 'Primero Galaxy',
+    statusBarStyle: 'black-translucent',
   },
 };
 
