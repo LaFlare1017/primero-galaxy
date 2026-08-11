@@ -3,13 +3,14 @@ import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { Company } from '@/types';
 import { maturityColor } from '@/lib/constants';
-import { faviconUrl, monogram } from '@/lib/utils';
+import { logoUrl, monogram } from '@/lib/utils';
 
 /**
  * Company logo tile. Fetches the brand mark from the company's official
- * domain via the favicon service; if the fetch fails (or the company has no
- * domain, e.g. user-added stars) it falls back to a maturity-tinted monogram
- * so the profile header never shows a broken image.
+ * domain via the favicon service (or a local asset for brands whose domain
+ * has no indexed favicon); if the fetch fails (or the company has no domain,
+ * e.g. user-added stars) it falls back to a maturity-tinted monogram so the
+ * profile header never shows a broken image.
  */
 export function CompanyLogo({
   company,
@@ -26,11 +27,12 @@ export function CompanyLogo({
       ? 'h-7 w-7 rounded-md p-0.5 text-[9px]'
       : 'h-11 w-11 rounded-lg p-1 text-[13px]';
   const color = maturityColor(company.maturity.overall);
+  const src = logoUrl(company.domain);
 
-  if (company.domain && !failed) {
+  if (src && !failed) {
     return (
       <Image
-        src={faviconUrl(company.domain)}
+        src={src}
         alt=""
         width={128}
         height={128}

@@ -69,6 +69,39 @@ export function faviconUrl(domain: string, size = 128): string {
   return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=${size}`;
 }
 
+/**
+ * Brands whose official domain has no favicon indexed by Google's favicon
+ * service (the request 404s, which would surface as a console error). These
+ * ship as local assets in /public/logos, sourced from the companies' own
+ * sites or Wikimedia, so the UI never fires a failing request. Keyed by the
+ * same domain used everywhere else in the app.
+ */
+const LOCAL_LOGOS: Record<string, string> = {
+  'allstate.com': '/logos/allstate.svg',
+  'berkshirehathaway.com': '/logos/berkshire-hathaway.svg',
+  'comcast.com': '/logos/comcast.png',
+  'conocophillips.com': '/logos/conocophillips.png',
+  'danaher.com': '/logos/danaher.svg',
+  'dow.com': '/logos/dow.svg',
+  'foxcorp.com': '/logos/foxcorp.png',
+  'kraftheinzcompany.com': '/logos/kraftheinz.svg',
+  'paloaltonetworks.com': '/logos/palo-alto-networks.png',
+  'rockwellautomation.com': '/logos/rockwell-automation.png',
+};
+
+/**
+ * Logo URL for a company: the local asset when the brand's domain has no
+ * indexed favicon, otherwise the Google favicon service. Returns null when
+ * there is no domain at all (e.g. user-added stars), letting callers fall
+ * back to a monogram.
+ */
+export function logoUrl(domain?: string | null): string | null {
+  if (!domain) return null;
+  const local = LOCAL_LOGOS[domain];
+  if (local) return local;
+  return faviconUrl(domain);
+}
+
 /** Initials monogram from a company name, the fallback when no logo loads. */
 export function monogram(name: string): string {
   const words = name

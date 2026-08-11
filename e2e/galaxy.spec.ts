@@ -1351,6 +1351,47 @@ test('the reactive-lines background draws one static frame under reduced motion'
   expect((await readCanvasFrame(page)).hash).toBe(first.hash);
 });
 
+test('brands without indexed favicons ship stable local logos in the planet panel', async ({ page }) => {
+  // Berkshire Hathaway has no favicon indexed by the favicon service, so its
+  // planet-panel logo must load from /logos via the shared logoUrl helper,
+  // and no favicon-service request may 404 while the profile is open.
+  const faviconFailures: string[] = [];
+  page.on('response', (res) => {
+    const url = res.url();
+    if (/(gstatic\.com|google\.com\/s2)/.test(url) && res.status() >= 400) {
+      faviconFailures.push(`${url} -> ${res.status()}`);
+    }
+  });
+
+  await waitForApp(page);
+
+  // Open Berkshire's planet panel through the search palette.
+  await page.getByRole('button', { name: 'Search' }).click();
+  const input = page.getByRole('combobox', { name: 'Search companies' });
+  await expect(input).toBeVisible();
+  await input.fill('Berkshire');
+  const option = page.getByRole('option', { name: /Berkshire/ });
+  await expect(option).toBeVisible();
+  await input.press('Enter');
+
+  await expect
+    .poll(() => page.evaluate(() => (window.__galaxy as GalaxyHandle).store.getState().mode), {
+      timeout: 15_000,
+    })
+    .toBe('planet');
+  await expect(page.getByRole('heading', { name: 'Berkshire Hathaway' })).toBeVisible();
+
+  // The profile logo is the local asset (the monogram fallback never fired),
+  // and it serves 200.
+  const logo = page.locator('img[src*="/logos/berkshire-hathaway"]');
+  await expect(logo).toBeVisible();
+  const res = await page.request.get('/logos/berkshire-hathaway.svg');
+  expect(res.status()).toBe(200);
+
+  // No favicon-service request 404ed while the profile was open.
+  expect(faviconFailures, faviconFailures.join('\n') || 'no failures').toEqual([]);
+});
+
 test('the share button invokes the native Web Share API when available', async ({ page }) => {
   let shared: { title?: string; text?: string; url?: string } | null = null;
   await page.addInitScript(() => {
