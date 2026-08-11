@@ -2,6 +2,7 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ContactForm } from '@/components/ui/ContactForm';
 import InteractiveLines from '@/components/ui/InteractiveLines';
+import { Reveal } from '@/components/ui/Reveal';
 import { breathTiming, DIMENSIONS } from '@/lib/constants';
 import { COMPANY_COUNT } from '@/lib/fortune500-data';
 
@@ -18,8 +19,8 @@ const fade = (delay: number): React.CSSProperties => ({
   animationDelay: `${delay}s`,
 });
 
-const EYEBROW = 'text-[11px] font-semibold uppercase tracking-label text-trajectory';
-const SECTION_TITLE = 'text-3xl font-semibold tracking-title text-star-bright md:text-4xl';
+const EYEBROW = 'text-lift text-[11px] font-semibold uppercase tracking-label text-trajectory';
+const SECTION_TITLE = 'text-lift text-3xl font-semibold tracking-title text-star-bright md:text-4xl';
 
 /**
  * Trajectory indicator line: pulses its violet glow on the same halo wave as
@@ -93,6 +94,15 @@ export default function LandingPage() {
         />
       </div>
 
+      {/* Ambient light: violet + teal color washes and a soft edge vignette
+          lift white text and card surfaces off the flat canvas. Decorative,
+          aria-hidden; painted once, no animation cost. */}
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0">
+        <div className="absolute -right-[12%] -top-[18%] h-[70vh] w-[55vw] rounded-full bg-trajectory/10 blur-[140px]" />
+        <div className="absolute -bottom-[22%] -left-[12%] h-[62vh] w-[50vw] rounded-full bg-maturity-high/10 blur-[140px]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_65%_at_50%_40%,transparent_48%,rgba(3,3,8,0.45)_100%)]" />
+      </div>
+
       {/* Page content above the background */}
       <div className="relative z-10">
       {/* ---------------------------------------------------------------- Nav */}
@@ -122,7 +132,7 @@ export default function LandingPage() {
           AI Transformation Maturity Visualization
         </p>
         <h1
-          className="mt-5 max-w-4xl animate-fade-in text-4xl font-semibold leading-[1.05] tracking-title text-star-bright md:text-6xl"
+          className="mt-5 max-w-4xl animate-fade-in text-lift text-4xl font-semibold leading-[1.05] tracking-title text-star-bright md:text-6xl"
           style={fade(0.1)}
         >
           The AI Transformation Galaxy
@@ -168,21 +178,24 @@ export default function LandingPage() {
       </section>
 
       {/* ------------------------------------------------------ What it is */}
-      <section className="bg-void/30 px-6 py-24">
+      <section className="bg-void/40 px-6 py-24">
         <div className="mx-auto max-w-5xl">
-          <p className={EYEBROW}>What it is</p>
-          <h2 className={`${SECTION_TITLE} mt-3`}>
-            The galaxy <span className="text-ui-muted">is</span> the interface.
-          </h2>
-          <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-ui-dim">
-            No dashboards, no sidebars, no panels. Every star earns its place,
-            and every one of them tells the story of a Fortune 500 company&apos;s
-            AI transformation, estimated from what it has publicly said and
-            shipped. The closer you look, the more the data reveals itself.
-          </p>
+          <Reveal>
+            <p className={EYEBROW}>What it is</p>
+            <h2 className={`${SECTION_TITLE} mt-3`}>
+              The galaxy <span className="text-ui-muted">is</span> the interface.
+            </h2>
+            <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-ui-dim">
+              No dashboards, no sidebars, no panels. Every star earns its place,
+              and every one of them tells the story of a Fortune 500 company&apos;s
+              AI transformation, estimated from what it has publicly said and
+              shipped. The closer you look, the more the data reveals itself.
+            </p>
+          </Reveal>
 
           <div className="mt-12 grid gap-4 md:grid-cols-3">
-            <div className="rounded-xl border border-border-subtle bg-nebula/40 p-6">
+            <Reveal delay={60} className="h-full">
+              <div className="h-full rounded-xl border border-border-subtle bg-nebula/40 p-6 hover-card">
               <div
                 aria-hidden="true"
                 className="flex h-9 w-9 items-center justify-center rounded-lg border border-border-subtle bg-void"
@@ -208,8 +221,10 @@ export default function LandingPage() {
                 more, each with an estimated AI maturity profile compiled
                 from public disclosures.
               </p>
-            </div>
-            <div className="rounded-xl border border-border-subtle bg-nebula/40 p-6">
+              </div>
+            </Reveal>
+            <Reveal delay={120} className="h-full">
+              <div className="h-full rounded-xl border border-border-subtle bg-nebula/40 p-6 hover-card">
               <div
                 aria-hidden="true"
                 className="flex h-9 w-9 items-center justify-center rounded-lg border border-border-subtle bg-void"
@@ -228,8 +243,10 @@ export default function LandingPage() {
                 Teal signals a company that has arrived. Size scales with
                 maturity too. The leaders are the biggest stars.
               </p>
-            </div>
-            <div className="rounded-xl border border-border-subtle bg-nebula/40 p-6">
+              </div>
+            </Reveal>
+            <Reveal delay={180} className="h-full">
+              <div className="h-full rounded-xl border border-border-subtle bg-nebula/40 p-6 hover-card">
               <div
                 aria-hidden="true"
                 className="flex h-9 w-9 items-center justify-center rounded-lg border border-border-subtle bg-void"
@@ -254,19 +271,23 @@ export default function LandingPage() {
                 with EBITDA impact, exit multiple, and milestone-by-milestone
                 plans.
               </p>
-            </div>
+              </div>
+            </Reveal>
           </div>
         </div>
       </section>
 
       {/* ------------------------------------------------------- Color legend */}
-      <section id="how" className="border-y border-border-subtle/60 bg-nebula/30 px-6 py-24">
+      <section id="how" className="border-y border-border-subtle/60 bg-nebula/40 px-6 py-24">
         <div className="mx-auto max-w-5xl">
-          <p className={EYEBROW}>How to read it</p>
-          <h2 className={`${SECTION_TITLE} mt-3`}>One glance, one story.</h2>
+          <Reveal>
+            <p className={EYEBROW}>How to read it</p>
+            <h2 className={`${SECTION_TITLE} mt-3`}>One glance, one story.</h2>
+          </Reveal>
 
           <div className="mt-10 grid gap-3 md:grid-cols-3">
-            <div className="flex items-center gap-4 rounded-xl border border-border-subtle bg-void/60 p-5">
+            <Reveal delay={60} className="h-full">
+              <div className="flex h-full items-center gap-4 rounded-xl border border-border-subtle bg-void/60 p-5 hover-card">
               <LegendBubble starIndex={0} color="#FF6B35" glow="rgba(255,107,53,0.5)" />
               <div>
                 <h3 className="text-[13px] font-medium text-star-bright">
@@ -276,8 +297,10 @@ export default function LandingPage() {
                   Early AI adoption: data scattered, workflows manual.
                 </div>
               </div>
-            </div>
-            <div className="flex items-center gap-4 rounded-xl border border-border-subtle bg-void/60 p-5">
+              </div>
+            </Reveal>
+            <Reveal delay={120} className="h-full">
+              <div className="flex h-full items-center gap-4 rounded-xl border border-border-subtle bg-void/60 p-5 hover-card">
               <LegendBubble starIndex={1} color="#F7C548" glow="rgba(247,197,72,0.5)" />
               <div>
                 <h3 className="text-[13px] font-medium text-star-bright">
@@ -287,8 +310,10 @@ export default function LandingPage() {
                   Standardizing workflows, first AI use cases in production.
                 </div>
               </div>
-            </div>
-            <div className="flex items-center gap-4 rounded-xl border border-border-subtle bg-void/60 p-5">
+              </div>
+            </Reveal>
+            <Reveal delay={180} className="h-full">
+              <div className="flex h-full items-center gap-4 rounded-xl border border-border-subtle bg-void/60 p-5 hover-card">
               <LegendBubble starIndex={2} color="#00D9C0" glow="rgba(0,217,192,0.5)" />
               <div>
                 <h3 className="text-[13px] font-medium text-star-bright">
@@ -298,10 +323,12 @@ export default function LandingPage() {
                   Scaled AI deployment, governance in place, agents at work.
                 </div>
               </div>
-            </div>
+              </div>
+            </Reveal>
           </div>
 
-          <div className="mt-6 flex items-center gap-4 rounded-xl border border-trajectory/30 bg-trajectory/5 p-5">
+          <Reveal delay={140} className="h-full">
+            <div className="mt-6 flex h-full items-center gap-4 rounded-xl border border-trajectory/30 bg-trajectory/5 p-5 hover-card">
             <TrajectoryLine />
             <div>
               <h3 className="text-[13px] font-medium text-trajectory">
@@ -313,26 +340,27 @@ export default function LandingPage() {
               </div>
             </div>
           </div>
+          </Reveal>
 
           {/* How each star is scored: the same five pillars the tool shows on
               every planet profile, so the scoring is legible before entering.
               Copy mirrors the methodology expander inside the galaxy. */}
           <div className="mt-12 border-t border-border-subtle/60 pt-10">
-            <p className={EYEBROW}>How it&apos;s scored</p>
-            <h3 className={`${SECTION_TITLE} mt-3`}>Five pillars, one number.</h3>
-            <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-ui-dim">
-              Every star&apos;s color comes from a single overall maturity score, a
-              weighted judgment of five dimensions. Open any planet in the
-              galaxy and each bar links to the public evidence it was derived
-              from.
-            </p>
+            <Reveal>
+              <p className={EYEBROW}>How it&apos;s scored</p>
+              <h3 className={`${SECTION_TITLE} mt-3`}>Five pillars, one number.</h3>
+              <p className="mt-4 max-w-2xl text-[15px] leading-relaxed text-ui-dim">
+                Every star&apos;s color comes from a single overall maturity score, a
+                weighted judgment of five dimensions. Open any planet in the
+                galaxy and each bar links to the public evidence it was derived
+                from.
+              </p>
+            </Reveal>
 
             <div className="mt-8 grid gap-3 md:grid-cols-2">
               {DIMENSIONS.map((d, i) => (
-                <div
-                  key={d.key}
-                  className="rounded-xl border border-border-subtle bg-void/60 p-5"
-                >
+                <Reveal key={d.key} delay={60 + i * 60} className="h-full">
+                  <div className="h-full rounded-xl border border-border-subtle bg-void/60 p-5 hover-card">
                   <div className="flex items-start gap-3">
                     <span
                       aria-hidden="true"
@@ -349,11 +377,13 @@ export default function LandingPage() {
                       </p>
                     </div>
                   </div>
-                </div>
+                  </div>
+                </Reveal>
               ))}
             </div>
 
-            <div className="mt-6 rounded-xl border border-border-subtle bg-nebula/40 p-5">
+            <Reveal delay={100}>
+              <div className="mt-6 rounded-xl border border-border-subtle bg-nebula/40 p-5 hover-card">
               <h4 className="text-[13px] font-medium text-ui-dim">
                 Where the scores come from
               </h4>
@@ -371,16 +401,19 @@ export default function LandingPage() {
               >
                 Read the full methodology and research trail →
               </Link>
-            </div>
+              </div>
+            </Reveal>
           </div>
         </div>
       </section>
 
       {/* ------------------------------------------------------- Navigation */}
-      <section className="bg-void/30 px-6 py-24">
+      <section className="bg-void/40 px-6 py-24">
         <div className="mx-auto max-w-5xl">
-          <p className={EYEBROW}>Explore</p>
-          <h2 className={`${SECTION_TITLE} mt-3`}>Fly like a spacecraft.</h2>
+          <Reveal>
+            <p className={EYEBROW}>Explore</p>
+            <h2 className={`${SECTION_TITLE} mt-3`}>Fly like a spacecraft.</h2>
+          </Reveal>
 
           <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {/* The four spacecraft controls carry the same hollow breathing
@@ -416,11 +449,9 @@ export default function LandingPage() {
                 glow: 'rgba(123,97,255,0.5)',
                 starIndex: 10,
               },
-            ].map(({ title, body, color, glow, starIndex }) => (
-              <div
-                key={title}
-                className="rounded-xl border border-border-subtle bg-void/60 p-5"
-              >
+            ].map(({ title, body, color, glow, starIndex }, i) => (
+              <Reveal key={title} delay={60 + i * 60} className="h-full">
+              <div className="h-full rounded-xl border border-border-subtle bg-void/60 p-5 hover-card">
                 <div className="flex items-start gap-3">
                   <LegendBubble starIndex={starIndex} color={color} glow={glow} />
                   <div>
@@ -429,10 +460,12 @@ export default function LandingPage() {
                   </div>
                 </div>
               </div>
+              </Reveal>
             ))}
           </div>
 
-          <div className="mt-10 rounded-xl border border-border-subtle bg-nebula/40 p-6">
+          <Reveal delay={100}>
+          <div className="mt-10 rounded-xl border border-border-subtle bg-nebula/40 p-6 hover-card">
             <div className="text-[12px] font-semibold uppercase tracking-label text-ui-dim">
               Three levels of detail
             </div>
@@ -474,17 +507,21 @@ export default function LandingPage() {
               ))}
             </div>
           </div>
+          </Reveal>
         </div>
       </section>
 
       {/* ---------------------------------------------------------- Features */}
-      <section className="border-t border-border-subtle/60 bg-nebula/30 px-6 py-24">
+      <section className="border-t border-border-subtle/60 bg-nebula/40 px-6 py-24">
         <div className="mx-auto max-w-5xl">
-          <p className={EYEBROW}>Beyond looking</p>
-          <h2 className={`${SECTION_TITLE} mt-3`}>Put yourself in it.</h2>
+          <Reveal>
+            <p className={EYEBROW}>Beyond looking</p>
+            <h2 className={`${SECTION_TITLE} mt-3`}>Put yourself in it.</h2>
+          </Reveal>
 
           <div className="mt-10 grid gap-3 md:grid-cols-2">
-            <div className="rounded-xl border border-border-subtle bg-void/60 p-6">
+            <Reveal delay={60}>
+              <div className="rounded-xl border border-border-subtle bg-void/60 p-6 hover-card">
               <h3 className="text-[15px] font-semibold text-star-bright">
                 Add your company
               </h3>
@@ -493,8 +530,10 @@ export default function LandingPage() {
                 saves it to your browser, and shows you the trajectory you
                 could be on.
               </p>
-            </div>
-            <div className="rounded-xl border border-border-subtle bg-void/60 p-6">
+              </div>
+            </Reveal>
+            <Reveal delay={120}>
+              <div className="rounded-xl border border-border-subtle bg-void/60 p-6 hover-card">
               <h3 className="text-[15px] font-semibold text-star-bright">
                 Planet-view deep dives
               </h3>
@@ -503,8 +542,10 @@ export default function LandingPage() {
                 workflow standardization, AI deployment, governance, and
                 talent, each scored 0–100.
               </p>
-            </div>
-            <div className="rounded-xl border border-border-subtle bg-void/60 p-6">
+              </div>
+            </Reveal>
+            <Reveal delay={180}>
+              <div className="rounded-xl border border-border-subtle bg-void/60 p-6 hover-card">
               <h3 className="text-[15px] font-semibold text-star-bright">
                 Transformation trajectories
               </h3>
@@ -512,8 +553,10 @@ export default function LandingPage() {
                 Projected EBITDA impact, exit-multiple improvement, and
                 milestone-by-milestone plans drawn in 3D space.
               </p>
-            </div>
-            <div className="rounded-xl border border-border-subtle bg-void/60 p-6">
+              </div>
+            </Reveal>
+            <Reveal delay={240}>
+              <div className="rounded-xl border border-border-subtle bg-void/60 p-6 hover-card">
               <h3 className="text-[15px] font-semibold text-star-bright">
                 Search the galaxy
               </h3>
@@ -522,7 +565,8 @@ export default function LandingPage() {
                 of the {COMPANY_COUNT} is a few keystrokes from its full
                 profile.
               </p>
-            </div>
+              </div>
+            </Reveal>
           </div>
         </div>
       </section>
@@ -530,13 +574,15 @@ export default function LandingPage() {
       {/* ------------------------------------------------------- Contact */}
       <section
         id="contact"
-        className="border-t border-border-subtle/60 bg-nebula/30 px-6 py-24"
+        className="border-t border-border-subtle/60 bg-nebula/40 px-6 py-24"
       >
         <div className="mx-auto max-w-3xl text-center">
-          <p className={EYEBROW}>Get in touch</p>
-          <h2 className={`${SECTION_TITLE} mt-3`}>
-            Ready to map your own AI transformation?
-          </h2>
+          <Reveal>
+            <p className={EYEBROW}>Get in touch</p>
+            <h2 className={`${SECTION_TITLE} mt-3`}>
+              Ready to map your own AI transformation?
+            </h2>
+          </Reveal>
           <p className="mx-auto mt-4 max-w-lg text-[14px] leading-relaxed text-ui-dim">
             Add your company to the galaxy and see the trajectory you could
             be on, or reach out to Primero for a full maturity assessment.
@@ -556,14 +602,16 @@ export default function LandingPage() {
       </section>
 
       {/* ------------------------------------------------------- Final CTA */}
-      <section className="bg-void/30 px-6 py-32 text-center">
-        <h2 className="mx-auto max-w-2xl text-3xl font-semibold tracking-title text-star-bright md:text-4xl">
-          Your company could be one of the stars.
-        </h2>
-        <p className="mx-auto mt-4 max-w-lg text-[14px] leading-relaxed text-ui-dim">
-          Fly in, look around, and add yourself to the map, or just lose
-          yourself in {COMPANY_COUNT} stories of transformation.
-        </p>
+      <section className="bg-void/40 px-6 py-32 text-center">
+        <Reveal>
+          <h2 className="mx-auto max-w-2xl text-3xl font-semibold tracking-title text-star-bright md:text-4xl">
+            Your company could be one of the stars.
+          </h2>
+          <p className="mx-auto mt-4 max-w-lg text-[14px] leading-relaxed text-ui-dim">
+            Fly in, look around, and add yourself to the map, or just lose
+            yourself in {COMPANY_COUNT} stories of transformation.
+          </p>
+        </Reveal>
         <Link
           href="/galaxy" prefetch={false}
           className="mt-8 inline-block rounded-md bg-maturity-high px-8 py-3.5 text-sm font-semibold text-void transition hover:opacity-90 active:scale-[0.98]"
