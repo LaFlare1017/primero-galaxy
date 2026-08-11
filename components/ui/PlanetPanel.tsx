@@ -225,6 +225,12 @@ export function PlanetPanel() {
                           </p>
                         </div>
                       ))}
+                      <a
+                        href="/methodology"
+                        className="mt-2 inline-flex items-center gap-1 text-[10px] font-medium text-ui-muted transition-colors hover:text-star-bright"
+                      >
+                        Read the full methodology and research trail →
+                      </a>
                     </div>
                   </motion.div>
                 )}

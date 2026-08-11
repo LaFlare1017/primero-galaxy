@@ -108,7 +108,7 @@ export function BottomBar({
 
       {/* Left: wordmark + stats */}
       <div className="flex items-baseline gap-3">
-        <span className="text-[13px] font-semibold tracking-[0.18em] text-star-bright">
+        <span className="text-[13px] font-semibold tracking-[0.18em] text-star-bright max-[560px]:text-[11px]">
           PRIMERO GALAXY
         </span>
         <span className="text-[11px] text-ui-muted">

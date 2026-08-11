@@ -107,7 +107,7 @@ export default function LandingPage() {
       <div className="relative z-10">
       {/* ---------------------------------------------------------------- Nav */}
       <header className="fixed inset-x-0 top-0 z-10 flex h-14 items-center justify-between border-b border-border-subtle/60 bg-void/70 px-6 backdrop-blur-md">
-        <span className="text-[13px] font-semibold tracking-[0.18em] text-star-bright">
+        <span className="text-[13px] font-semibold tracking-[0.18em] text-star-bright max-[560px]:text-[11px]">
           PRIMERO GALAXY
         </span>
         <nav aria-label="Primary">
