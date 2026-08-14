@@ -96,7 +96,11 @@ function useCanvasAnimation({
     };
 
     const setup = () => {
-      const dpr = window.devicePixelRatio || 1;
+      // Cap the backing-store scale: phones run DPR 2-3, and painting the
+      // full pixel grid every frame costs far more than a slight softness
+      // saves. 1.75 keeps the thin lines crisp while cutting fill+stroke
+      // pixels by up to ~3x on high-DPR phones.
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.75);
       const rect = container.getBoundingClientRect();
       st.width = rect.width;
       st.height = rect.height;
@@ -230,6 +234,9 @@ export default function InteractiveLines({
       let s = r < 500;
       let u = s ? 0.8 * n : 0;
       let d = s ? 1.5 : 0.7;
+      // Small screens need fewer points per stroke: the subtle line field
+      // reads the same at ~24 segments and costs roughly half the path work.
+      let segs = s ? 24 : 50;
 
       let c = vec(r, -(1.1 * n) + u);
       let f = vec(0, 2 * n);
@@ -270,8 +277,8 @@ export default function InteractiveLines({
           let s = vecSub(n, o);
 
           e.beginPath();
-          for (let n = 0; n <= 50; n++) {
-            let o = n / 50;
+          for (let n = 0; n <= segs; n++) {
+            let o = n / segs;
             let u = vecLerp(t, r, o);
             let d =
               2 *
