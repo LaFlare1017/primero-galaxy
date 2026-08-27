@@ -1,6 +1,5 @@
 'use client';
 import { useEffect, useState } from 'react';
-import Image from 'next/image';
 import { Company } from '@/types';
 import { maturityColor } from '@/lib/constants';
 import { logoUrl, monogram } from '@/lib/utils';
@@ -31,12 +30,19 @@ export function CompanyLogo({
 
   if (src && !failed) {
     return (
-      <Image
+      // Plain <img> instead of next/image: the source is an unoptimized
+      // remote favicon (128px, no optimizer round-trip), so the Image
+      // component's machinery (responsive sizing, blur placeholders) is
+      // dead weight. This keeps ~50 kB of unused JS out of /galaxy's
+      // first load while preserving lazy + async decoding.
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
         src={src}
         alt=""
         width={128}
         height={128}
-        unoptimized
+        loading="lazy"
+        decoding="async"
         referrerPolicy="no-referrer"
         onError={() => setFailed(true)}
         className={`${frame} shrink-0 border border-border-subtle bg-white object-contain`}
