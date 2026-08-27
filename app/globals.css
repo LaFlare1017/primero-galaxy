@@ -224,6 +224,46 @@ body::before {
     0 0 30px -8px rgba(123, 97, 255, 0.22);
 }
 
+/* Breathing icon chips (landing "What it is"): the same shared wave as the
+   legend bubbles (peak at 25%, trough at 75%), but subtler, so the chips
+   undulate with the page instead of stealing the show from the stars they
+   stand for. */
+.chip-breathe {
+  animation: chipBreathe 4.83s linear infinite;
+}
+
+@keyframes chipBreathe {
+  0%,
+  50%,
+  100% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.07);
+  }
+  75% {
+    transform: scale(0.985);
+  }
+}
+
+/* Primary CTA: a soft teal bloom on hover (bloom, not glow) over the
+   maturity-high fill; the press-down lives in :active. */
+.cta-primary {
+  transition:
+    box-shadow 0.4s ease,
+    filter 0.4s ease,
+    transform 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.cta-primary:hover {
+  box-shadow:
+    0 0 0 1px rgba(0, 217, 192, 0.25),
+    0 0 30px -8px rgba(0, 217, 192, 0.5);
+  filter: brightness(1.05);
+}
+.cta-primary:active {
+  transform: scale(0.98);
+}
+
 /* Soft drop shadow on headings so white text stays grounded over the
    animated lines (decorative; does not change contrast ratios). */
 .text-lift {
