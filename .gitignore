@@ -36,3 +36,7 @@ playwright/.cache/
 
 # freebuff session data (local conversation database, never uploaded)
 .freebuff/
+
+# benchmarking artifacts
+finbench/
+finbench-output/
