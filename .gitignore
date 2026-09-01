@@ -40,3 +40,4 @@ playwright/.cache/
 # benchmarking artifacts
 finbench/
 finbench-output/
+.env*

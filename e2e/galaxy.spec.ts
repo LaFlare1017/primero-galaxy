@@ -4,9 +4,9 @@ declare global {
   interface Window {
     // Debug handle exposed by the app (GalaxyApp / CameraRig / GalaxyScene)
     __galaxy?: Record<string, any>;
-    // Debug handle exposed by the reactive-lines background: the pattern's
-    // pointer target, so tests can assert mouse/touch input reaches it.
-    __lines?: { target(): { x: number; y: number } };
+    // Debug handle exposed by the hero starfield: the current star budget,
+    // so tests can assert the mobile viewport draws fewer stars.
+    __heroStars?: () => number;
   }
 }
 
@@ -1105,9 +1105,10 @@ test('the landing page contact form renders and submits a pre-filled mailto', as
   // The root route is the explainer landing page.
   await page.goto('/');
 
-  // The form lives in the #contact section, below the fold.
+  // The form lives in the #contact section, below the fold. Match by the
+  // heading's accessible name (the rendered heading breaks across lines).
   await expect(
-    page.getByText('Ready to map your own AI transformation?')
+    page.getByRole('heading', { name: 'Ready to map your own AI transformation?' })
   ).toBeVisible();
 
   // All three fields render, and the submit button is inert until a message
@@ -1206,7 +1207,6 @@ test('every landing-page CTA lands in the galaxy tool at /galaxy', async ({ page
   test.setTimeout(180_000);
 
   const ctas = [
-    { label: 'header', link: page.getByRole('link', { name: 'Enter the galaxy →' }) },
     {
       label: 'hero',
       // The hero is the first section; scope there so the final-CTA link of
@@ -1214,7 +1214,7 @@ test('every landing-page CTA lands in the galaxy tool at /galaxy', async ({ page
       link: page
         .locator('section')
         .first()
-        .getByRole('link', { name: 'Enter the galaxy' }),
+        .getByRole('link', { name: 'Enter the galaxy →' }),
     },
     {
       label: 'contact',
@@ -1231,7 +1231,7 @@ test('every landing-page CTA lands in the galaxy tool at /galaxy', async ({ page
             name: 'Your company could be one of the stars.',
           }),
         })
-        .getByRole('link', { name: 'Enter the galaxy' }),
+        .getByRole('link', { name: 'Enter the galaxy →' }),
     },
     { label: 'footer', link: page.getByRole('link', { name: 'Launch the galaxy ↗' }) },
   ];
@@ -1261,94 +1261,82 @@ test('every landing-page CTA lands in the galaxy tool at /galaxy', async ({ page
  * Sample the landing page's reactive-lines canvas: a hash of sampled pixels
  * (animation moves the lines, so any redraw changes the hash), a count of
  * line pixels, and a count of void-background pixels (#030308). The void
- * count is the key painted-vs-blank discriminator: an unpainted canvas is
- * opaque black (#000, zero void pixels), while a painted frame is mostly
- * void with the lavender lines on top.
+ * Sample the landing hero's starfield canvas: a hash of sampled pixels
+ * (breathing stars move, so any redraw changes the hash) and a count of
+ * non-transparent pixels. The star count is the painted-vs-blank
+ * discriminator: an unpainted canvas has zero star pixels.
  */
-async function readCanvasFrame(page: Page) {
+async function readStarfieldFrame(page: Page) {
   return page.evaluate(() => {
     const canvas = document.querySelector('canvas') as HTMLCanvasElement | null;
     const ctx = canvas?.getContext('2d');
-    if (!canvas || !ctx) return { hash: -1, nonBg: 0, voidPx: 0 };
+    if (!canvas || !ctx) return { hash: -1, starPx: 0 };
     const d = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
     let hash = 0;
-    let nonBg = 0;
-    let voidPx = 0;
+    let starPx = 0;
     for (let i = 0; i < d.length; i += 16) {
       hash = ((hash * 31 + d[i]) | 0) ^ (d[i + 1] << 4) ^ (d[i + 2] << 8);
-      if (d[i] === 3 && d[i + 1] === 3 && d[i + 2] === 8) voidPx++;
-      else nonBg++;
+      if (d[i + 3] > 0) starPx++;
     }
-    return { hash, nonBg, voidPx };
+    return { hash, starPx };
   });
 }
 
-test('the reactive-lines background paints and animates immediately on load (control)', async ({ page }) => {
+test('the hero starfield paints and animates immediately on load', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
   await page.goto('/');
   await page.waitForLoadState('networkidle');
 
-  // The frame painted on mount with NO interaction; the animation is not
-  // deferred until a mouse move (the void background is painted, not a
-  // blank black canvas).
+  // The frame painted on mount with NO interaction; the animation starts on
+  // load, not after a scroll or pointer event.
   await expect
-    .poll(async () => (await readCanvasFrame(page)).voidPx, { timeout: 10_000 })
-    .toBeGreaterThan(0);
-  await expect
-    .poll(async () => (await readCanvasFrame(page)).nonBg, { timeout: 10_000 })
+    .poll(async () => (await readStarfieldFrame(page)).starPx, { timeout: 10_000 })
     .toBeGreaterThan(0);
 
-  // Mouse input reaches the pattern: the exposed pointer target follows the
-  // cursor. The running loop paints from this target, so input → animation
-  // (the reduced-motion test below proves the loop can also be absent).
-  await page.mouse.move(720, 450, { steps: 3 });
-  const target = await page.evaluate(() => window.__lines!.target());
-  expect(target).toEqual({ x: 720, y: 450 });
+  // The field animates: breathing + drift change the sampled frame.
+  const first = await readStarfieldFrame(page);
+  await expect
+    .poll(async () => (await readStarfieldFrame(page)).hash, { timeout: 10_000 })
+    .not.toBe(first.hash);
 });
 
-test('the reactive-lines background reacts to touch drags (touch fallback)', async ({ page }) => {
-  await page.emulateMedia({ reducedMotion: 'no-preference' });
-  await page.goto('/');
-  await page.waitForLoadState('networkidle');
-
-  // Touch devices have no cursor: the canvas still paints on load.
-  await expect
-    .poll(async () => (await readCanvasFrame(page)).voidPx, { timeout: 10_000 })
-    .toBeGreaterThan(0);
-
-  // A touch drag (synthetic TouchEvent through the document listener) must
-  // reach the pattern: the exposed pointer target follows the finger, so the
-  // background stays interactive on devices with no mouse.
-  await page.evaluate(() => {
-    const touch = (x: number, y: number) =>
-      new Touch({ identifier: 1, target: document.body, clientX: x, clientY: y });
-    document.dispatchEvent(
-      new TouchEvent('touchmove', { touches: [touch(900, 300)], bubbles: true })
-    );
-  });
-  const target = await page.evaluate(() => window.__lines!.target());
-  expect(target).toEqual({ x: 900, y: 300 });
-});
-
-test('the reactive-lines background draws one static frame under reduced motion', async ({ page }) => {
+test('the hero starfield draws one static frame under reduced motion', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
   await page.waitForLoadState('networkidle');
 
-  // A single static frame painted on mount, with no mouse interaction needed.
+  // A single static frame painted on mount.
   await expect
-    .poll(async () => (await readCanvasFrame(page)).voidPx, { timeout: 10_000 })
+    .poll(async () => (await readStarfieldFrame(page)).starPx, { timeout: 10_000 })
     .toBeGreaterThan(0);
-  const first = await readCanvasFrame(page);
+  const first = await readStarfieldFrame(page);
 
   // Time passes: the canvas must NOT animate (frames stay identical).
   await page.waitForTimeout(400);
-  expect((await readCanvasFrame(page)).hash).toBe(first.hash);
+  expect((await readStarfieldFrame(page)).hash).toBe(first.hash);
+});
 
-  // Even mouse movement must not start the animation.
-  await page.mouse.move(700, 400, { steps: 5 });
-  await page.waitForTimeout(300);
-  expect((await readCanvasFrame(page)).hash).toBe(first.hash);
+test('the hero starfield scales its star budget down for mobile viewports', async ({ page }) => {
+  // The per-frame canvas cost is dominated by star count on phones, so the
+  // component derives the budget from viewport area. The debug handle lets
+  // the suite assert the smaller viewport actually draws fewer stars.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/');
+  await expect
+    .poll(() => page.evaluate(() => window.__heroStars?.() ?? -1), {
+      timeout: 10_000,
+    })
+    .toBeGreaterThan(0);
+  const desktop = await page.evaluate(() => window.__heroStars!());
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  // The resize handler debounces at 100ms before rebuilding the field.
+  await page.waitForTimeout(400);
+  const mobile = await page.evaluate(() => window.__heroStars!());
+
+  expect(desktop).toBeGreaterThan(0);
+  expect(mobile).toBeGreaterThan(0);
+  expect(mobile, 'mobile hero should draw fewer stars than desktop').toBeLessThan(desktop);
 });
 
 test('brands without indexed favicons ship stable local logos in the planet panel', async ({ page }) => {

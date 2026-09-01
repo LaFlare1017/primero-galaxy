@@ -1,10 +1,10 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { ContactForm } from '@/components/ui/ContactForm';
-import InteractiveLines from '@/components/ui/InteractiveLines';
+import HeroStarfield from '@/components/ui/HeroStarfield';
 import { Reveal } from '@/components/ui/Reveal';
 import { WebGLNotice } from '@/components/ui/WebGLNotice';
-import { breathTiming, DIMENSIONS } from '@/lib/constants';
+import { DIMENSIONS } from '@/lib/constants';
 import { COMPANY_COUNT } from '@/lib/fortune500-data';
 
 export const metadata: Metadata = {
@@ -14,449 +14,258 @@ export const metadata: Metadata = {
   alternates: { canonical: '/' },
 };
 
-/* ── helpers ─────────────────────────────────────────────────────────────── */
-
-const fade = (delay: number): React.CSSProperties => ({
-  animation: 'fadeIn 0.8s ease-out both',
-  animationDelay: `${delay}s`,
-});
-
-/* ── breathing components (same wave as galaxy stars) ────────────────────── */
-
-function LegendBubble({
-  starIndex,
-  color,
-  glow,
-}: {
-  starIndex: number;
-  color: string;
-  glow: string;
-}) {
-  const { duration, delay } = breathTiming(starIndex);
-  return (
-    <span
-      className="legend-bubble shrink-0"
-      style={
-        {
-          '--bubble': color,
-          '--bubble-glow': glow,
-          animationDuration: `${duration}s`,
-          animationDelay: `${delay}s`,
-        } as React.CSSProperties
-      }
-    />
-  );
-}
-
-/* ── Stat row (Event Horizon style) ─────────────────────────────────────── */
-
-function StatRow({ items }: { items: { label: string; value: string }[] }) {
-  return (
-    <div className="flex flex-wrap justify-center gap-x-8 gap-y-2 text-[12px]">
-      {items.map((item) => (
-        <div key={item.label} className="flex items-baseline gap-2">
-          <span className="font-medium text-[var(--ui-muted)]">{item.label}</span>
-          <span className="text-star-bright/80">{item.value}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 /* ── page ────────────────────────────────────────────────────────────────── */
 
 export default function LandingPage() {
   return (
-    <main className="h-[100dvh] overflow-y-auto">
-      {/* Fixed reactive-lines background */}
-      <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0">
-        <InteractiveLines
-          backgroundColor="#030308"
-          lineColor="#ABABC7"
-          lineWidth={0.5}
-          minLines={108}
-          maxLines={15}
+    <main className="bg-void">
+      {/* ─── Hero: full-bleed starfield ─────────────────────────── */}
+      <section className="relative flex min-h-[100svh] flex-col items-center justify-center overflow-hidden px-6 text-center">
+        <HeroStarfield />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_85%_65%_at_50%_50%,transparent_35%,rgba(3,3,8,0.55)_100%)]"
         />
-      </div>
-
-      {/* Ambient light washes */}
-      <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0">
-        <div className="absolute -right-[12%] -top-[18%] h-[70vh] w-[55vw] rounded-full bg-trajectory/10 blur-[140px]" />
-        <div className="absolute -bottom-[22%] -left-[12%] h-[62vh] w-[50vw] rounded-full bg-maturity-high/10 blur-[140px]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_65%_at_50%_40%,transparent_48%,rgba(3,3,8,0.45)_100%)]" />
-      </div>
-
-      {/* Page content */}
-      <div className="relative z-10">
-        {/* ─── Nav ─────────────────────────────────────────────────── */}
-        <header className="fixed inset-x-0 top-0 z-10 flex h-14 items-center justify-between border-b border-border-subtle/60 bg-void/70 px-6 backdrop-blur-md">
-          <span className="text-[13px] font-semibold tracking-[0.18em] text-star-bright max-[560px]:text-[11px]">
-            PRIMERO GALAXY
-          </span>
-          <nav aria-label="Primary">
-            <Link
-              href="/galaxy"
-              prefetch={false}
-              className="rounded-md border border-maturity-high/50 px-4 py-3 text-[12px] font-medium text-maturity-high transition hover:bg-maturity-high/10 active:scale-[0.98]"
-            >
-              Enter the galaxy →
-            </Link>
-          </nav>
-        </header>
-
-        {/* ─── 00 — Hero ──────────────────────────────────────────── */}
-        <section className="relative flex min-h-[100dvh] flex-col items-center justify-center px-6 text-center">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_90%_70%_at_50%_50%,rgba(3,3,8,0.92),rgba(3,3,8,0.45)_48%,transparent_78%)]"
-          />
+        <div className="relative z-10 flex max-w-3xl flex-col items-center">
           <p
-            className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--ui-muted)]"
-            style={fade(0)}
+            className="font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-trajectory"
+            style={{ animation: 'fadeIn 0.8s ease-out both' }}
           >
-            Fortune 500 · 12 industries · AI maturity estimates
+            Independent research · Fortune 500 · AI maturity estimates
           </p>
           <h1
-            className="mt-6 max-w-4xl text-5xl font-semibold leading-[1.05] tracking-[-0.03em] text-star-bright md:text-7xl lg:text-8xl"
-            style={fade(0.1)}
+            className="text-lift mt-6 text-5xl font-extrabold leading-[0.98] tracking-[-0.04em] text-star-bright md:text-7xl lg:text-8xl"
+            style={{ animation: 'fadeIn 0.8s ease-out 0.1s both' }}
           >
             The AI Transformation
             <br />
             Galaxy
           </h1>
           <p
-            className="mt-6 max-w-[48ch] text-base leading-relaxed text-star-bright/80 md:text-lg"
-            style={fade(0.25)}
+            className="mt-6 max-w-[52ch] text-base leading-relaxed text-star-bright/75 md:text-lg"
+            style={{ animation: 'fadeIn 0.8s ease-out 0.25s both' }}
           >
-            Each star is a Fortune 500 company embarking on an AI
-            Transformation journey. Explore.
+            <strong className="font-semibold text-star-bright">
+              {COMPANY_COUNT} Fortune 500 companies
+            </strong>
+            , each scored on five AI-maturity dimensions from public
+            disclosures, mapped as an explorable 3D galaxy. Not a product. A
+            research instrument.
           </p>
           <WebGLNotice />
-          <div className="mt-12" style={fade(0.5)}>
+          <div
+            className="mt-10 flex flex-wrap items-center justify-center gap-3.5"
+            style={{ animation: 'fadeIn 0.8s ease-out 0.4s both' }}
+          >
             <Link
               href="/galaxy"
               prefetch={false}
-              className="cta-primary rounded-md bg-maturity-high px-8 py-3.5 text-sm font-semibold text-void active:scale-[0.98]"
+              className="cta-primary rounded-lg bg-trajectory px-8 py-3.5 text-[15px] font-semibold text-white"
             >
-              Enter the galaxy
+              Enter the galaxy →
+            </Link>
+            <Link
+              href="#methodology"
+              prefetch={false}
+              className="rounded-lg border border-border-subtle px-6 py-3.5 text-[14px] font-medium text-[var(--ui-dim)] transition-colors hover:border-trajectory hover:text-star-bright"
+            >
+              How scoring works
             </Link>
           </div>
-          <p
-            className="absolute bottom-10 animate-pulse-slow text-[11px] uppercase tracking-[0.12em] text-[var(--ui-muted)]"
-            style={fade(0.8)}
-          >
-            Scroll to fall
+        </div>
+        <p
+          className="absolute bottom-8 z-10 font-mono text-[10.5px] uppercase tracking-[0.16em] text-[var(--ui-muted)]"
+          style={{ animation: 'fadeIn 1s ease-out 0.8s both' }}
+        >
+          Scroll to explore
+        </p>
+      </section>
+
+      {/* ─── 01 — The Galaxy ─────────────────────────────────────── */}
+      <section className="mx-auto max-w-3xl px-6 py-28 md:py-36">
+        <Reveal>
+          <p className="font-mono text-[12px] tracking-[0.14em] text-trajectory">
+            01 / THE GALAXY
           </p>
-        </section>
-
-        {/* ─── 01 — The Galaxy ─────────────────────────────────────── */}
-        <section className="flex min-h-[100dvh] flex-col items-center justify-center px-6 text-center">
-          <Reveal>
-            <span className="font-mono text-[13px] tracking-[0.1em] text-[var(--ui-muted)]">
-              01
-            </span>
-          </Reveal>
-          <Reveal delay={40}>
-            <h2 className="mt-4 max-w-3xl text-4xl font-semibold leading-[1.1] tracking-[-0.02em] text-star-bright md:text-5xl lg:text-6xl">
-              The galaxy is the
-              <br />
-              interface.
-            </h2>
-          </Reveal>
-          <Reveal delay={80}>
-            <p className="mt-6 max-w-[44ch] text-[15px] leading-relaxed text-star-bright/70">
-              No dashboards, no sidebars, no panels. Every star earns its
-              place, and every one of them tells the story of a Fortune 500
-              company&apos;s AI transformation, estimated from what it has
-              publicly said and shipped.
-            </p>
-          </Reveal>
-          <Reveal delay={120}>
-            <div className="mt-8">
-              <StatRow
-                items={[
-                  { label: 'Companies', value: `${COMPANY_COUNT}` },
-                  { label: 'Industries', value: '12' },
-                  { label: 'Dimensions', value: '5' },
-                ]}
-              />
+          <h2 className="mt-4 text-4xl font-extrabold tracking-[-0.03em] text-star-bright md:text-5xl">
+            Every star is a company.
+          </h2>
+          <p className="mt-5 max-w-[58ch] text-[15.5px] leading-relaxed text-star-bright/70">
+            {COMPANY_COUNT} Fortune 500 enterprises mapped in 3D. Position
+            encodes sector, color encodes AI maturity, size encodes evidence
+            confidence. Fly through, zoom into a planet, and read the sourced
+            profile behind every score.
+          </p>
+        </Reveal>
+        <Reveal delay={80}>
+          <div className="mt-12">
+            <div
+              role="img"
+              aria-label="Maturity scale from 0 to 100: orange low, amber mid, teal high"
+              className="h-2.5 rounded-full bg-gradient-to-r from-maturity-low via-maturity-mid to-maturity-high"
+            />
+            <div className="mt-3 flex justify-between font-mono text-[11px] text-[var(--ui-muted)]">
+              <span>0</span>
+              <span>25</span>
+              <span>50</span>
+              <span>75</span>
+              <span>100</span>
             </div>
-          </Reveal>
-        </section>
-
-        {/* ─── 02 — How to Read It ─────────────────────────────────── */}
-        <section className="flex min-h-[100dvh] flex-col items-center justify-center px-6 text-center">
-          <Reveal>
-            <span className="font-mono text-[13px] tracking-[0.1em] text-[var(--ui-muted)]">
-              02
-            </span>
-          </Reveal>
-          <Reveal delay={40}>
-            <h2 className="mt-4 max-w-3xl text-4xl font-semibold leading-[1.1] tracking-[-0.02em] text-star-bright md:text-5xl lg:text-6xl">
-              One glance,
-              <br />
-              one story.
-            </h2>
-          </Reveal>
-          <Reveal delay={80}>
-            <p className="mt-6 max-w-[44ch] text-[15px] leading-relaxed text-star-bright/70">
-              Color marks maturity. Size scales with confidence. Violet paths
-              trace transformation. The galaxy speaks in light, not legends.
+            <p className="mt-5 text-[13px] leading-relaxed text-[var(--ui-dim)]">
+              <strong className="font-semibold text-maturity-low">Orange</strong> = early
+              stage (0–40) ·{' '}
+              <strong className="font-semibold text-maturity-mid">Amber</strong> = building
+              (40–70) ·{' '}
+              <strong className="font-semibold text-maturity-high">Teal</strong> = leading
+              (70–100). Violet paths trace transformation trajectories between a
+              company&apos;s past and current position.
             </p>
-          </Reveal>
-          <Reveal delay={120}>
-            <div className="mt-10 flex flex-col items-center gap-4">
-              <div className="flex items-center gap-6">
-                <LegendBubble
-                  starIndex={0}
-                  color="#FF6B35"
-                  glow="rgba(255,107,53,0.5)"
-                />
-                <LegendBubble
-                  starIndex={1}
-                  color="#F7C548"
-                  glow="rgba(247,197,72,0.5)"
-                />
-                <LegendBubble
-                  starIndex={2}
-                  color="#00D9C0"
-                  glow="rgba(0,217,192,0.5)"
-                />
+          </div>
+        </Reveal>
+      </section>
+
+      {/* ─── 02 — Methodology ────────────────────────────────────── */}
+      <section
+        id="methodology"
+        className="mx-auto max-w-3xl scroll-mt-20 px-6 pb-28 md:pb-36"
+      >
+        <Reveal>
+          <p className="font-mono text-[12px] tracking-[0.14em] text-trajectory">
+            02 / METHODOLOGY
+          </p>
+          <h2 className="mt-4 text-4xl font-extrabold tracking-[-0.03em] text-star-bright md:text-5xl">
+            Five pillars, one number.
+          </h2>
+          <p className="mt-5 max-w-[58ch] text-[15.5px] leading-relaxed text-star-bright/70">
+            Every star&apos;s color comes from a single overall maturity score:
+            a weighted judgment of five dimensions, each derived from public
+            evidence. Every bar in a planet profile links to the sources it was
+            derived from.
+          </p>
+        </Reveal>
+        <Reveal delay={80}>
+          <div className="mt-10">
+            {DIMENSIONS.map((d, i) => (
+              <div
+                key={d.key}
+                className="grid grid-cols-[48px_220px_1fr] items-baseline gap-4 border-b border-border-subtle/70 py-5 max-sm:grid-cols-[40px_1fr]"
+              >
+                <span className="font-mono text-[12px] text-trajectory">
+                  D{i + 1}
+                </span>
+                <h3 className="text-[15px] font-bold text-star-bright max-sm:col-start-2">
+                  {d.label}
+                </h3>
+                <p className="text-[13.5px] leading-relaxed text-[var(--ui-dim)] max-sm:col-start-2">
+                  {d.description}
+                </p>
               </div>
-              <StatRow
-                items={[
-                  { label: 'Low', value: '0–40' },
-                  { label: 'Mid', value: '40–70' },
-                  { label: 'High', value: '70–100' },
-                ]}
-              />
-            </div>
-          </Reveal>
-          <Reveal delay={160}>
-            <div className="mt-8">
-              <StatRow
-                items={[
-                  { label: 'Trajectories', value: 'Violet paths' },
-                  { label: 'Evidence', value: 'Linked per score' },
-                  { label: 'Benchmark', value: 'Sector median' },
-                ]}
-              />
-            </div>
-          </Reveal>
-        </section>
+            ))}
+          </div>
+        </Reveal>
+        <Reveal delay={140}>
+          <div className="mt-10 rounded-xl border border-dashed border-maturity-mid/40 p-5 text-[12.5px] leading-relaxed text-[var(--ui-dim)]">
+            <strong className="font-semibold text-maturity-mid">
+              Independent estimates.
+            </strong>{' '}
+            Scores are derived by this project from public disclosures
+            (filings, engineering blogs, job posts, talks). Companies named are
+            not affiliated with, nor endorse, this project. Scores are analyst
+            judgments, not company statements.{' '}
+            <Link
+              href="/methodology"
+              prefetch={false}
+              className="font-medium text-trajectory transition-colors hover:text-star-bright"
+            >
+              Full source list on the methodology page →
+            </Link>
+          </div>
+        </Reveal>
+      </section>
 
-        {/* ─── 03 — How to Use It ──────────────────────────────────── */}
-        <section className="flex min-h-[100dvh] flex-col items-center justify-center px-6 text-center">
-          <Reveal>
-            <span className="font-mono text-[13px] tracking-[0.1em] text-[var(--ui-muted)]">
-              03
-            </span>
-          </Reveal>
-          <Reveal delay={40}>
-            <h2 className="mt-4 max-w-3xl text-4xl font-semibold leading-[1.1] tracking-[-0.02em] text-star-bright md:text-5xl lg:text-6xl">
-              Put yourself
-              <br />
-              in it.
-            </h2>
-          </Reveal>
-          <Reveal delay={80}>
-            <p className="mt-6 max-w-[44ch] text-[15px] leading-relaxed text-star-bright/70">
-              Add your company as a star, fly to any planet, trace
-              transformation trajectories, or search by name. The galaxy
-              rewards curiosity.
-            </p>
-          </Reveal>
-          <Reveal delay={120}>
-            <div className="mt-8">
-              <StatRow
-                items={[
-                  { label: 'Add', value: '2 fields' },
-                  { label: 'View', value: '5 scores' },
-                  { label: 'Trajectory', value: '3D path' },
-                  { label: 'Search', value: 'By name' },
-                ]}
-              />
-            </div>
-          </Reveal>
-          <Reveal delay={160}>
-            <div className="mt-10">
-              <Link
-                href="/galaxy"
-                prefetch={false}
-                className="cta-primary rounded-md bg-maturity-high px-8 py-3.5 text-sm font-semibold text-void active:scale-[0.98]"
-              >
-                Enter the galaxy
-              </Link>
-            </div>
-          </Reveal>
-        </section>
-
-        {/* ─── 04 — The Methodology ────────────────────────────────── */}
-        <section
-          id="methodology"
-          className="flex min-h-[100dvh] flex-col items-center justify-center px-6 text-center"
-        >
-          <Reveal>
-            <span className="font-mono text-[13px] tracking-[0.1em] text-[var(--ui-muted)]">
-              04
-            </span>
-          </Reveal>
-          <Reveal delay={40}>
-            <h2 className="mt-4 max-w-3xl text-4xl font-semibold leading-[1.1] tracking-[-0.02em] text-star-bright md:text-5xl lg:text-6xl">
-              Five pillars,
-              <br />
-              one number.
-            </h2>
-          </Reveal>
-          <Reveal delay={80}>
-            <p className="mt-6 max-w-[48ch] text-[15px] leading-relaxed text-star-bright/70">
-              Every star&apos;s color comes from a single overall maturity
-              score, a weighted judgment of five dimensions. Each bar in the
-              planet profile links to the public evidence it was derived from.
-            </p>
-          </Reveal>
-          <Reveal delay={120}>
-            <div className="mt-10 grid max-w-2xl gap-4 text-left sm:grid-cols-2">
-              {DIMENSIONS.map((d, i) => (
-                <div key={d.key} className="flex gap-3">
-                  <span className="shrink-0 pt-0.5 font-mono text-[11px] tracking-[0.1em] text-[var(--ui-muted)]">
-                    {String(i + 1).padStart(2, '0')}
-                  </span>
-                  <div>
-                    <h4 className="text-[13px] font-semibold text-star-bright">
-                      {d.label}
-                    </h4>
-                    <p className="mt-0.5 text-[12px] leading-relaxed text-[var(--ui-dim)]">
-                      {d.description}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Reveal>
-          <Reveal delay={160}>
-            <div className="mt-8">
-              <StatRow
-                items={[
-                  { label: 'Sources', value: 'Public disclosures' },
-                  { label: 'Weighting', value: 'Analyst judgment' },
-                  { label: 'Benchmark', value: 'Sector median' },
-                ]}
-              />
-            </div>
-          </Reveal>
-          <Reveal delay={200}>
-            <div className="mt-6">
-              <Link
-                href="/methodology"
-                prefetch={false}
-                className="text-[12px] font-medium text-trajectory transition hover:text-star-bright"
-              >
-                Read the full methodology and research trail →
-              </Link>
-            </div>
-          </Reveal>
-        </section>
-
-        {/* ─── 05 — Contact ────────────────────────────────────────── */}
-        <section
-          id="contact"
-          className="flex min-h-[100dvh] flex-col items-center justify-center px-6 text-center"
-        >
-          <Reveal>
-            <span className="font-mono text-[13px] tracking-[0.1em] text-[var(--ui-muted)]">
-              05
-            </span>
-          </Reveal>
-          <Reveal delay={40}>
-            <h2 className="mt-4 max-w-3xl text-4xl font-semibold leading-[1.1] tracking-[-0.02em] text-star-bright md:text-5xl lg:text-6xl">
-              Ready to map your own
-              <br />
-              AI transformation?
-            </h2>
-          </Reveal>
-          <Reveal delay={80}>
-            <p className="mt-6 max-w-[44ch] text-[15px] leading-relaxed text-star-bright/70">
+      {/* ─── 03 — Contact ────────────────────────────────────────── */}
+      <section
+        id="contact"
+        className="mx-auto max-w-3xl scroll-mt-20 px-6 pb-28 md:pb-36"
+      >
+        <Reveal>
+          <p className="font-mono text-[12px] tracking-[0.14em] text-trajectory">
+            03 / GET IN TOUCH
+          </p>
+          <h2 className="mt-4 text-4xl font-extrabold tracking-[-0.03em] text-star-bright md:text-5xl">
+            Ready to map your own
+            <br />
+            AI transformation?
+          </h2>
+        </Reveal>
+        <div className="mt-10 grid gap-10 md:grid-cols-2">
+          <Reveal delay={60}>
+            <p className="max-w-[48ch] text-[15px] leading-relaxed text-star-bright/70">
               Add your company to the galaxy and see the trajectory you could
-              be on, or reach out to Primero for a full maturity assessment.
+              be on, or reach out to Primero for a full maturity assessment. We
+              typically respond within one business day.
             </p>
-          </Reveal>
-          <Reveal delay={120}>
-            <div className="mt-8 flex flex-col items-center gap-6">
+            <p className="mt-4 text-[13px] leading-relaxed text-[var(--ui-dim)]">
+              <span aria-hidden="true" className="text-maturity-high">
+                ●
+              </span>{' '}
+              Your email client opens with the message pre-filled. The address
+              stays off the page for crawlers.
+            </p>
+            <div className="mt-7">
               <Link
                 href="/galaxy"
                 prefetch={false}
-                className="cta-primary rounded-md bg-maturity-high px-8 py-3.5 text-sm font-semibold text-void active:scale-[0.98]"
+                className="cta-primary inline-block rounded-lg bg-maturity-high px-7 py-3 text-[14px] font-semibold text-void"
               >
                 Add your company to the galaxy
               </Link>
-              <div className="w-full max-w-xl">
-                <ContactForm />
-              </div>
             </div>
           </Reveal>
-        </section>
+          <Reveal delay={120}>
+            <ContactForm />
+          </Reveal>
+        </div>
+      </section>
 
-        {/* ─── Final CTA ───────────────────────────────────────────── */}
-        <section className="flex min-h-[60dvh] flex-col items-center justify-center px-6 text-center">
-          <Reveal>
-            <div
-              aria-hidden="true"
-              className="mb-8 flex items-center justify-center gap-3"
-            >
-              <LegendBubble
-                starIndex={0}
-                color="#FF6B35"
-                glow="rgba(255,107,53,0.5)"
-              />
-              <LegendBubble
-                starIndex={1}
-                color="#F7C548"
-                glow="rgba(247,197,72,0.5)"
-              />
-              <LegendBubble
-                starIndex={2}
-                color="#00D9C0"
-                glow="rgba(0,217,192,0.5)"
-              />
-            </div>
-            <h2 className="mx-auto max-w-2xl text-3xl font-semibold tracking-[-0.02em] text-star-bright md:text-4xl">
-              Your company could be one of the stars.
-            </h2>
-            <p className="mx-auto mt-4 max-w-lg text-[14px] leading-relaxed text-[var(--ui-dim)]">
-              Fly in, look around, and add yourself to the map, or just lose
-              yourself in {COMPANY_COUNT} stories of transformation.
-            </p>
-          </Reveal>
+      {/* ─── Final CTA + footer ──────────────────────────────────── */}
+      <section className="flex min-h-[45svh] flex-col items-center justify-center px-6 pb-16 text-center">
+        <Reveal>
+          <h2 className="text-lift mx-auto max-w-2xl text-3xl font-extrabold tracking-[-0.02em] text-star-bright md:text-4xl">
+            Your company could be one of the stars.
+          </h2>
+          <p className="mx-auto mt-4 max-w-lg text-[14px] leading-relaxed text-[var(--ui-dim)]">
+            Fly in, look around, and add yourself to the map, or just lose
+            yourself in {COMPANY_COUNT} stories of transformation.
+          </p>
+        </Reveal>
+        <Link
+          href="/galaxy"
+          prefetch={false}
+          className="cta-primary mt-8 inline-block rounded-lg bg-trajectory px-8 py-3.5 text-[15px] font-semibold text-white"
+        >
+          Enter the galaxy →
+        </Link>
+      </section>
+
+      <footer className="border-t border-border-subtle/60 px-6 py-8">
+        <div className="mx-auto flex max-w-3xl flex-col items-center justify-between gap-3 text-[11px] text-[var(--ui-muted)] sm:flex-row">
+          <span className="font-semibold tracking-[0.18em] text-[var(--ui-dim)]">
+            PRIMERO GALAXY
+          </span>
+          <span>
+            {COMPANY_COUNT} companies &middot; 12 industries &middot; AI
+            maturity estimates
+          </span>
           <Link
             href="/galaxy"
             prefetch={false}
-            className="cta-primary mt-8 inline-block rounded-md bg-maturity-high px-8 py-3.5 text-sm font-semibold text-void"
+            className="inline-block py-2.5 transition-colors hover:text-star-bright"
           >
-            Enter the galaxy
+            Launch the galaxy ↗
           </Link>
-        </section>
-
-        {/* ─── Footer ──────────────────────────────────────────────── */}
-        <footer className="border-t border-border-subtle/60 px-6 py-8">
-          <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-3 text-[11px] text-[var(--ui-muted)] sm:flex-row">
-            <span className="font-semibold tracking-[0.18em] text-[var(--ui-dim)]">
-              PRIMERO GALAXY
-            </span>
-            <span>
-              {COMPANY_COUNT} companies &middot; 12 industries &middot; AI
-              maturity estimates
-            </span>
-            <Link
-              href="/galaxy"
-              prefetch={false}
-              className="inline-block py-2.5 transition-colors hover:text-star-bright"
-            >
-              Launch the galaxy ↗
-            </Link>
-          </div>
-        </footer>
-      </div>
+        </div>
+      </footer>
     </main>
   );
 }
