@@ -1,0 +1,113 @@
+name: Uptime
+
+# Production uptime check for the deployed site. Runs every 15 minutes and
+# on demand. On failure it opens/updates an issue so a broken deploy is
+# impossible to miss; on recovery it closes the issue automatically.
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: uptime
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Production availability
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check production endpoints
+        id: check
+        run: |
+          set -euo pipefail
+          declare -a FAILURES=()
+          check() {
+            local label="$1" url="$2" expect="${3:-200}"
+            local status
+            status=$(curl -s -o /dev/null -w '%{http_code}' \
+              --max-time 20 --retry 2 --retry-delay 3 -L "$url")
+            echo "${label}: ${status}"
+            if [ "$status" != "$expect" ]; then
+              FAILURES+=("${label} -> ${url} returned ${status}, expected ${expect}")
+            fi
+          }
+          # Landing page, galaxy tool, methodology, and a bundled asset.
+          check "landing"      "https://primero-galaxy.vercel.app/"
+          check "galaxy"       "https://primero-galaxy.vercel.app/galaxy"
+          check "methodology"  "https://primero-galaxy.vercel.app/methodology"
+          check "marquee-logo" "https://primero-galaxy.vercel.app/logos/marquee/elevance-health.png"
+
+          if [ ${#FAILURES[@]} -gt 0 ]; then
+            {
+              echo "### Uptime check failed"
+              echo ""
+              printf -- '- %s\n' "${FAILURES[@]}"
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Open issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = 'Uptime alert: production endpoint check failed';
+            const body = [
+              'The scheduled uptime check failed.',
+              '',
+              'Run: ' + context.serverUrl + '/' + context.repo.owner + '/'
+                + context.repo.repo + '/actions/runs/' + context.runId,
+              'Time: ' + new Date().toISOString(),
+              '',
+              'Check the run log for which endpoint failed, then verify the',
+              'Vercel deployment status at https://vercel.com/dashboard.',
+            ].join('\n');
+            const issues = await github.rest.issues.listForRepo({
+              ...context.repo,
+              state: 'open',
+              labels: 'uptime',
+            });
+            if (issues.data.length > 0) {
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: issues.data[0].number,
+                body,
+              });
+            } else {
+              await github.rest.issues.create({
+                ...context.repo,
+                title,
+                body,
+                labels: ['uptime'],
+              });
+            }
+
+      - name: Close issue on recovery
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issues = await github.rest.issues.listForRepo({
+              ...context.repo,
+              state: 'open',
+              labels: 'uptime',
+            });
+            for (const issue of issues.data) {
+              if (issue.pull_request) continue;
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: issue.number,
+                body: 'Recovered. Uptime check passing again as of '
+                  + new Date().toISOString() + '.',
+              });
+              await github.rest.issues.update({
+                ...context.repo,
+                issue_number: issue.number,
+                state: 'closed',
+              });
+            }
