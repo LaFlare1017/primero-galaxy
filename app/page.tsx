@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
+import { CompanyMarquee } from '@/components/ui/CompanyMarquee';
 import { ContactForm } from '@/components/ui/ContactForm';
 import HeroStarfield from '@/components/ui/HeroStarfield';
 import { Reveal } from '@/components/ui/Reveal';
@@ -80,6 +81,11 @@ export default function LandingPage() {
           Scroll to explore
         </p>
       </section>
+
+      {/* ─── Company Marquee ─────────────────────────────────────── */}
+      <Reveal delay={40}>
+        <CompanyMarquee />
+      </Reveal>
 
       {/* ─── 01 — The Galaxy ─────────────────────────────────────── */}
       <section className="mx-auto max-w-3xl px-6 py-28 md:py-36">

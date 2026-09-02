@@ -102,6 +102,42 @@ export function logoUrl(domain?: string | null): string | null {
   return faviconUrl(domain);
 }
 
+const MARQUEE_LOGOS: Record<string, string> = {
+  'amazon.com': '/logos/marquee/amazon.png',
+  'walmart.com': '/logos/marquee/walmart.png',
+  'unitedhealthgroup.com': '/logos/marquee/united-health.png',
+  'apple.com': '/logos/marquee/apple.png',
+  'abc.xyz': '/logos/marquee/alphabet.png',
+  'berkshirehathaway.com': '/logos/marquee/berkshire-hathaway.png',
+  'cvshealth.com': '/logos/marquee/cvs-health.png',
+  'exxonmobil.com': '/logos/marquee/exxonmobil.png',
+  'mckesson.com': '/logos/marquee/mckesson.png',
+  'cencora.com': '/logos/marquee/cencora.png',
+  'microsoft.com': '/logos/marquee/microsoft.png',
+  'costco.com': '/logos/marquee/costco.png',
+  'thecignagroup.com': '/logos/marquee/cigna.png',
+  'cardinalhealth.com': '/logos/marquee/cardinal-health.png',
+  'nvidia.com': '/logos/marquee/nvidia.png',
+  'toyota.com': '/logos/marquee/toyota.png',
+  'meta.com': '/logos/marquee/meta.png',
+  'chevron.com': '/logos/marquee/chevron.png',
+  'jpmorganchase.com': '/logos/marquee/jpmorgan-chase.png',
+  'gm.com': '/logos/marquee/general-motors.png',
+  // Backfill 2026 revenue figures put Elevance Health and Centene in the
+  // top 20 (displacing Chevron and General Motors); ship their marks too.
+  'elevancehealth.com': '/logos/marquee/elevance-health.png',
+  'centene.com': '/logos/marquee/centene.png',
+};
+
+/**
+ * White marquee mark for a company's domain, or null when the brand is not in
+ * the top-20 set (callers then fall back to the favicon service / monogram).
+ */
+export function marqueeLogoUrl(domain?: string | null): string | null {
+  if (!domain) return null;
+  return MARQUEE_LOGOS[domain] ?? null;
+}
+
 /** Initials monogram from a company name, the fallback when no logo loads. */
 export function monogram(name: string): string {
   const words = name

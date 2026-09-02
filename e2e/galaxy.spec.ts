@@ -1364,6 +1364,40 @@ test('the hero starfield scales its star budget down for mobile viewports', asyn
   expect(mobile, 'mobile hero should draw fewer stars than desktop').toBeLessThan(desktop);
 });
 
+test('brands without indexed favicons ship stable local logos instead of 404ing', async ({ page }) => {
+  // Every top-20 marquee brand ships a bundled white mark under /logos/marquee
+  // (planet panels keep their own assets under /logos). Berkshire's tile must
+  // load from the bundled set, never from the favicon service, and no
+  // favicon-service request may 404 during the landing-page load.
+  const faviconFailures: string[] = [];
+  page.on('response', (res) => {
+    const url = res.url();
+    if (/(gstatic\.com|google\.com\/s2)/.test(url) && res.status() >= 400) {
+      faviconFailures.push(`${url} -> ${res.status()}`);
+    }
+  });
+
+  await page.goto('/');
+  await page.waitForLoadState('networkidle');
+
+  // Scroll the marquee into view so its lazy-loaded images actually load.
+  await page
+    .getByRole('heading', { name: /AI MATURITY ASSESSMENTS FOR THE FOLLOWING/i })
+    .scrollIntoViewIfNeeded();
+  await page.waitForTimeout(700);
+
+  // Both marquee copies of Berkshire's tile use the bundled white mark, and it
+  // is visible (the monogram fallback never fired).
+  const berkshireTile = page.locator('img[src*="/logos/marquee/berkshire-hathaway"]');
+  await expect(berkshireTile).toHaveCount(2);
+  await expect(berkshireTile.first()).toBeVisible();
+  const res = await page.request.get('/logos/marquee/berkshire-hathaway.png');
+  expect(res.status()).toBe(200);
+
+  // No favicon-service request failed for any brand on the page.
+  expect(faviconFailures, faviconFailures.join('\n') || 'no failures').toEqual([]);
+});
+
 test('brands without indexed favicons ship stable local logos in the planet panel', async ({ page }) => {
   // Berkshire Hathaway has no favicon indexed by the favicon service, so its
   // planet-panel logo must load from /logos via the shared logoUrl helper,

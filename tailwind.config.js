@@ -32,6 +32,7 @@ module.exports = {
         'slide-in-right': 'slideInRight 0.6s ease-out forwards',
         'pulse-slow': 'pulseSlow 4s ease-in-out infinite',
         breathe: 'breathe 9s ease-in-out infinite',
+        marquee: 'marquee 45s linear infinite',
       },
       keyframes: {
         fadeIn: {
@@ -53,6 +54,10 @@ module.exports = {
         breathe: {
           '0%, 100%': { opacity: '0.55' },
           '50%': { opacity: '1' },
+        },
+        marquee: {
+          '0%': { transform: 'translateX(0)' },
+          '100%': { transform: 'translateX(-50%)' },
         },
       },
     },
