@@ -16,10 +16,13 @@
   --border-subtle: #1a1a3a;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 html,
 body {
-  height: 100%;
-  overflow: hidden;
+  overflow-x: hidden;
   background: var(--void);
   color: var(--star-bright);
   font-family: var(--font-geist-sans), Geist, system-ui, sans-serif;
