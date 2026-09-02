@@ -267,6 +267,15 @@ body::before {
   transform: scale(0.98);
 }
 
+/* The violet CTAs pair bg-trajectory (#7b61ff) with white text, which only
+   reaches ~4.2:1 — below the 4.5:1 floor for 15px text. Darken only the
+   trajectory-filled CTAs (never the --trajectory token, which is also used
+   as text on the near-black background and would lose contrast if darkened
+   globally). #6a4ff0 clears 5.26:1 with white text while keeping the hue. */
+.cta-primary.bg-trajectory {
+  background-color: #6a4ff0;
+}
+
 /* Soft drop shadow on headings so white text stays grounded over the
    animated lines (decorative; does not change contrast ratios). */
 .text-lift {
