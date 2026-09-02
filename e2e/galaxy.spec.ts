@@ -201,6 +201,34 @@ async function doubleClickStar(page: Page, companyId: string) {
   return false;
 }
 
+/**
+ * Double-click a star at an arbitrary screen projection with the same
+ * retry-with-fresh-projection loop as `doubleClickStar`, but for stars whose
+ * position comes from the store rather than /api/companies (user-added stars
+ * are not in the dataset). Each retry re-projects the current world position
+ * at click time and stops as soon as the store flips to planet mode, so a
+ * single stale frame can never fail the call.
+ */
+async function doubleClickPosition(
+  page: Page,
+  project: () => Promise<{ x: number; y: number }>
+): Promise<boolean> {
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    const { x, y } = await project();
+    await page.mouse.dblclick(x, y);
+    const landed = await page
+      .waitForFunction(
+        () => (window.__galaxy as GalaxyHandle).store.getState().mode === 'planet',
+        undefined,
+        { timeout: 2_000, polling: 200 }
+      )
+      .then(() => true)
+      .catch(() => false);
+    if (landed) return true;
+  }
+  return false;
+}
+
 /** Poll the store until the intended star is hovered (or timeout with the last value). */
 async function waitForHover(page: Page, companyName: string, timeoutMs: number) {
   const deadline = Date.now() + timeoutMs;
@@ -749,16 +777,13 @@ test('adding a company creates a persistent star and flies to it', async ({ page
     }, { id: userStar.id });
 
   if (landed) {
-    await page.mouse.dblclick(landed.x, landed.y);
-    try {
-      await expect
-        .poll(() => page.evaluate(() => (window.__galaxy as GalaxyHandle).store.getState().mode), {
-          timeout: 4_000,
-        })
-        .toBe('planet');
-    } catch {
-      await selectViaStore();
-    }
+    // Retry with a fresh projection, mirroring the trajectory dblclick
+    // helper: the galaxy rotates between the hover discovery above and this
+    // click, so a single stale frame must never fail the delete phase. The
+    // store pick remains a last-resort fallback only (occlusion), not the
+    // primary path.
+    const opened = await doubleClickPosition(page, projectUserStar);
+    if (!opened) await selectViaStore();
   } else {
     // The random position is occluded behind another star.
     await selectViaStore();
