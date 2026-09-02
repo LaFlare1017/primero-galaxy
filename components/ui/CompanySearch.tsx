@@ -27,7 +27,22 @@ export function CompanySearch({
   const selectStar = useGalaxyStore((s) => s.selectStar);
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
+  const [wasOpen, setWasOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Reset transient state on the rising edge of `open`, during render (the
+  // React-endorsed "adjust state when a prop changes" pattern). Doing it in
+  // render - not a passive effect - commits the cleared state atomically with
+  // the palette appearing, so no post-commit callback can ever wipe input
+  // typed right after the palette opened (that race flaked the e2e suite:
+  // WebGL main-thread stalls delayed the old effect's flush past the fill).
+  if (open && !wasOpen) {
+    setWasOpen(true);
+    if (query !== '') setQuery('');
+    if (activeIndex !== 0) setActiveIndex(0);
+  } else if (!open && wasOpen) {
+    setWasOpen(false);
+  }
 
   // Case-insensitive substring match on company name (dataset + user stars).
   const results = useMemo(() => {
@@ -38,11 +53,11 @@ export function CompanySearch({
       .slice(0, MAX_RESULTS);
   }, [companies, query]);
 
-  // Reset transient state and focus the input each time the palette opens.
+  // Focus the input shortly after the palette opens. Post-commit is correct
+  // for focus (the element must exist first); state resets live in the
+  // render-phase edge detection above.
   useEffect(() => {
     if (!open) return;
-    setQuery('');
-    setActiveIndex(0);
     const t = setTimeout(() => inputRef.current?.focus(), 80);
     return () => clearTimeout(t);
   }, [open]);
