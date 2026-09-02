@@ -406,10 +406,28 @@ test('searching a company by name flies to its star and opens its profile', asyn
   // Reopen and type the name: the matching result row renders with its
   // details, and Enter (keyboard selection) picks it (no raycast, so no
   // camera/rotation timing dependence like the dblclick path.
-  await page.getByRole('button', { name: 'Search' }).click();
-  await expect(input).toBeVisible();
-  await input.fill('Nvidia');
+  // The palette's open-reset (setQuery('')) is scheduled by React and can
+  // land after the fill when the main thread is stalled by the suite's
+  // accumulated WebGL contexts, wiping the query before results render.
+  // Retry: reopen the palette so the reset can't race the fill.
   const option = page.getByRole('option', { name: /Nvidia/ });
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await page.getByRole('button', { name: 'Search' }).click();
+    await expect(input).toBeVisible();
+    await input.fill('Nvidia');
+    if (
+      await expect(option)
+        .toBeVisible({ timeout: 3000 })
+        .then(
+          () => true,
+          () => false
+        )
+    ) {
+      break;
+    }
+    await page.keyboard.press('Escape');
+    await expect(input).toBeHidden({ timeout: 5000 });
+  }
   await expect(option).toBeVisible();
   await expect(option).toContainText('Technology');
   await input.press('Enter');
