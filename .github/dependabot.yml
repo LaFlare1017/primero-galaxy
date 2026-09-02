@@ -1,0 +1,21 @@
+# Keep the CI actions (checkout, setup-node, upload-artifact, setup-chrome)
+# on current versions. GitHub removes old action runtimes from runners over
+# time (Node 20 was force-upgraded to 24 on 2 Jun 2026 and leaves runners
+# on 16 Sep 2026); with weekly PRs a runtime
+# deprecation lands as a reviewable update instead of a build warning.
+#
+# Floating major pins in the workflow (e.g. actions/checkout@v7) mean
+# Dependabot bumps the major tag itself, so new majors are caught too.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    # One grouped PR per week instead of a separate PR per action.
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: ci
