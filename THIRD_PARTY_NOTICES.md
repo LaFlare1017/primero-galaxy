@@ -45,13 +45,11 @@ filter so they read cleanly on the dark surface.
 | `cardinal-health.png` | Cardinal Health | Wikimedia Commons: [File:Cardinal Health Logo.svg](https://commons.wikimedia.org/wiki/File:Cardinal_Health_Logo.svg) |
 | `cencora.png` | Cencora | Wikimedia Commons: [File:Cencora logo.png](https://commons.wikimedia.org/wiki/File:Cencora_logo.png) |
 | `centene.png` | Centene | Wikimedia Commons: [File:Centene Corporation Logo.svg](https://commons.wikimedia.org/wiki/File:Centene_Corporation_Logo.svg) |
-| `chevron.png` | Chevron | Wikimedia Commons: [File:Chevron Logo.svg](https://commons.wikimedia.org/wiki/File:Chevron_Logo.svg) |
 | `cigna.png` | The Cigna Group | Wikimedia Commons: [File:Cigna Logo.png](https://commons.wikimedia.org/wiki/File:Cigna_Logo.png) |
 | `costco.png` | Costco | Wikimedia Commons: [File:Costco Wholesale logo 2010-10-26.svg](https://commons.wikimedia.org/wiki/File:Costco_Wholesale_logo_2010-10-26.svg) |
 | `cvs-health.png` | CVS Health | Wikimedia Commons: [File:CVS Health logo.svg](https://commons.wikimedia.org/wiki/File:CVS_Health_logo.svg) |
 | `elevance-health.png` | Elevance Health | Wikimedia Commons: [File:Elevance Health logo.svg](https://commons.wikimedia.org/wiki/File:Elevance_Health_logo.svg) |
 | `exxonmobil.png` | ExxonMobil | Wikimedia Commons: [File:ExxonMobil Logo.svg](https://commons.wikimedia.org/wiki/File:ExxonMobil_Logo.svg) |
-| `general-motors.png` | General Motors | Wikimedia Commons: [File:General motors logo with wordmark.svg](https://commons.wikimedia.org/wiki/File:General_motors_logo_with_wordmark.svg) |
 | `jpmorgan-chase.png` | JPMorgan Chase | Wikimedia Commons: [File:JPMorgan Chase.svg](https://commons.wikimedia.org/wiki/File:JPMorgan_Chase.svg) |
 | `mckesson.png` | McKesson | Wikimedia Commons: [File:McKesson logo.svg](https://commons.wikimedia.org/wiki/File:McKesson_logo.svg) |
 | `meta.png` | Meta | Wikimedia Commons: [File:Meta-Logo.png](https://commons.wikimedia.org/wiki/File:Meta-Logo.png) |

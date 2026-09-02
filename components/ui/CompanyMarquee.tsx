@@ -1,5 +1,6 @@
 import { COMPANY_META, FORTUNE500_AI_COMPANIES } from '@/lib/fortune500-data';
 import { maturityColor } from '@/lib/constants';
+import { marqueeLogoDomains } from '@/lib/utils';
 import { MarqueeTile } from './MarqueeTile';
 
 /**
@@ -19,6 +20,25 @@ const TOP20 = [...FORTUNE500_AI_COMPANIES]
     domain: COMPANY_META[company.name]?.domain,
     color: maturityColor(company.m[0]),
   }));
+
+// Guard against the dataset's top-20 by revenue drifting from the bundled
+// white marks. A backfill that re-ranks the revenue figures can either drop a
+// brand out of the top-20 (leaving its PNG orphaned) or push one in without a
+// bundled mark (the tile quietly falls back to a monogram). Both are silent,
+// so warn here: this module is a server component prerendered at build, so
+// the warning shows in the dev console and the CI build log.
+const top20Domains = new Set(TOP20.map((c) => c.domain).filter(Boolean) as string[]);
+const marqueeDomains = new Set(marqueeLogoDomains());
+const missingMarks = TOP20.filter((c) => c.domain && !marqueeDomains.has(c.domain));
+const orphanedMarks = marqueeLogoDomains().filter((d) => !top20Domains.has(d));
+if (missingMarks.length || orphanedMarks.length) {
+  console.warn(
+    '[marquee] the top 20 by revenue drifted from the bundled white marks. ' +
+      'A backfill re-ranked the revenue figures: re-run the logo pipeline or ' +
+      'update MARQUEE_LOGOS in lib/utils.ts.',
+    { missing: missingMarks.map((c) => c.name), orphaned: orphanedMarks }
+  );
+}
 
 export function CompanyMarquee() {
   return (

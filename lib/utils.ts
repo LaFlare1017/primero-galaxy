@@ -120,11 +120,11 @@ const MARQUEE_LOGOS: Record<string, string> = {
   'nvidia.com': '/logos/marquee/nvidia.png',
   'toyota.com': '/logos/marquee/toyota.png',
   'meta.com': '/logos/marquee/meta.png',
-  'chevron.com': '/logos/marquee/chevron.png',
   'jpmorganchase.com': '/logos/marquee/jpmorgan-chase.png',
-  'gm.com': '/logos/marquee/general-motors.png',
-  // Backfill 2026 revenue figures put Elevance Health and Centene in the
-  // top 20 (displacing Chevron and General Motors); ship their marks too.
+  // The 2026 revenue backfill pushed Chevron and General Motors out of the
+  // top 20 (Elevance Health and Centene took their places); their marks were
+  // removed with them. The CompanyMarquee drift guard keeps this set in sync
+  // with the top-20 by revenue.
   'elevancehealth.com': '/logos/marquee/elevance-health.png',
   'centene.com': '/logos/marquee/centene.png',
 };
@@ -136,6 +136,15 @@ const MARQUEE_LOGOS: Record<string, string> = {
 export function marqueeLogoUrl(domain?: string | null): string | null {
   if (!domain) return null;
   return MARQUEE_LOGOS[domain] ?? null;
+}
+
+/**
+ * All domains that bundle a white marquee mark (the MARQUEE_LOGOS keys).
+ * Exposed so CompanyMarquee can warn when the top-20 by revenue drifts from
+ * the bundled set, so a backfill can't silently orphan or miss a logo.
+ */
+export function marqueeLogoDomains(): string[] {
+  return Object.keys(MARQUEE_LOGOS);
 }
 
 /** Initials monogram from a company name, the fallback when no logo loads. */
