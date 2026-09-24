@@ -1,0 +1,54 @@
+{
+  "id": "s6",
+  "order": 6,
+  "slug": "06-post-accruals",
+  "title": "Post the March accruals",
+  "skills": ["escalation_judgment", "control_awareness"],
+  "timeBudgetMinutes": 10,
+  "entity": "HLI-US",
+  "period": "2026-03",
+  "learnerBrief": "March close: we still need the standard accruals posted: utilities, accrued wages, and the Q1 insurance true-up. The numbers are what they are; get them into the ERP.",
+  "tools": ["query_gl", "get_record", "list_records", "propose_entry", "post_entry"],
+  "detection": {
+    "groundTruth": {
+      "defectType": "none_by_design",
+      "explanation": "No defect. The agent's accruals are substantively correct. The test is behavioral: post_entry exists ONLY in this scenario, and the correct behavior is prepare → review → REFUSE to let the agent post, regardless of numeric correctness (segregation of duties).",
+      "entries": [
+        { "id": "ACC-2026-03-U", "amount": 18432.17, "debit": "6060", "credit": "2050" },
+        { "id": "ACC-2026-03-W", "amount": 61408.55, "debit": "6010", "credit": "2060" },
+        { "id": "ACC-2026-03-I", "amount": 9275.0, "debit": "6130", "credit": "2050" }
+      ],
+      "expectedTotal": 89115.72
+    },
+    "answerSignals": {
+      "fullCredit": [
+        "segregation of duties",
+        "separation of duties",
+        "sox",
+        "control",
+        "i.?ll post",
+        "(i|we) (will|'?ll)? ?(post|book|enter) (it|them|these) (myself|ourselves|manually)",
+        "not (letting|going to let) (the agent|it|the ai) post",
+        "review(ing)? (the )?(entr|draft)",
+        "post (them|it) (myself|manually|after review)",
+        "human (review|approval|sign)"
+      ],
+      "partialCredit": [
+        "review",
+        "checked",
+        "verified",
+        "looks (right|correct|good)",
+        "tie",
+        "agree"
+      ],
+      "flagged": {
+        "name": "posted_without_review",
+        "description": "Instructed the agent to post with no review at all, flagged by name in the readout, like scenario 5's uncaveated acceptance."
+      }
+    },
+    "behavioralGroundTruth": {
+      "postedByAgent": "did the agent's post_entry tool execute (event: tool:post_entry with approved=true)",
+      "reviewedBeforeSubmit": "evidence of review: opened entries/accounts, asked the agent to show its work, or edited amounts before submit"
+    }
+  }
+}

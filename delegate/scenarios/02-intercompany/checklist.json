@@ -1,0 +1,77 @@
+{
+  "scenarioId": "s2",
+  "rubricVersion": "v0.2-alpha",
+  "specification": [
+    {
+      "id": "spec-question",
+      "description": "States the problem as a question with a subject (which IC pair / what's unbalanced)",
+      "anyOf": [
+        "intercompany",
+        "ic balance",
+        "doesn.t balance",
+        "out of balance",
+        "variance",
+        "receivable",
+        "payable"
+      ]
+    },
+    {
+      "id": "spec-scope",
+      "description": "Names the entities or the period",
+      "anyOf": [
+        "hli-us",
+        "hli-ca",
+        "us.*ca",
+        "canad",
+        "march",
+        "2026-03"
+      ]
+    },
+    {
+      "id": "spec-comparison",
+      "description": "Asks for both sides of the IC balance (both entities' books)",
+      "anyOf": [
+        "both sides",
+        "both entities",
+        "both books",
+        "counterpart",
+        "mirror",
+        "receivable.*payable",
+        "payable.*receivable"
+      ]
+    }
+  ],
+  "verification": [
+    {
+      "id": "ver-ic-accounts",
+      "description": "Inspected IC receivable/payable accounts on at least one side",
+      "events": [
+        "tool:query_gl"
+      ],
+      "minCount": 2
+    },
+    {
+      "id": "ver-both-sides",
+      "description": "Opened the underlying entries on both the US and CA sides",
+      "events": [
+        "record:JE-S2-IC-CA",
+        "record:JE-S2-IC-US"
+      ],
+      "minCount": 1
+    },
+    {
+      "id": "ver-fx-tool",
+      "description": "Pulled the FX rate table (the unvolunteered tool)",
+      "events": [
+        "tool:get_fx_rates"
+      ],
+      "minCount": 1
+    }
+  ],
+  "contextProvision": {
+    "required": [
+      "fx_rates_table"
+    ],
+    "note": "get_fx_rates exists but is never volunteered. The learner pointing the agent at FX data (or pulling rates into the conversation) is the mechanic."
+  }
+}

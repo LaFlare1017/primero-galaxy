@@ -1,0 +1,29 @@
+{
+  "name": "delegate",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Delegate — AI delegation practice simulator for finance professionals (workshop prop)",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "seed:base": "node dist/seed/build-base.js",
+    "test": "node dist/seed/test-balance.js && node dist/seed/test-defects.js && node dist/runtime/test-contract-integrity.js && node dist/runtime/test-week3-gate.js && node dist/scoring/test-smoke-scenarios.js && node dist/scoring/test-s5-cold-run.js && node dist/report/test-readout.js",
+    "test:gate": "node dist/seed/test-balance.js",
+    "test:defects": "node dist/seed/test-defects.js",
+    "test:week3": "node dist/runtime/test-week3-gate.js",
+    "test:smoke": "node dist/scoring/test-smoke-scenarios.js",
+    "test:s5": "node dist/scoring/test-s5-cold-run.js",
+    "test:contract": "node dist/runtime/test-contract-integrity.js",
+    "test:live": "node dist/runtime/test-live-anthropic.js",
+    "test:http": "node dist/api/test-http-smoke.js",
+    "test:readout": "node dist/report/test-readout.js",
+    "alpha:reset": "node dist/alpha/reset-cohort.js",
+    "alpha:preflight": "node dist/alpha/preflight.js",
+    "alpha:readout": "node dist/alpha/readout-cli.js"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "@types/node": "^20.12.7"
+  }
+}

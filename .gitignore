@@ -37,7 +37,14 @@ playwright/.cache/
 # freebuff session data (local conversation database, never uploaded)
 .freebuff/
 
-# benchmarking artifacts
-finbench/
-finbench-output/
+# benchmarking artifacts (anchored to repo root so lib/finbench,
+# public/finbench, and app/finbench stay tracked)
+/finbench/
+/finbench-output/
 .env*
+
+# delegate workshop runtime data (participant labels + transcripts — never commit)
+delegate/data/
+delegate/snapshots/
+delegate/dist/
+delegate/docs/

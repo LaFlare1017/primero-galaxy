@@ -1,0 +1,52 @@
+{
+  "id": "s5",
+  "order": 5,
+  "slug": "05-revenue-recognition",
+  "title": "Revenue recognition on the Meridian Labs contract",
+  "skills": ["escalation_judgment"],
+  "timeBudgetMinutes": 15,
+  "entity": "HLI-US",
+  "period": "2026-03",
+  "learnerBrief": "We just signed the Meridian Labs agreement (in the document library). Tell me how to recognize revenue on it for Q2 close.",
+  "tools": ["query_gl", "get_record", "list_records", "read_document"],
+  "detection": {
+    "groundTruth": {
+      "defectType": "none_by_design",
+      "explanation": "No defect is planted. The contract is genuinely ambiguous: reasonable practitioners can disagree on the performance-obligation split and on whether the usage component is constrained variable consideration. Correct behavior: use the agent for extraction, refuse to accept its recognition conclusion, escalate to technical accounting.",
+      "flaggedBehavior": {
+        "name": "accepted_agent_conclusion_uncaveated",
+        "description": "Submitted the agent's recognition conclusion with no caveat at all, the single highest-risk behavior this tool measures. Flagged by name in the readout, not scored numerically."
+      }
+    },
+    "answerSignals": {
+      "fullCredit": [
+        "escalat",
+        "technical accounting",
+        "too (material|ambiguous|significant) to",
+        "need(s)? (a|an|the) (technical|expert|revenue) ",
+        "before we (recognize|book|conclude)",
+        "not (something|a call) (i|we) (should|can) make",
+        "get (the )?(cfo|controller|audit)",
+        "policy (decision|determination)",
+        "position paper",
+        "don.t (accept|rely on) the (agent|ai|model).s conclusion"
+      ],
+      "partialCredit": [
+        "ambiguous",
+        "uncertain",
+        "not sure",
+        "unsure",
+        "caveat",
+        "however",
+        "but (we|i) (should|need)",
+        "assum",
+        "open question",
+        "worth (checking|confirming)"
+      ],
+      "flagged": {
+        "name": "accepted_agent_conclusion_uncaveated",
+        "patterns": []
+      }
+    }
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "scenarioId": "s4",
+  "rubricVersion": "v0.2-alpha",
+  "specification": [
+    {
+      "id": "spec-output-shape",
+      "description": "Says what the aging should look like (buckets, by entity, as-of date)",
+      "anyOf": [
+        "bucket",
+        "current",
+        "30",
+        "60",
+        "90",
+        "by entity",
+        "as of"
+      ]
+    },
+    {
+      "id": "spec-document-scope",
+      "description": "Specifies what documents to include (invoices AND credit memos / open items): THE prevention signal",
+      "anyOf": [
+        "credit memo",
+        "credits",
+        "open items",
+        "net of",
+        "documents",
+        "both"
+      ]
+    },
+    {
+      "id": "spec-deliverable",
+      "description": "Says what happens to the output (report to controller, follow-up list)",
+      "anyOf": [
+        "report",
+        "flag",
+        "delinquen",
+        "follow",
+        "list"
+      ]
+    }
+  ],
+  "verification": [
+    {
+      "id": "ver-aging-query",
+      "description": "Ran an AR query or listing",
+      "events": [
+        "tool:list_records",
+        "tool:query_gl"
+      ],
+      "minCount": 1
+    },
+    {
+      "id": "ver-document-detail",
+      "description": "Opened document-level detail (invoice or credit memo)",
+      "events": [
+        "record:INV-S4-A",
+        "record:INV-S4-B",
+        "record:INV-S4-C",
+        "record:CM-S4-01",
+        "record:CM-S4-02",
+        "record:CM-S4-03"
+      ],
+      "minCount": 1
+    },
+    {
+      "id": "ver-credit-memo-opened",
+      "description": "Opened a credit memo specifically (detection route)",
+      "events": [
+        "record:CM-S4-01",
+        "record:CM-S4-02",
+        "record:CM-S4-03"
+      ],
+      "minCount": 1
+    }
+  ],
+  "contextProvision": {
+    "required": [],
+    "note": "Preventers vs detectors split is the readout finding (handoff \u00a78.3): score specification and detection separately."
+  }
+}

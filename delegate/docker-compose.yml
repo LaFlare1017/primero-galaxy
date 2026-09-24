@@ -1,0 +1,64 @@
+# Delegate — local sandbox infrastructure (handoff §2, §3.4)
+# ERPNext v15 + Postgres for the session/event/score store.
+# The ERPNext DB is snapshotted after seeding and reset via scripts/reset.sh.
+#
+# Note: this file was authored before Docker was verified in the build
+# environment — the seed gate currently runs against an in-process ledger
+# (see README "Deviations"). Keep this as the target substrate.
+
+services:
+  erpnext-db:
+    image: postgres:16-alpine
+    container_name: erpnext-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: delegate_local
+      POSTGRES_DB: erpnext
+    ports:
+      - "5433:5432"
+    volumes:
+      - erpnext-db-data:/var/lib/postgresql/data
+      - ./snapshots:/snapshots:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d erpnext"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  erpnext:
+    image: frappe/erpnext:v15
+    container_name: erpnext
+    depends_on:
+      erpnext-db:
+        condition: service_healthy
+    environment:
+      DB_HOST: erpnext-db
+      DB_PORT: "5432"
+      DB_NAME: erpnext
+      DB_PASSWORD: delegate_local
+    ports:
+      - "8081:8080"
+    volumes:
+      - erpnext-sites:/home/frappe/frappe-bench/sites
+
+  delegate-db:
+    image: postgres:16-alpine
+    container_name: delegate-db
+    environment:
+      POSTGRES_USER: delegate
+      POSTGRES_PASSWORD: delegate_local
+      POSTGRES_DB: delegate
+    ports:
+      - "5434:5432"
+    volumes:
+      - delegate-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U delegate -d delegate"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  erpnext-db-data:
+  erpnext-sites:
+  delegate-db-data:

@@ -1,0 +1,53 @@
+{
+  "scenarioId": "s5",
+  "rubricVersion": "v0.2-alpha",
+  "specification": [
+    {
+      "id": "spec-contract",
+      "description": "Names the contract / document to work from",
+      "anyOf": [
+        "meridian",
+        "contract",
+        "agreement",
+        "document"
+      ]
+    },
+    {
+      "id": "spec-question",
+      "description": "States the accounting question (how to recognize revenue)",
+      "anyOf": [
+        "revenue",
+        "recogni",
+        " ASC 606",
+        "po",
+        "performance obligation",
+        "q2"
+      ]
+    }
+  ],
+  "verification": [
+    {
+      "id": "ver-contract-read",
+      "description": "Had the agent extract contract terms (read_document or summary in chat)",
+      "events": [
+        "tool:read_document"
+      ],
+      "minCount": 1,
+      "actorScope": "any",
+      "note": "Agent-mediated by design: the participant induces the agent's tool call, so the agent's event IS the participant's credit."
+    },
+    {
+      "id": "ver-terms-examined",
+      "description": "Interrogated specific terms (PO split, usage component, floor, repricing)",
+      "events": [],
+      "minCount": 0,
+      "note": "Scored from chat content by the model-graded scorer, not events."
+    }
+  ],
+  "contextProvision": {
+    "required": [
+      "contract_document"
+    ],
+    "note": "The contract is only reachable via read_document; providing it to the agent (or reading it) is required context provision."
+  }
+}

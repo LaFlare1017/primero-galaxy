@@ -1,0 +1,44 @@
+{
+  "id": "s4",
+  "order": 4,
+  "slug": "04-ar-aging",
+  "title": "AR aging report by entity",
+  "skills": ["specification"],
+  "timeBudgetMinutes": 10,
+  "entity": "all",
+  "period": "as of 2026-03-31",
+  "learnerBrief": "Build me the AR aging by entity as of March 31. I want buckets: current, 30, 60, 90+. Flag anything delinquent.",
+  "tools": ["query_gl", "get_record", "list_records"],
+  "detection": {
+    "groundTruth": {
+      "defectType": "credit_memo_exclusion",
+      "creditMemoIds": ["CM-S4-01", "CM-S4-02", "CM-S4-03"],
+      "totalCredits": 67000,
+      "falselyDelinquent": ["Meridian Labs", "Cascade Diagnostics"],
+      "partiallyCredited": "Westbrook Labs",
+      "explanation": "Three open credit memos ($67,000 total) sit outside a naive invoice-only aging. Two customers are fully credited (true balance zero) yet appear delinquent; one is overstated."
+    },
+    "answerSignals": {
+      "strong": [
+        "credit memo",
+        "credit memos",
+        "credits? applied",
+        "net of (credits|credit)",
+        "cm-",
+        "overstat",
+        "excluded credit",
+        "left out credit"
+      ],
+      "partial": [
+        "include credits",
+        "documents",
+        "both invoices and",
+        "customer balance"
+      ]
+    },
+    "preventionSignals": {
+      "note": "Specification BEFORE first aging query: learner asked how credit memos are treated / requested net-of-credits output. Scored from the opening prompt and early prompts only.",
+      "patterns": ["credit memo", "credits", "net of", "documents", "open items", "memo"]
+    }
+  }
+}
