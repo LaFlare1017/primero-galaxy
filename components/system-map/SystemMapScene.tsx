@@ -5,6 +5,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { EDGES, LAYER_BY_ID, NODE_BY_ID, type MapEdge, type MapNode } from './map-data';
+import { usePrefersReducedMotion } from '@/components/ui/useReducedMotion';
 
 // ── Grid layout ──────────────────────────────────────────────────────────────
 const CELL = 11; // world units between grid cells
@@ -166,8 +167,15 @@ function Payload({ edge, index }: { edge: MapEdge; index: number }) {
   const ref = useRef<THREE.Mesh>(null);
   const speed = 0.16 + (index % 3) * 0.03;
   const offset = (index % 6) / 6;
+  const reducedMotion = usePrefersReducedMotion();
 
   useFrame((state) => {
+    // Reduced motion: park the payload dot on its arc instead of tracing —
+    // the dot reads as a node marker and the edge stays visible.
+    if (reducedMotion) {
+      if (ref.current) ref.current.position.copy(curve.getPoint(offset));
+      return;
+    }
     const t = (state.clock.elapsedTime * speed + offset) % 1;
     const p = curve.getPoint(t);
     if (ref.current) ref.current.position.copy(p);

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { GeistSans } from 'geist/font/sans';
+import { MotionProvider } from '@/components/ui/MotionProvider';
 import './globals.css';
 
 // Absolute base for OG/twitter image URLs and the canonical link. Set
@@ -69,7 +70,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={GeistSans.variable}>
-      <body className="bg-void text-star-bright antialiased">{children}</body>
+      <body className="bg-void text-star-bright antialiased">
+        {/* reducedMotion="user": every framer-motion component respects the OS
+            prefers-reduced-motion setting (see components/ui/MotionProvider). */}
+        <MotionProvider>{children}</MotionProvider>
+      </body>
     </html>
   );
 }

@@ -14,9 +14,32 @@ export const dynamic = "force-dynamic";
  * and detection reveals only at submission; scores are group-debrief
  * material, revealed together.
  */
+
+/**
+ * Agent-working derivation (event-sourced, nothing inferred): a run's latest
+ * agent-turn event decides. prompt_sent with no later agent_response → the
+ * agent owes a turn; a tool_call within the last window → mid-turn. The
+ * budget guard caps a turn at 120s, so an older tool_call is a stalled turn,
+ * not activity. agent_response as the latest → turn complete, idle.
+ */
+const AGENT_STALE_AFTER_MS = 130_000;
+
+function agentWorkingForRun(events: Array<{ runId: string; ts: string; type: string }>, runId: string): boolean {
+  let last: { ts: string; type: string } | undefined;
+  for (const e of events) {
+    if (e.runId !== runId) continue;
+    if (e.type === "prompt_sent" || e.type === "agent_response" || e.type === "tool_call") {
+      if (!last || e.ts > last.ts) last = e;
+    }
+  }
+  if (!last) return false;
+  if (last.type === "prompt_sent") return true;
+  if (last.type === "tool_call") return Date.now() - new Date(last.ts).getTime() < AGENT_STALE_AFTER_MS;
+  return false;
+}
 export async function GET() {
   const eventLog = new EventLog();
-  const { sessions, runs } = eventLog.all();
+  const { sessions, runs, events } = eventLog.all();
   const scoresPath = join(dataDir(), "scores.json");
   const scores: Array<{ runId: string; dimension: string; value: number; max: number; flaggedBehavior?: string }> =
     existsSync(scoresPath) ? JSON.parse(readFileSync(scoresPath, "utf8")) : [];
@@ -35,6 +58,7 @@ export async function GET() {
       submittedAt: current?.submittedAt,
       elapsedSeconds: Math.round((Date.now() - new Date(session.startedAt).getTime()) / 1000),
       status: current?.submittedAt ? "submitted" : "working",
+      agentWorking: current ? agentWorkingForRun(events, current.id) : false,
       detected: interception ? interception.value >= 1 : undefined,
       flaggedBehavior: flagged,
     };

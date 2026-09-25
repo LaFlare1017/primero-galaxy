@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 
+import { AgentStatusOrb } from "@/components/ui/AgentEffects";
+
 /**
  * Facilitator view (handoff §7): kept open on the facilitator's screen.
  * Live grid of participants — current scenario, elapsed time, status, and
@@ -21,6 +23,7 @@ interface Row {
   submittedAt?: string;
   elapsedSeconds: number;
   status: string;
+  agentWorking?: boolean;
   detected?: boolean;
   flaggedBehavior?: string;
 }
@@ -96,7 +99,7 @@ export default function FacilitatorPage() {
         </h1>
         <span className="text-xs text-gray-500 flex items-center gap-1.5">
           <Icon name="users" size={12} />
-          live · refreshed {generatedAt ? new Date(generatedAt).toLocaleTimeString() : "not yet"} · individual scores reveal at the group debrief
+          agent activity · refreshed {generatedAt ? new Date(generatedAt).toLocaleTimeString() : "not yet"} · individual scores reveal at the group debrief
         </span>
       </div>
       {rows.length === 0 ? (
@@ -125,7 +128,10 @@ export default function FacilitatorPage() {
                   {Math.floor(r.elapsedSeconds / 60)}:{String(r.elapsedSeconds % 60).padStart(2, "0")}
                 </td>
                 <td className="py-2 pr-4">
-                  <span className={r.status === "submitted" ? "text-black font-medium" : "text-gray-500"}>{r.status}</span>
+                  <span className="inline-flex items-center gap-1.5">
+                    {r.agentWorking ? <AgentStatusOrb active /> : null}
+                    <span className={r.status === "submitted" ? "text-black font-medium" : "text-gray-500"}>{r.status}</span>
+                  </span>
                 </td>
                 <td className="py-2 pr-4">
                   {r.detected === undefined ? "n/a" : r.detected ? "caught it" : "missed"}

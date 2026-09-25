@@ -1,6 +1,7 @@
 'use client';
 import { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
+import { usePrefersReducedMotion } from '@/components/ui/useReducedMotion';
 import * as THREE from 'three';
 import { Company, MaturityDimension } from '@/types';
 import { maturityColor } from '@/lib/constants';
@@ -43,9 +44,15 @@ export function PlanetSystem({ company }: { company: Company }) {
   const coreColor = useMemo(() => new THREE.Color(maturityColor(company.maturity.overall)).multiplyScalar(1.9), [company]);
 
   const coreScale = 6 + (company.maturity.overall / 100) * 5; // 6 - 11
+  const reducedMotion = usePrefersReducedMotion();
 
+  // Core/wireframe/ring spin and moon orbits are idle decoration — frozen
+  // under prefers-reduced-motion. The scene stays fully readable as a
+  // static diagram (rings, moons and colors carry the information).
   useFrame((state, delta) => {
     const t = state.clock.elapsedTime;
+
+    if (reducedMotion) return;
 
     if (coreRef.current) {
       coreRef.current.rotation.y += delta * 0.12;
@@ -134,10 +141,14 @@ function OrbitalRing({
       }),
     [color]
   );
+  const reducedMotion = usePrefersReducedMotion();
 
   useFrame((state) => {
     const t = state.clock.elapsedTime;
-    material.opacity = 0.45 + 0.18 * Math.sin(t * 1.2 + pulsePhase);
+    // Ring pulse is idle decoration; reduced motion keeps the base opacity.
+    material.opacity = reducedMotion
+      ? 0.45
+      : 0.45 + 0.18 * Math.sin(t * 1.2 + pulsePhase);
   });
 
   return (

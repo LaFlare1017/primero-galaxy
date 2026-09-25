@@ -1,8 +1,9 @@
 "use client";
 
 import { BorderBeam } from "border-beam";
-import { useEffect, useState } from "react";
 import { ThinkingOrb } from "thinking-orbs";
+
+import { usePrefersReducedMotion } from "@/components/ui/useReducedMotion";
 
 /**
  * Delegate chat effect primitives (Libraries.dev), kept behind one client
@@ -10,18 +11,6 @@ import { ThinkingOrb } from "thinking-orbs";
  * monochrome; color is reserved for meaning. Hence colorVariant="mono" on
  * the beam and theme="light" on the orb.
  */
-
-function usePrefersReducedMotion() {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(mq.matches);
-    const on = (e: MediaQueryListEvent) => setReduced(e.matches);
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
-  }, []);
-  return reduced;
-}
 
 /** Travelling beam around the chat composer while the agent works. */
 export function ComposerBeam({

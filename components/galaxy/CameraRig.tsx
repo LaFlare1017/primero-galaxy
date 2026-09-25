@@ -5,6 +5,7 @@ import { CameraControls } from '@react-three/drei';
 import type CameraControlsImpl from 'camera-controls';
 import * as THREE from 'three';
 import { useGalaxyStore } from '@/store/galaxyStore';
+import { usePrefersReducedMotion } from '@/components/ui/useReducedMotion';
 
 interface CameraRigProps {
   groupRef: React.RefObject<THREE.Group>;
@@ -24,6 +25,10 @@ export function CameraRig({ groupRef }: CameraRigProps) {
   const isTransitioning = useRef(false);
   const appliedSelection = useRef<string | null>(null);
   const focusWorld = useRef(new THREE.Vector3());
+  // Auto-orbit is the only idle motion here; fly-to/reset transitions are
+  // functional (they move the camera in response to the user's selection),
+  // so they stay enabled under reduced motion.
+  const reducedMotion = usePrefersReducedMotion();
 
   const selectedId = useGalaxyStore((s) => s.selectedStar?.id);
 
@@ -93,8 +98,9 @@ export function CameraRig({ groupRef }: CameraRigProps) {
     const state = useGalaxyStore.getState();
 
     // Auto-orbit when idle in galaxy mode (never fights the user's hand or
-    // in-flight transitions)
+    // in-flight transitions). Skipped under prefers-reduced-motion.
     if (
+      !reducedMotion &&
       state.mode === 'galaxy' &&
       !isTransitioning.current &&
       performance.now() - lastInteraction.current > 2500

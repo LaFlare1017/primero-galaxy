@@ -80,13 +80,23 @@ types/          Company / Trajectory / Maturity data model
 e2e/            Playwright specs
 ```
 
+## Reduced motion
+
+The app honors the OS-level `prefers-reduced-motion` setting on three layers:
+
+- **CSS**: a global kill switch in `globals.css` collapses keyframe and transition durations to ~0 (legend bubbles, trajectory breathe, scroll reveals, hover lifts).
+- **Framer motion**: `MotionProvider` (mounted in `app/layout.tsx`) wraps the tree in `<MotionConfig reducedMotion="user">`, so every `motion.*` element skips transform animation while opacity fades remain.
+- **WebGL / canvas**: react-three-fiber render loops gate themselves through the shared `usePrefersReducedMotion` hook. Idle decoration (galaxy rotation drift, star breathing and flicker, planet spin and moon orbits, ring pulses, auto-orbit, trajectory travel loop, system-map payload dots) is frozen; functional motion (star appear stagger, hover and selection feedback, camera fly-to on selection, zoom-driven fades) is preserved so the scenes stay fully operable as near-static diagrams. The Libraries.dev effects in Delegate (composer beam, thinking orb) unmount instead of animating; meaning is carried by text, borders, and disabled states.
+
+The pass is proven end to end by `e2e/reduced-motion.spec.ts`, which emulates the setting in Playwright: the Delegate working state keeps its live-region status and disabled composer with no decorative canvas mounted, and the Galaxy starfield quaternion is sampled twice and shown frozen while the scene keeps rendering.
+
 ## Roadmap
 
 The following handoff-spec features are the natural next milestones:
 
 - **Compare companies**: side-by-side maturity comparison.
 - **Contact Primero**: the CTA in planet view links to the landing page's `#contact` section, which hosts a gated contact form (the address is only assembled on an actual submission, never rendered on the page).
-- **Ambient generative audio** with a mute control, plus a full `prefers-reduced-motion` pass.
+- **Ambient generative audio** with a mute control.
 - **Mobile strategy**: a light 3D mode or 2D fallback for touch devices.
 
 ## License
