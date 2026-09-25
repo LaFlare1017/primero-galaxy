@@ -20,20 +20,23 @@ function Command({ className, ...props }: React.ComponentPropsWithoutRef<typeof 
   );
 }
 
-function CommandInput({ className, ...props }: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>) {
-  return (
-    <div className="flex items-center border-b border-border px-3">
-      <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-      <CommandPrimitive.Input
-        className={cn(
-          'flex h-9 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',
-          className
-        )}
-        {...props}
-      />
-    </div>
-  );
-}
+const CommandInput = React.forwardRef<
+  React.ElementRef<typeof CommandPrimitive.Input>,
+  React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
+>(({ className, ...props }, ref) => (
+  <div className="flex items-center border-b border-border px-3">
+    <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+    <CommandPrimitive.Input
+      ref={ref}
+      className={cn(
+        'flex h-9 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50',
+        className
+      )}
+      {...props}
+    />
+  </div>
+));
+CommandInput.displayName = 'CommandInput';
 
 function CommandList({ className, ...props }: React.ComponentPropsWithoutRef<typeof CommandPrimitive.List>) {
   return (
@@ -65,16 +68,39 @@ function CommandGroup({ className, ...props }: React.ComponentPropsWithoutRef<ty
   );
 }
 
-function CommandItem({ className, ...props }: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Item>) {
+const CommandItem = React.forwardRef<
+  React.ElementRef<typeof CommandPrimitive.Item>,
+  React.ComponentPropsWithoutRef<typeof CommandPrimitive.Item>
+>(({ className, ...props }, ref) => (
+  <CommandPrimitive.Item
+    ref={ref}
+    className={cn(
+      'relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50',
+      className
+    )}
+    {...props}
+  />
+));
+CommandItem.displayName = 'CommandItem';
+
+function CommandSeparator({
+  className,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof CommandPrimitive.Separator>) {
   return (
-    <CommandPrimitive.Item
-      className={cn(
-        'relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50',
-        className
-      )}
+    <CommandPrimitive.Separator
+      className={cn('-mx-1 h-px bg-border', className)}
       {...props}
     />
   );
 }
 
-export { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList };
+export {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+};
