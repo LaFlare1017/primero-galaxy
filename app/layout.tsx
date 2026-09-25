@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { GeistSans } from 'geist/font/sans';
+import { NuqsAdapter } from 'nuqs/adapters/next/app';
+import { CommandPalette } from '@/components/ui/CommandPalette';
 import { MotionProvider } from '@/components/ui/MotionProvider';
 import './globals.css';
 
@@ -73,7 +75,12 @@ export default function RootLayout({
       <body className="bg-void text-star-bright antialiased">
         {/* reducedMotion="user": every framer-motion component respects the OS
             prefers-reduced-motion setting (see components/ui/MotionProvider). */}
-        <MotionProvider>{children}</MotionProvider>
+        {/* NuqsAdapter: URL query state (FinBench run filters) survives SSR. */}
+        <MotionProvider>
+          <NuqsAdapter>{children}</NuqsAdapter>
+        </MotionProvider>
+        {/* ⌘K palette: mounted once, global shortcut, all product surfaces. */}
+        <CommandPalette />
       </body>
     </html>
   );

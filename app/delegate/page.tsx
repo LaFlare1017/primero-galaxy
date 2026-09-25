@@ -116,6 +116,24 @@ export default function DelegatePage() {
   const [glEntity, setGlEntity] = useState("HLI-US");
   const [glGroup, setGlGroup] = useState<"account" | "">("account");
 
+  // ── Deep link: ?scenario=s3 preselects a scenario (command palette). The
+  // custom event covers same-page selection from the palette, where the page
+  // is already mounted and a query-only push would not remount it. ──
+  useEffect(() => {
+    const requested = new URLSearchParams(window.location.search).get("scenario");
+    if (requested && SCENARIOS.some((s) => s.id === requested)) {
+      setScenarioId(requested as ScenarioId);
+    }
+    const onSelect = (event: Event) => {
+      const detail = (event as CustomEvent<string>).detail;
+      if (detail && SCENARIOS.some((s) => s.id === detail)) {
+        setScenarioId(detail as ScenarioId);
+      }
+    };
+    window.addEventListener("delegate:select-scenario", onSelect);
+    return () => window.removeEventListener("delegate:select-scenario", onSelect);
+  }, []);
+
   // ── Answer panel ──
   const [conclusion, setConclusion] = useState("");
   const [checked, setChecked] = useState("");
