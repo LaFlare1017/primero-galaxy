@@ -304,12 +304,69 @@ body::before {
   border-radius: 999px;
 }
 
+/* Delegate workshop pages mount in light mode (white surfaces, black text);
+   this override keeps the scrollbars from carrying the site's dark chrome
+   into them. The class is added/removed by the page components. */
+.delegate-light {
+  scrollbar-color: #d4d4d8 transparent;
+}
+.delegate-light *::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+}
+
 /* UI glass surfaces */
 .glass {
   background: rgba(3, 3, 8, 0.9);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--border-subtle);
+}
+
+/* shadcn-compatible token layer (Circle extraction). Standard shadcn names
+   backed by --sc-* CSS vars: dark values at :root for the site chrome
+   (FinBench tables/popovers), light values under .delegate-light so Delegate
+   pages inherit them automatically. Radius is mode-specific too. */
+:root {
+  --sc-radius: 0.5rem;
+  --sc-background: #030308;
+  --sc-foreground: #ffffff;
+  --sc-card: #0a0a1a;
+  --sc-card-foreground: #ffffff;
+  --sc-popover: #0a0a1a;
+  --sc-popover-foreground: #ffffff;
+  --sc-primary: #ffffff;
+  --sc-primary-foreground: #030308;
+  --sc-secondary: #1a1a3a;
+  --sc-secondary-foreground: #ffffff;
+  --sc-muted: #14142b;
+  --sc-muted-foreground: #8e8eae;
+  --sc-accent: #1a1a3a;
+  --sc-accent-foreground: #ffffff;
+  --sc-destructive: #ff453a;
+  --sc-border: #26264a;
+  --sc-input: #26264a;
+  --sc-ring: #7b61ff;
+}
+.delegate-light {
+  --sc-radius: 0.375rem;
+  --sc-background: #ffffff;
+  --sc-foreground: #0a0a0a;
+  --sc-card: #ffffff;
+  --sc-card-foreground: #0a0a0a;
+  --sc-popover: #ffffff;
+  --sc-popover-foreground: #0a0a0a;
+  --sc-primary: #0a0a0a;
+  --sc-primary-foreground: #ffffff;
+  --sc-secondary: #f4f4f5;
+  --sc-secondary-foreground: #0a0a0a;
+  --sc-muted: #f4f4f5;
+  --sc-muted-foreground: #71717a;
+  --sc-accent: #f4f4f5;
+  --sc-accent-foreground: #0a0a0a;
+  --sc-destructive: #dc2626;
+  --sc-border: #e4e4e7;
+  --sc-input: #e4e4e7;
+  --sc-ring: #0a0a0a;
 }
 
 /* Reduce motion */

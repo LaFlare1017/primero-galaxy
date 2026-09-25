@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AgentStatusOrb, ComposerBeam, DecisionBeam } from "@/components/ui/AgentEffects";
+import { MessageBody } from "@/components/ui/MessageBody";
 
 /**
  * Delegate — participant view (handoff §7).
@@ -400,13 +401,19 @@ export default function DelegatePage() {
           </div>
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
             {messages.map((m, i) => (
-              <div key={i} className={m.role === "user" ? "flex justify-end" : ""}>
+              <div
+                key={i}
+                data-chat-message
+                className={m.role === "user" ? "flex justify-end" : ""}
+              >
                 <div
                   className={`max-w-[92%] rounded-lg px-3 py-2 text-sm ${
                     m.role === "user" ? "bg-black text-white" : "bg-white border border-gray-200 text-black"
                   }`}
                 >
-                  <p className="whitespace-pre-wrap leading-relaxed">{m.content}</p>
+                  {/* Circle-extracted structured renderer: bullets, numbered
+                      lists, inline code/bold instead of a pre-wrap blob. */}
+                  <MessageBody content={m.content} />
                   {m.toolCalls && m.toolCalls.length > 0 && (
                     <details className="mt-2 group">
                       <summary className={`cursor-pointer text-xs ${m.role === "user" ? "text-gray-300" : "text-gray-500 hover:text-black"}`}>

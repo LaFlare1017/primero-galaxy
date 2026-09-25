@@ -94,7 +94,7 @@ test.describe('Delegate agent effects', () => {
     await expect(page.locator(STATUS)).toHaveCount(0, { timeout: 15_000 });
     await expect(page.locator('canvas')).toHaveCount(0);
     await expect(page.locator(COMPOSER)).toBeEnabled();
-    await expect(page.locator('.whitespace-pre-wrap')).toHaveCount(2); // user msg + reply
+    await expect(page.locator('[data-chat-message]')).toHaveCount(2); // user msg + reply
     await expect.poll(() => beamActivity(beam)).toBe(0); // beam idle again
   });
 

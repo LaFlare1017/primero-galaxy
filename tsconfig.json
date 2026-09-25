@@ -36,6 +36,10 @@
     ".next-e2e/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "circle-master",
+    "design-variations",
+    "enterprise-ai-galaxy",
+    "galaxy"
   ]
 }

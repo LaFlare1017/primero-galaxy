@@ -1,0 +1,372 @@
+{
+  "findings": [
+    {
+      "detail": {
+        "groundedness_score": 0.0,
+        "runs_evaluated": 11
+      },
+      "kind": "groundedness_gap",
+      "model_version": "mock-0.1",
+      "statement": "mock-0.1 did not ground every expected fact on govcon-provisional-rates-002 in this run.",
+      "task_ids": [
+        "govcon-provisional-rates-002"
+      ]
+    },
+    {
+      "detail": {
+        "runs_evaluated": 11
+      },
+      "kind": "numeric_miss",
+      "model_version": "mock-0.1",
+      "statement": "mock-0.1 missed the computed answer on govcon-provisional-rates-002 in this run.",
+      "task_ids": [
+        "govcon-provisional-rates-002"
+      ]
+    }
+  ],
+  "month": "2026-09",
+  "runs": [
+    {
+      "citation_validity": 1.0,
+      "groundedness_score": 1.0,
+      "id": "e74a2675-64ee-4fd9-b319-0bde257a6d22",
+      "judge_rationale": "Deterministic baseline: every expected numeric field, expected value, and required citation is checked explicitly.",
+      "latency_ms": 0,
+      "model_provider": "mock",
+      "model_version": "mock-0.1",
+      "numeric_accuracy": null,
+      "response": "{'contract_type': 'firm_fixed_price', 'implication': 'contractor_bears_cost_risk_but_can_retain_cost_efficiency', 'required_citations': ['FAR 16.201'], 'computed_by': 'LG, independently authored and reviewed'}",
+      "run_at": "2026-09-13T06:18:13.439150+00:00",
+      "structure_score": 1.0,
+      "task_id": "govcon-contract-type-001"
+    },
+    {
+      "citation_validity": 1.0,
+      "groundedness_score": 1.0,
+      "id": "7d42618c-80de-4853-9eeb-2ef5e5837c34",
+      "judge_rationale": "Deterministic baseline: every expected numeric field, expected value, and required citation is checked explicitly.",
+      "latency_ms": 0,
+      "model_provider": "mock",
+      "model_version": "mock-0.1",
+      "numeric_accuracy": null,
+      "response": "{'classification': 'direct', 'rationale': 'can_be_identified_specifically_with_a_final_cost_object', 'required_citations': ['FAR 31.202'], 'computed_by': 'LG, independently authored and reviewed'}",
+      "run_at": "2026-09-13T06:18:13.442051+00:00",
+      "structure_score": 1.0,
+      "task_id": "govcon-direct-indirect-001"
+    },
+    {
+      "citation_validity": 1.0,
+      "groundedness_score": 1.0,
+      "id": "6d2a5d1c-d899-4d83-9c98-ae9533e35023",
+      "judge_rationale": "Deterministic baseline: every expected numeric field, expected value, and required citation is checked explicitly.",
+      "latency_ms": 0,
+      "model_provider": "mock",
+      "model_version": "mock-0.1",
+      "numeric_accuracy": null,
+      "response": "{'classification': 'indirect', 'rationale': 'supports_multiple_final_cost_objects_and_is_allocated', 'required_citations': ['FAR 31.203'], 'computed_by': 'LG, independently authored and reviewed'}",
+      "run_at": "2026-09-13T06:18:13.450683+00:00",
+      "structure_score": 1.0,
+      "task_id": "govcon-direct-indirect-002"
+    },
+    {
+      "citation_validity": 1.0,
+      "groundedness_score": 1.0,
+      "id": "dc8ace61-4419-436a-a375-b96edf19a10e",
+      "judge_rationale": "Deterministic baseline: every expected numeric field, expected value, and required citation is checked explicitly.",
+      "latency_ms": 0,
+      "model_provider": "mock",
+      "model_version": "mock-0.1",
+      "numeric_accuracy": true,
+      "response": "{'funding_remaining': 50000.0, 'months_remaining': 2.7, 'total_remaining_contract_period': 6.0, 'risk_level': 'high', 'required_citations': ['FAR 52.232-22'], 'computed_by': 'LG, independently authored'}",
+      "run_at": "2026-09-13T06:18:13.459275+00:00",
+      "structure_score": 1.0,
+      "task_id": "govcon-funding-ceiling-001"
+    },
+    {
+      "citation_validity": 1.0,
+      "groundedness_score": 1.0,
+      "id": "0f0fa8f6-d2dd-434b-bdf7-1a7136dfea11",
+      "judge_rationale": "Deterministic baseline: every expected numeric field, expected value, and required citation is checked explicitly.",
+      "latency_ms": 0,
+      "model_provider": "mock",
+      "model_version": "mock-0.1",
+      "numeric_accuracy": true,
+      "response": "{'time_to_ceiling_months': 1.5, 'excess_liability_exposure': 50000.0, 'invoiced_but_unbilled': 300000.0, 'required_citations': ['FAR 52.232-7'], 'computed_by': 'LG, independently authored'}",
+      "run_at": "2026-09-13T06:18:13.460292+00:00",
+      "structure_score": 1.0,
+      "task_id": "govcon-funding-ceiling-002"
+    },
+    {
+      "citation_validity": 1.0,
+      "groundedness_score": 1.0,
+      "id": "9be0cf79-5859-47db-a433-5d03b7520a18",
+      "judge_rationale": "Deterministic baseline: every expected numeric field, expected value, and required citation is checked explicitly.",
+      "latency_ms": 0,
+      "model_provider": "mock",
+      "model_version": "mock-0.1",
+      "numeric_accuracy": null,
+      "response": "{'missing_elements': ['Direct cost allocation detail by contract and cost objective', 'Indirect rate calculation schedules by pool and base', 'Direct-to-indirect cost classification adjustments', 'Ending inventory and work-in-progress balances', 'Simplified acquisition threshold justification if applicable'], 'required_citations': ['FAR 52.215-2', 'FAR 31.202'], 'computed_by': 'LG, independently authored'}",
+      "run_at": "2026-09-13T06:18:13.461694+00:00",
+      "structure_score": 1.0,
+      "task_id": "govcon-ice-schedule-001"
+    },
+    {
+      "citation_validity": 1.0,
+      "groundedness_score": 1.0,
+      "id": "6a44aa20-25c4-4232-bfc0-5ec3df55e4fd",
+      "judge_rationale": "Deterministic baseline: every expected numeric field, expected value, and required citation is checked explicitly.",
+      "latency_ms": 0,
+      "model_provider": "mock",
+      "model_version": "mock-0.1",
+      "numeric_accuracy": true,
+      "response": "{'fringe_rate': 22.5, 'overhead_rate': 15.0, 'g_and_a_rate': 8.0, 'total_indirect_rate': 45.5, 'contract_a_burdened_rate': 204.5, 'contract_b_burdened_rate': 204.5, 'contract_c_burdened_rate': 204.5, 'required_citations': ['FAR 31.203'], 'computed_by': 'LG, independently authored'}",
+      "run_at": "2026-09-13T06:18:13.462533+00:00",
+      "structure_score": 1.0,
+      "task_id": "govcon-ice-schedule-002"
+    },
+    {
+      "citation_validity": 1.0,
+      "groundedness_score": 1.0,
+      "id": "90984dc1-a8d4-43c6-8537-055e8990cbb7",
+      "judge_rationale": "Deterministic baseline: every expected numeric field, expected value, and required citation is checked explicitly.",
+      "latency_ms": 0,
+      "model_provider": "mock",
+      "model_version": "mock-0.1",
+      "numeric_accuracy": true,
+      "response": "{'overhead_rate': '0.30', 'overhead_burden': '22500.00', 'total_cost': '97500.00', 'required_citations': ['FAR 31.203'], 'computed_by': 'deterministic pool/base calculation, independently verified'}",
+      "run_at": "2026-09-13T06:18:13.463364+00:00",
+      "structure_score": 1.0,
+      "task_id": "govcon-indirect-rate-001"
+    },
+    {
+      "citation_validity": 1.0,
+      "groundedness_score": 1.0,
+      "id": "6d4b978c-9ed5-4523-b55d-94472d39b675",
+      "judge_rationale": "Deterministic baseline: every expected numeric field, expected value, and required citation is checked explicitly.",
+      "latency_ms": 0,
+      "model_provider": "mock",
+      "model_version": "mock-0.1",
+      "numeric_accuracy": true,
+      "response": "{'overhead_burden_provisional': 3578400.0, 'overhead_burden_actual': 3292800.0, 'overhead_overstated_by': 285600.0, 'g_and_a_overstated_by': 136000.0, 'total_overstated': 421600.0, 'required_citations': ['FAR 42.708'], 'computed_by': 'LG, independently authored'}",
+      "run_at": "2026-09-13T06:18:13.464336+00:00",
+      "structure_score": 1.0,
+      "task_id": "govcon-provisional-rates-001"
+    },
+    {
+      "citation_validity": 1.0,
+      "groundedness_score": 0.0,
+      "id": "beeaebe7-80af-464b-88b9-54720fb3fa2b",
+      "judge_rationale": "Deterministic baseline: every expected numeric field, expected value, and required citation is checked explicitly.",
+      "latency_ms": 0,
+      "model_provider": "mock",
+      "model_version": "mock-0.1",
+      "numeric_accuracy": false,
+      "response": "{'provisional_overhead': 4926000.0, 'actual_overhead': 4788000.0, 'trueup_amount': -138000.0, 'clin_0001_adjustment': -55200.0, 'clin_0002_adjustment': -41400.0, 'clin_0003_adjustment': -27600.0, 'clin_0004_adjustment': -13800.0, 'required_citations': ['FAR 42.708'], 'computed_by': 'LG, independently authored'}",
+      "run_at": "2026-09-13T06:18:13.465170+00:00",
+      "structure_score": 1.0,
+      "task_id": "govcon-provisional-rates-002"
+    },
+    {
+      "citation_validity": 1.0,
+      "groundedness_score": 1.0,
+      "id": "2ad62379-2a3f-4d0f-9ef1-f1597d295d86",
+      "judge_rationale": "Deterministic baseline: every expected numeric field, expected value, and required citation is checked explicitly.",
+      "latency_ms": 0,
+      "model_provider": "mock",
+      "model_version": "mock-0.1",
+      "numeric_accuracy": true,
+      "response": "{'unallowable_amount': '4000.00', 'excluded_category': 'entertainment', 'required_citations': ['FAR 31.205-14'], 'computed_by': 'deterministic classification, independently verified'}",
+      "run_at": "2026-09-13T06:18:13.466262+00:00",
+      "structure_score": 1.0,
+      "task_id": "govcon-unallowable-001"
+    }
+  ],
+  "scorecard": {
+    "categories": {
+      "govcon-contract-type": {
+        "citation_validity": 1.0,
+        "groundedness": 1.0,
+        "numeric_accuracy": null,
+        "structure": 1.0,
+        "tasks": 1
+      },
+      "govcon-direct-indirect": {
+        "citation_validity": 1.0,
+        "groundedness": 1.0,
+        "numeric_accuracy": null,
+        "structure": 1.0,
+        "tasks": 2
+      },
+      "govcon-funding-ceiling": {
+        "citation_validity": 1.0,
+        "groundedness": 1.0,
+        "numeric_accuracy": 1.0,
+        "structure": 1.0,
+        "tasks": 2
+      },
+      "govcon-ice-schedule": {
+        "citation_validity": 1.0,
+        "groundedness": 1.0,
+        "numeric_accuracy": 1.0,
+        "structure": 1.0,
+        "tasks": 2
+      },
+      "govcon-indirect-rate": {
+        "citation_validity": 1.0,
+        "groundedness": 1.0,
+        "numeric_accuracy": 1.0,
+        "structure": 1.0,
+        "tasks": 1
+      },
+      "govcon-provisional-rates": {
+        "citation_validity": 1.0,
+        "groundedness": 0.5,
+        "numeric_accuracy": 0.5,
+        "structure": 1.0,
+        "tasks": 2
+      },
+      "govcon-unallowable": {
+        "citation_validity": 1.0,
+        "groundedness": 1.0,
+        "numeric_accuracy": 1.0,
+        "structure": 1.0,
+        "tasks": 1
+      }
+    },
+    "models": {
+      "mock:mock-0.1": {
+        "citation_validity": 1.0,
+        "groundedness": 0.9090909090909091,
+        "numeric_accuracy": 0.8571428571428571,
+        "structure": 1.0,
+        "tasks": 11
+      }
+    },
+    "month": "2026-09",
+    "track": "govcon"
+  },
+  "tasks": [
+    {
+      "category": "contract_type_reasoning",
+      "difficulty": "medium",
+      "id": "govcon-contract-type-001",
+      "prompt": "The government agrees to pay a negotiated fixed price of $2,000,000 for a\ndefined deliverable. The contractor bears the risk that its actual cost will\nexceed its estimate, and the price is not adjusted based on actual cost.\nIdentify the contract type and the primary cost-risk implication.",
+      "provenance": "original",
+      "required_citations": [
+        "FAR 16.201"
+      ]
+    },
+    {
+      "category": "direct_vs_indirect_classification",
+      "difficulty": "easy",
+      "id": "govcon-direct-indirect-001",
+      "prompt": "A contractor performs a single contract that requires a specialized engineer.\nThe engineer's labor is identified and charged only to that contract. Classify\nthe labor as direct or indirect cost and cite the governing FAR treatment.",
+      "provenance": "original",
+      "required_citations": [
+        "FAR 31.202"
+      ]
+    },
+    {
+      "category": "direct_vs_indirect_classification",
+      "difficulty": "medium",
+      "id": "govcon-direct-indirect-002",
+      "prompt": "A contractor maintains a shared corporate accounting department supporting\nseveral contracts and internal operations. The department's costs are pooled\nand allocated using an approved allocation base rather than traced to one\ncontract. Classify the costs as direct or indirect and cite the governing FAR\ntreatment.",
+      "provenance": "original",
+      "required_citations": [
+        "FAR 31.203"
+      ]
+    },
+    {
+      "category": "funding_ceiling_monitoring",
+      "difficulty": "medium",
+      "id": "govcon-funding-ceiling-001",
+      "prompt": "Atlas Federal Systems has a cost-reimbursement contract with the following\nfunding terms:\n  - Total contract ceiling: $2,400,000\n  - Letter of Commitment (LOC): $2,100,000\n  - Current expenditures to date: $2,050,000\n  - Monthly burn rate: $185,000\n  - Remaining contract performance period: 6 months\n\nThe contracting officer has not issued a stop-work notice and the contractor\ncontinues to bill at the current rate.\n\nDetermine:\n  (1) How many months of funding remain before breaching the LOC ceiling\n  (2) The required contractual action before exceeding the LOC\n  (3) The risk level if the contractor continues to incur costs without\n      additional funding authorization\n  (4) The applicable FAR provisions governing funding ceiling compliance",
+      "provenance": "original",
+      "required_citations": [
+        "FAR 52.232-22"
+      ]
+    },
+    {
+      "category": "funding_ceiling_monitoring",
+      "difficulty": "medium",
+      "id": "govcon-funding-ceiling-002",
+      "prompt": "Aerojet Dynamics operates under a time-and-materials (T&M) contract with\nthe following terms:\n  - Not-to-exceed (NTE) ceiling: $3,800,000\n  - Current incurred costs: $3,500,000\n  - Current invoiced amounts: $3,200,000\n  - Gap between incurred and invoiced: $300,000\n  - Monthly burn rate: $195,000\n  - Remaining contract period: 8 months\n  - T&M hourly rates: $125 (labor), $75 (other direct costs)\n\nThe company has not received a stop-work notice and has not requested\nceiling adjustments.\n\nCalculate:\n  (1) The time to reach the NTE ceiling at the current burn rate\n  (2) The excess liability exposure if the contractor continues\n  (3) The required communication to the contracting officer",
+      "provenance": "original",
+      "required_citations": [
+        "FAR 52.232-7"
+      ]
+    },
+    {
+      "category": "ice_schedule",
+      "difficulty": "hard",
+      "id": "govcon-ice-schedule-001",
+      "prompt": "NovaTech Systems is preparing its annual incurred cost submission for\nFY2026. The company has the following cost data:\n  - Total incurred cost pool: $15,200,000\n  - Direct labor base: $9,800,000\n  - Total incurred costs by category:\n      Direct labor: $9,800,000\n      Fringe benefits: $3,136,000\n      Overhead: $1,568,000\n      G&A: $696,000\n\nThe incurred cost package submitted to DCAA includes:\n  - A narrative explaining the accounting system\n  - The indirect rate calculations\n  - Total cost objective pool summary\n\nIdentify what data is missing from the ICE package that would be required\nfor DCAA acceptance and explain the corrective actions needed.",
+      "provenance": "original",
+      "required_citations": [
+        "FAR 52.215-2",
+        "FAR 31.202"
+      ]
+    },
+    {
+      "category": "ice_schedule",
+      "difficulty": "hard",
+      "id": "govcon-ice-schedule-002",
+      "prompt": "Pacific Defense Solutions has three government contracts and the following\ncost allocation structure for FY2026:\n  - Contract A (DFARS cost-reimbursement): 45% of direct labor\n  - Contract B (FFP supply): 30% of direct labor\n  - Contract C (T&M professional services): 25% of direct labor\n\nThe company has the following indirect cost pools:\n  - Fringe benefits pool: $2,700,000\n  - Overhead pool: $1,800,000\n  - G&A pool: $960,000\n\nDirect labor bases:\n  - Contract A: $5,400,000\n  - Contract B: $3,600,000\n  - Contract C: $3,000,000\n  - Total direct labor base: $12,000,000\n\nCalculate the fully-burdened hourly rate for each contract assuming:\n  - Contract A: 40,000 labor hours\n  - Contract B: 25,000 labor hours\n  - Contract C: 30,000 labor hours\n\nShow the indirect rate calculations and the burdened hourly rates.",
+      "provenance": "original",
+      "required_citations": [
+        "FAR 31.203"
+      ]
+    },
+    {
+      "category": "indirect_rate_application",
+      "difficulty": "medium",
+      "id": "govcon-indirect-rate-001",
+      "prompt": "An approved overhead pool is $180,000 and the associated direct-labor base is\n$600,000. Apply the overhead rate to a contract with $75,000 of direct labor.\nReturn the overhead burden and total labor-plus-overhead amount to the nearest\ncent.",
+      "provenance": "original",
+      "required_citations": [
+        "FAR 31.203"
+      ]
+    },
+    {
+      "category": "provisional_rate_trueup",
+      "difficulty": "hard",
+      "id": "govcon-provisional-rates-001",
+      "prompt": "Crestview Engineering is a defense contractor with a cost-reimbursement\ncontract. For fiscal year 2026, the company negotiated the following\nprovisional billing rates with the ACO:\n  - Direct labor overhead: 85.2%\n  - G&A expense rate: 12.8%\n  - Fringe benefits: 32.5%\n  - Material handling: 8.4%\n\nAt year-end, the incurred cost submission shows actual rates:\n  - Direct labor overhead: 78.4%\n  - G&A expense rate: 11.2%\n  - Fringe benefits: 30.1%\n  - Material handling: 7.9%\n\nDirect labor base: $4,200,000. Indirect cost pool: $3,542,400.\nG&A base: $8,500,000. G&A pool: $1,088,000.\n\nCalculate the provisional-to-actual rate true-up adjustment and the\nrequired corrective actions under FAR 42.708.",
+      "provenance": "original",
+      "required_citations": [
+        "FAR 42.708"
+      ]
+    },
+    {
+      "category": "provisional_rate_trueup",
+      "difficulty": "hard",
+      "id": "govcon-provisional-rates-002",
+      "prompt": "A government contractor has the following rate history and current year data:\n  - Prior year (FY2025) final overhead rate: 76.3%\n  - Current year (FY2026) provisional rate negotiated at 82.1%\n  - Year-end actual overhead rate: 79.8%\n  - Direct labor base: $6,000,000\n  - Cumulative provisional billings through year-end: $4,926,000\n\nThe contract has four cost-reimbursement CLINs. The contractor's billing\ndistribution across CLINs is:\n  - CLIN 0001: 40% of billings\n  - CLIN 0002: 30% of billings\n  - CLIN 0003: 20% of billings\n  - CLIN 0004: 10% of billings\n\nCalculate the true-up amount and show how the adjustment would be\nallocated across CLINs.",
+      "provenance": "original",
+      "required_citations": [
+        "FAR 42.708"
+      ]
+    },
+    {
+      "category": "unallowable_cost_identification",
+      "difficulty": "medium",
+      "id": "govcon-unallowable-001",
+      "prompt": "A contractor's cost pool contains $12,000 of ordinary recruiting expense,\n$4,000 of entertainment, and $3,000 of employee training. Identify the amount\nthat must be excluded from a reimbursable cost pool under the applicable FAR\ncost principles, and cite the relevant section.",
+      "provenance": "original",
+      "required_citations": [
+        "FAR 31.205-14"
+      ]
+    }
+  ],
+  "track": "govcon",
+  "trend": {
+    "models": {
+      "mock:mock-0.1": {
+        "change": null,
+        "current": 0.8571428571428571,
+        "prior": null
+      }
+    },
+    "prior_month": "2026-08"
+  }
+}

@@ -1,0 +1,447 @@
+{
+  "findings": [
+    {
+      "detail": {
+        "groundedness_score": 0.0,
+        "runs_evaluated": 14
+      },
+      "kind": "groundedness_gap",
+      "model_version": "mock-0.1",
+      "statement": "mock-0.1 did not ground every expected fact on asc606-modification-003 in this run.",
+      "task_ids": [
+        "asc606-modification-003"
+      ]
+    },
+    {
+      "detail": {
+        "runs_evaluated": 14
+      },
+      "kind": "numeric_miss",
+      "model_version": "mock-0.1",
+      "statement": "mock-0.1 missed the computed answer on asc606-modification-003 in this run.",
+      "task_ids": [
+        "asc606-modification-003"
+      ]
+    }
+  ],
+  "month": "2026-09",
+  "runs": [
+    {
+      "citation_validity": 1.0,
+      "groundedness_score": 1.0,
+      "id": "c5cb4b8b-c9ca-4c92-ae72-9bea662610a0",
+      "judge_rationale": "Deterministic baseline: every expected numeric field, expected value, and required citation is checked explicitly.",
+      "latency_ms": 0,
+      "model_provider": "mock",
+      "model_version": "mock-0.1",
+      "numeric_accuracy": true,
+      "response": "{'recognized_revenue': '24375.00', 'method': 'redeemed_credits_plus_proportional_breakage', 'required_citations': ['ASC 606-10-55-48'], 'computed_by': 'deterministic calculation, independently verified'}",
+      "run_at": "2026-09-13T06:18:07.565621+00:00",
+      "structure_score": 1.0,
+      "task_id": "asc606-breakage-001"
+    },
+    {
+      "citation_validity": 1.0,
+      "groundedness_score": 1.0,
+      "id": "17fe7596-e927-48e9-85b6-9602a9bdbf3b",
+      "judge_rationale": "Deterministic baseline: every expected numeric field, expected value, and required citation is checked explicitly.",
+      "latency_ms": 0,
+      "model_provider": "mock",
+      "model_version": "mock-0.1",
+      "numeric_accuracy": true,
+      "response": "{'constrained_transaction_price': 2000000.0, 'unconstrained_transaction_price': 2500000.0, 'constraint_applied': True, 'constraint_amount_constrained': 500000.0, 'required_citations': ['ASC 606-10-32-11', 'ASC 606-10-32-12'], 'computed_by': 'LG, independently authored'}",
+      "run_at": "2026-09-13T06:18:07.567587+00:00",
+      "structure_score": 1.0,
+      "task_id": "asc606-constraint-001"
+    },
+    {
+      "citation_validity": 1.0,
+      "groundedness_score": 1.0,
+      "id": "19b79b82-cb70-49a2-b617-604af29903aa",
+      "judge_rationale": "Deterministic baseline: every expected numeric field, expected value, and required citation is checked explicitly.",
+      "latency_ms": 0,
+      "model_provider": "mock",
+      "model_version": "mock-0.1",
+      "numeric_accuracy": true,
+      "response": "{'warranty_obligation': 62000.0, 'recognized_warranty_revenue': 60000.0, 'constraint_applied': False, 'rationale': 'The expected cost of satisfying the warranty ($62,000) exceeds the warranty fee ($60,000). Under ASC 606-10-55-48, the warranty is a service-type warranty and should be recognized over the coverage period. However, the company has a loss position on the warranty, so the variable consideration constraint does not reduce the transaction price \u2014 the company has an obligation to perform regardless.', 'required_citations': ['ASC 606-10-55-48', 'ASC 606-10-32-11'], 'computed_by': 'LG, independently authored'}",
+      "run_at": "2026-09-13T06:18:07.568536+00:00",
+      "structure_score": 1.0,
+      "task_id": "asc606-constraint-002"
+    },
+    {
+      "citation_validity": 1.0,
+      "groundedness_score": 1.0,
+      "id": "12e428e7-b134-45d7-8e83-77d8ac5d85f5",
+      "judge_rationale": "Deterministic baseline: every expected numeric field, expected value, and required citation is checked explicitly.",
+      "latency_ms": 0,
+      "model_provider": "mock",
+      "model_version": "mock-0.1",
+      "numeric_accuracy": true,
+      "response": "{'expected_incentive': 1050000.0, 'expected_liquidated_damages': 150000.0, 'expected_variable': 900000.0, 'unconstrained_transaction_price': 12900000.0, 'constrained_transaction_price': 12900000.0, 'constraint_applied': False, 'rationale': 'The expected value of the incentive ($1,050,000) exceeds the expected liquidated damages ($150,000), yielding a net positive variable consideration of $900,000. At 70% probability of earning the incentive and 70%+ probability of not incurring liquidated damages, it is probable that including the net amount will not result in a significant reversal. The constraint does not apply.', 'required_citations': ['ASC 606-10-32-8', 'ASC 606-10-32-11'], 'computed_by': 'LG, independently authored'}",
+      "run_at": "2026-09-13T06:18:07.569656+00:00",
+      "structure_score": 1.0,
+      "task_id": "asc606-constraint-003"
+    },
+    {
+      "citation_validity": 1.0,
+      "groundedness_score": 1.0,
+      "id": "23c2c0af-9755-4d11-a449-6e255d2ebd47",
+      "judge_rationale": "Deterministic baseline: every expected numeric field, expected value, and required citation is checked explicitly.",
+      "latency_ms": 0,
+      "model_provider": "mock",
+      "model_version": "mock-0.1",
+      "numeric_accuracy": null,
+      "response": "{'applies': True, 'condition': 'amount_to_invoice_corresponds_directly_to_value_transferred', 'required_citations': ['ASC 606-10-55-18'], 'computed_by': 'LG, independently authored and reviewed'}",
+      "run_at": "2026-09-13T06:18:07.570732+00:00",
+      "structure_score": 1.0,
+      "task_id": "asc606-expedient-001"
+    },
+    {
+      "citation_validity": 1.0,
+      "groundedness_score": 1.0,
+      "id": "6f90b56d-3e4f-4096-9232-170c8d59ba19",
+      "judge_rationale": "Deterministic baseline: every expected numeric field, expected value, and required citation is checked explicitly.",
+      "latency_ms": 0,
+      "model_provider": "mock",
+      "model_version": "mock-0.1",
+      "numeric_accuracy": null,
+      "response": "{'modification_type': 'separate_contract', 'rationale': 'The additional scope (custom integration) is distinct from the original contract (system implementation). The additional $350,000 is priced at standalone selling price ($320,000), and the goods/services are distinct from those already transferred. Per ASC 606-10-25-12, this modification is treated as a separate contract.', 'required_citations': ['ASC 606-10-25-12'], 'computed_by': 'LG, independently authored'}",
+      "run_at": "2026-09-13T06:18:07.571595+00:00",
+      "structure_score": 1.0,
+      "task_id": "asc606-modification-001"
+    },
+    {
+      "citation_validity": 1.0,
+      "groundedness_score": 1.0,
+      "id": "a74d669b-8ee2-4c2d-b1c2-9c888ad79a3a",
+      "judge_rationale": "Deterministic baseline: every expected numeric field, expected value, and required citation is checked explicitly.",
+      "latency_ms": 0,
+      "model_provider": "mock",
+      "model_version": "mock-0.1",
+      "numeric_accuracy": true,
+      "response": "{'modification_type': 'prospective', 'remaining_revenue': 508000.0, 'remaining_revenue_recognized': 508000.0, 'allocation_method': 'prospective', 'rationale': 'The additional licenses are not distinct from the original subscription (they increase capacity of the same service). Per ASC 606-10-25-13, this is not a separate contract. Per ASC 606-10-25-13(a), since the remaining goods/services are the same as those already transferred, the modification is accounted for prospectively. The total remaining consideration ($380,000 + $128,000 = $508,000) is recognized over the remaining 16 months.', 'required_citations': ['ASC 606-10-25-13'], 'computed_by': 'LG, independently authored'}",
+      "run_at": "2026-09-13T06:18:07.572535+00:00",
+      "structure_score": 1.0,
+      "task_id": "asc606-modification-002"
+    },
+    {
+      "citation_validity": 1.0,
+      "groundedness_score": 0.0,
+      "id": "a43ce6b9-12ba-496c-8f6d-a5069aabcd94",
+      "judge_rationale": "Deterministic baseline: every expected numeric field, expected value, and required citation is checked explicitly.",
+      "latency_ms": 0,
+      "model_provider": "mock",
+      "model_version": "mock-0.1",
+      "numeric_accuracy": false,
+      "response": "{'modification_type': 'cumulative_catchup', 'catchup_amount': -45000.0, 'remaining_revenue': 609000.0, 'rationale': 'Part (1) \u2014 reducing the rate \u2014 is not distinct and modifies the existing contract. Per ASC 606-10-25-13(b), since the remaining goods are distinct from those transferred, this is a cumulative catch-up adjustment. Part (2) \u2014 adding workers \u2014 is distinct and priced at standalone selling price, so per ASC 606-10-25-12, it is a separate contract. The catch-up reduces previously recognized revenue by $45,000 ($600,000 - $645,000). The new workers are recognized separately as $144,000 over 6 months.', 'required_citations': ['ASC 606-10-25-12', 'ASC 606-10-25-13'], 'computed_by': 'LG, independently authored'}",
+      "run_at": "2026-09-13T06:18:07.573776+00:00",
+      "structure_score": 1.0,
+      "task_id": "asc606-modification-003"
+    },
+    {
+      "citation_validity": 1.0,
+      "groundedness_score": 1.0,
+      "id": "c42ad674-edf1-47df-932e-7180ea1fe6fc",
+      "judge_rationale": "Deterministic baseline: every expected numeric field, expected value, and required citation is checked explicitly.",
+      "latency_ms": 0,
+      "model_provider": "mock",
+      "model_version": "mock-0.1",
+      "numeric_accuracy": null,
+      "response": "{'performance_obligations': ['hosted_subscription', 'training'], 'bundled_items': ['implementation_configuration'], 'required_citations': ['ASC 606-10-25-19'], 'computed_by': 'LG, independently authored and reviewed'}",
+      "run_at": "2026-09-13T06:18:07.574845+00:00",
+      "structure_score": 1.0,
+      "task_id": "asc606-po-001"
+    },
+    {
+      "citation_validity": 1.0,
+      "groundedness_score": 1.0,
+      "id": "39b2f8e8-2f50-4354-ad5d-bc09266b4950",
+      "judge_rationale": "Deterministic baseline: every expected numeric field, expected value, and required citation is checked explicitly.",
+      "latency_ms": 0,
+      "model_provider": "mock",
+      "model_version": "mock-0.1",
+      "numeric_accuracy": null,
+      "response": "{'performance_obligations': ['perpetual_license', 'stand_ready_support'], 'required_citations': ['ASC 606-10-25-19'], 'computed_by': 'LG, independently authored and reviewed'}",
+      "run_at": "2026-09-13T06:18:07.576007+00:00",
+      "structure_score": 1.0,
+      "task_id": "asc606-po-002"
+    },
+    {
+      "citation_validity": 1.0,
+      "groundedness_score": 1.0,
+      "id": "6cfc864d-7981-45ea-9e3f-ad15c381e82f",
+      "judge_rationale": "Deterministic baseline: every expected numeric field, expected value, and required citation is checked explicitly.",
+      "latency_ms": 0,
+      "model_provider": "mock",
+      "model_version": "mock-0.1",
+      "numeric_accuracy": null,
+      "response": "{'allocations': {'license': '80000.00', 'implementation': '40000.00'}, 'required_citations': ['ASC 606-10-32-36'], 'computed_by': 'deterministic relative SSP calculation, independently verified'}",
+      "run_at": "2026-09-13T06:18:07.576779+00:00",
+      "structure_score": 1.0,
+      "task_id": "asc606-ssp-001"
+    },
+    {
+      "citation_validity": 1.0,
+      "groundedness_score": 1.0,
+      "id": "534a7c83-a391-4536-ae54-203e3da72b99",
+      "judge_rationale": "Deterministic baseline: every expected numeric field, expected value, and required citation is checked explicitly.",
+      "latency_ms": 0,
+      "model_provider": "mock",
+      "model_version": "mock-0.1",
+      "numeric_accuracy": true,
+      "response": "{'expected_overage_users': 135, 'expected_overage_per_quarter': 40500.0, 'expected_overage_annual': 162000.0, 'transaction_price': 412000.0, 'constraint_applied': False, 'method': 'expected_value', 'required_citations': ['ASC 606-10-32-8'], 'computed_by': 'LG, independently authored'}",
+      "run_at": "2026-09-13T06:18:07.577545+00:00",
+      "structure_score": 1.0,
+      "task_id": "asc606-var-consid-001"
+    },
+    {
+      "citation_validity": 1.0,
+      "groundedness_score": 1.0,
+      "id": "798ac8a1-d623-4786-9952-0a981041a82b",
+      "judge_rationale": "Deterministic baseline: every expected numeric field, expected value, and required citation is checked explicitly.",
+      "latency_ms": 0,
+      "model_provider": "mock",
+      "model_version": "mock-0.1",
+      "numeric_accuracy": true,
+      "response": "{'most_likely_amount': 200000.0, 'constrained_amount': 0.0, 'constraint_applied': True, 'constraint_reasoning': 'Probability of achieving full $10M target is approximately 30% per client analysis; most-likely-amount is $200k but constraint under ASC 606-10-32-11 applies because inclusion is probable of significant reversal. Expected-value alternative yields $140k which further supports constraining.', 'required_citations': ['ASC 606-10-32-11'], 'computed_by': 'LG, independently authored'}",
+      "run_at": "2026-09-13T06:18:07.578464+00:00",
+      "structure_score": 1.0,
+      "task_id": "asc606-var-consid-002"
+    },
+    {
+      "citation_validity": 1.0,
+      "groundedness_score": 1.0,
+      "id": "66bd7fd6-116d-45fd-ab60-4738648d8da6",
+      "judge_rationale": "Deterministic baseline: every expected numeric field, expected value, and required citation is checked explicitly.",
+      "latency_ms": 0,
+      "model_provider": "mock",
+      "model_version": "mock-0.1",
+      "numeric_accuracy": true,
+      "response": "{'migration_expected_value': 200000.0, 'total_transaction_price': 800000.0, 'constraint_applied': False, 'method': 'expected_value', 'required_citations': ['ASC 606-10-32-8'], 'computed_by': 'LG, independently authored'}",
+      "run_at": "2026-09-13T06:18:07.579236+00:00",
+      "structure_score": 1.0,
+      "task_id": "asc606-var-consid-003"
+    }
+  ],
+  "scorecard": {
+    "categories": {
+      "asc606-breakage": {
+        "citation_validity": 1.0,
+        "groundedness": 1.0,
+        "numeric_accuracy": 1.0,
+        "structure": 1.0,
+        "tasks": 1
+      },
+      "asc606-constraint": {
+        "citation_validity": 1.0,
+        "groundedness": 1.0,
+        "numeric_accuracy": 1.0,
+        "structure": 1.0,
+        "tasks": 3
+      },
+      "asc606-expedient": {
+        "citation_validity": 1.0,
+        "groundedness": 1.0,
+        "numeric_accuracy": null,
+        "structure": 1.0,
+        "tasks": 1
+      },
+      "asc606-modification": {
+        "citation_validity": 1.0,
+        "groundedness": 0.6666666666666666,
+        "numeric_accuracy": 0.5,
+        "structure": 1.0,
+        "tasks": 3
+      },
+      "asc606-po": {
+        "citation_validity": 1.0,
+        "groundedness": 1.0,
+        "numeric_accuracy": null,
+        "structure": 1.0,
+        "tasks": 2
+      },
+      "asc606-ssp": {
+        "citation_validity": 1.0,
+        "groundedness": 1.0,
+        "numeric_accuracy": null,
+        "structure": 1.0,
+        "tasks": 1
+      },
+      "asc606-var-consid": {
+        "citation_validity": 1.0,
+        "groundedness": 1.0,
+        "numeric_accuracy": 1.0,
+        "structure": 1.0,
+        "tasks": 3
+      }
+    },
+    "models": {
+      "mock:mock-0.1": {
+        "citation_validity": 1.0,
+        "groundedness": 0.9285714285714286,
+        "numeric_accuracy": 0.8888888888888888,
+        "structure": 1.0,
+        "tasks": 14
+      }
+    },
+    "month": "2026-09",
+    "track": "asc606"
+  },
+  "tasks": [
+    {
+      "category": "breakage",
+      "difficulty": "medium",
+      "id": "asc606-breakage-001",
+      "prompt": "A retailer sells 1,000 non-refundable credits for $25 each. Based on its\nhistorical pattern, it expects 8% of credits to expire unused and has\nsufficient evidence that the expected breakage will not be subject to a\nsignificant reversal. During the period, customers redeem 700 credits.\nAssuming revenue is recognized proportionately with redemptions, calculate\ncumulative revenue recognized, including breakage, at period end.",
+      "provenance": "original",
+      "required_citations": [
+        "ASC 606-10-55-48"
+      ]
+    },
+    {
+      "category": "constraint_application",
+      "difficulty": "hard",
+      "id": "asc606-constraint-001",
+      "prompt": "A pharmaceutical licensing company enters a deal with a biotech startup:\n  - Upfront license fee: $2,000,000\n  - Milestone payment: $500,000 if the product receives FDA approval by\n    December 31, 2027\n  - The product is currently in Phase II clinical trials; Phase II-to-Phase III\n    transition probability historically ranges from 40% to 55%\n  - If the milestone is achieved, there is no risk of significant reversal\n  - If the milestone is included in revenue and the product fails to receive\n    approval, the $500,000 would require a complete reversal\n\nDetermine whether the milestone payment should be included in the transaction\nprice, applying the constraint analysis required by ASC 606-10-32-11 through\n32-15. Show your reasoning and calculate the constrained transaction price.",
+      "provenance": "original",
+      "required_citations": [
+        "ASC 606-10-32-11",
+        "ASC 606-10-32-12"
+      ]
+    },
+    {
+      "category": "constraint_application",
+      "difficulty": "hard",
+      "id": "asc606-constraint-002",
+      "prompt": "An equipment manufacturer sells a machine for $800,000 and offers a two-year\nextended warranty for an additional $60,000. The machine has a 95% probability\nof operating without defect for 18 months and a 70% probability of operating\nwithout defect for the full 24 months. Under the warranty, the manufacturer\nwould be obligated to repair or replace the machine if a defect occurs.\n\nHistorical data shows:\n  - 30% of machines develop defects between months 18-24\n  - Repair costs average $180,000\n  - Replacement costs average $400,000\n  - The expected cost per warranty is $62,000\n\nExplain how the warranty obligation should be recognized and whether the\nvariable consideration constraint applies to any portion of the warranty\nrevenue.",
+      "provenance": "original",
+      "required_citations": [
+        "ASC 606-10-55-48",
+        "ASC 606-10-32-11"
+      ]
+    },
+    {
+      "category": "constraint_application",
+      "difficulty": "hard",
+      "id": "asc606-constraint-003",
+      "prompt": "A construction firm enters a contract to build a data center:\n  - Base contract price: $12,000,000\n  - Performance incentive: $1,500,000 if project completes 30 days early\n  - Liquidated damages: $1,500,000 if project completes 30 days late\n  - Projected completion: 60 days ahead of schedule (70% probability)\n  - Risk of delay: 10% probability of being 30+ days late\n  - The firm applies the expected-value method\n\nDetermine the transaction price, applying constraint analysis to the variable\nconsideration components. Show the expected-value calculation and explain\nwhich components are constrained.",
+      "provenance": "original",
+      "required_citations": [
+        "ASC 606-10-32-8",
+        "ASC 606-10-32-11"
+      ]
+    },
+    {
+      "category": "practical_expedient",
+      "difficulty": "medium",
+      "id": "asc606-expedient-001",
+      "prompt": "A customer is invoiced $12,000 each month for services performed during that\nsame month. The invoice amount corresponds directly to the value transferred\nto the customer for the month, and there are no material financing effects.\nMay the entity recognize revenue at the amount to which it has a right to\ninvoice? State the condition that must be met.",
+      "provenance": "original",
+      "required_citations": [
+        "ASC 606-10-55-18"
+      ]
+    },
+    {
+      "category": "contract_modification",
+      "difficulty": "hard",
+      "id": "asc606-modification-001",
+      "prompt": "An ERP vendor enters a contract to deliver a system implementation for a\nmanufacturing client:\n  - Phase 1 (months 1-6): System configuration and testing, $800,000\n  - Phase 2 (months 7-12): Data migration and go-live support, $600,000\n  - Total contract: $1,400,000 for two distinct services\n  - Phase 1 has a standalone selling price of $750,000\n  - Phase 2 has a standalone selling price of $650,000\n\nMidway through Phase 1 (month 3), the client requests an additional scope of\ncustom integration work not covered by either phase, priced at $350,000\n(standalone selling price $320,000).\n\nClassify this contract modification and determine the accounting treatment.\nShow which method applies and explain why.",
+      "provenance": "original",
+      "required_citations": [
+        "ASC 606-10-25-12"
+      ]
+    },
+    {
+      "category": "contract_modification",
+      "difficulty": "hard",
+      "id": "asc606-modification-002",
+      "prompt": "A cloud software vendor has a 24-month SaaS subscription contract:\n  - Original monthly fee: $25,000 ($600,000 total)\n  - The vendor has recognized $200,000 through month 8\n  - The standalone selling price for the remaining 16 months is $380,000\n\nAt month 8, the client and vendor agree to add 50 additional user licenses\nto the existing subscription. The additional licenses are not distinct from\nthe original subscription \u2014 they increase the capacity of the same hosted\nservice and cannot be used independently.\n  - Additional monthly fee for the 50 licenses: $8,000 per month for the\n    remaining 16 months ($128,000 total)\n  - Standalone selling price of the additional licenses: $10,000 per month\n    ($160,000 total)\n\nClassify this contract modification and determine the accounting treatment.\nShow the transaction price allocation and remaining revenue recognition.",
+      "provenance": "original",
+      "required_citations": [
+        "ASC 606-10-25-13"
+      ]
+    },
+    {
+      "category": "contract_modification",
+      "difficulty": "hard",
+      "id": "asc606-modification-003",
+      "prompt": "A staffing firm provides temporary placement services under a 12-month\ncontract:\n  - Monthly billing: $100,000 for 10 temporary workers\n  - After 6 months, $600,000 has been recognized as revenue\n  - The remaining obligation is 6 months of placement services\n\nAt month 6, the parties agree to:\n  (1) Reduce the rate to $85,000 per month for the remaining 6 months\n      ($510,000 total for the remaining period)\n  (2) Add 2 additional temporary workers at $12,000 per month each\n      for the remaining 6 months ($144,000 total)\n\nThe additional workers are distinct services that the firm regularly sells\nseparately (standalone selling price $144,000 for 6 months).\n\nClassify this modification. Show the cumulative catch-up or prospective\ntreatment and the revenue impact.",
+      "provenance": "original",
+      "required_citations": [
+        "ASC 606-10-25-12",
+        "ASC 606-10-25-13"
+      ]
+    },
+    {
+      "category": "performance_obligation_identification",
+      "difficulty": "easy",
+      "id": "asc606-po-001",
+      "prompt": "A SaaS vendor signs a contract providing (1) a one-year hosted subscription,\n(2) implementation configuration that does not create a separate asset for\nthe customer, and (3) ten hours of customer training. The vendor regularly\nsells the hosted subscription and training separately, but the configuration\nsignificantly modifies the hosted service. Identify the distinct performance\nobligations and briefly explain the conclusion.",
+      "provenance": "original",
+      "required_citations": [
+        "ASC 606-10-25-19"
+      ]
+    },
+    {
+      "category": "performance_obligation_identification",
+      "difficulty": "easy",
+      "id": "asc606-po-002",
+      "prompt": "A software company sells a perpetual software license and a two-year\nstand-ready support service. The customer can benefit from the license on its\nown, and the support service is separately sold. Identify the performance\nobligations.",
+      "provenance": "original",
+      "required_citations": [
+        "ASC 606-10-25-19"
+      ]
+    },
+    {
+      "category": "ssp_allocation",
+      "difficulty": "medium",
+      "id": "asc606-ssp-001",
+      "prompt": "A vendor sells a license and implementation service together for a stated\ntransaction price of $120,000. The standalone selling price of the license is\n$100,000 and the standalone selling price of implementation is $50,000.\nAllocate the transaction price to each performance obligation using relative\nstandalone selling prices. Return amounts to the nearest cent.",
+      "provenance": "original",
+      "required_citations": [
+        "ASC 606-10-32-36"
+      ]
+    },
+    {
+      "category": "variable_consideration",
+      "difficulty": "medium",
+      "id": "asc606-var-consid-001",
+      "prompt": "A software vendor contracts with a customer for a one-year cloud platform\nlicense with the following terms:\n  - Guaranteed annual subscription fee: $250,000\n  - Usage-based overage fee: $150 per active user-month above 500 users,\n    billed quarterly in arrears\n  - Historical usage: the customer averaged 342 active users per month over\n    the past 12 months, with a minimum of 280 and a maximum of 410\n  - The customer is expanding its workforce by approximately 15% over the\n    contract term\n  - The vendor applies the expected-value method for variable consideration\n    under ASC 606-10-32-8\n\nDetermine the transaction price and explain how variable consideration is\nestimated and whether the constraint applies.",
+      "provenance": "original",
+      "required_citations": [
+        "ASC 606-10-32-8"
+      ]
+    },
+    {
+      "category": "variable_consideration",
+      "difficulty": "hard",
+      "id": "asc606-var-consid-002",
+      "prompt": "A consulting firm delivers a fixed-fee implementation project with the\nfollowing structure:\n  - Fixed fee: $500,000\n  - Success bonus: $200,000 payable if the client achieves a $10 million\n    annualized cost reduction within 18 months\n  - The client's internal analysis estimates a 60% probability of achieving\n    $8 million of the target but only 30% of achieving the full $10 million\n  - Historical data from similar engagements shows success rates of 25-40%\n  - If the bonus is included and the client does not achieve the target, there\n    is a moderate risk of significant revenue reversal\n\nDetermine the appropriate variable consideration amount using the most-likely-\namount method. Explain whether the constraint under ASC 606-10-32-11 should\nbe applied and, if so, how much of the bonus should be constrained.",
+      "provenance": "original",
+      "required_citations": [
+        "ASC 606-10-32-11"
+      ]
+    },
+    {
+      "category": "variable_consideration",
+      "difficulty": "medium",
+      "id": "asc606-var-consid-003",
+      "prompt": "A healthcare SaaS vendor contracts to deliver a two-year electronic health\nrecords platform subscription:\n  - Base annual subscription: $300,000 per year\n  - Variable data migration fee: $25 per patient record migrated, estimated at\n    8,000 patient records\n  - Migration estimates have ranged from 6,500 to 9,500 records across\n    similar engagements\n  - Migration fee is invoiced upon completion of migration milestones\n  - The vendor uses the expected-value method for variable consideration\n\nCalculate the transaction price and explain how each component is treated\nunder ASC 606.",
+      "provenance": "original",
+      "required_citations": [
+        "ASC 606-10-32-8"
+      ]
+    }
+  ],
+  "track": "asc606",
+  "trend": {
+    "models": {
+      "mock:mock-0.1": {
+        "change": null,
+        "current": 0.8888888888888888,
+        "prior": null
+      }
+    },
+    "prior_month": "2026-08"
+  }
+}
