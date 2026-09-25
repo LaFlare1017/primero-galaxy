@@ -179,11 +179,13 @@ onApply(view.filters);   // → nuqs setFilters → same ?filters= pipeline as a
 
 The `SavedViews` popover (bookmark trigger next to the filter bar) marks the active view — the one whose filters JSON-match the live state — with a check, and disables "Save current" until a filter exists.
 
+The popover UI itself is shared: `components/ui/SavedViewsPopover.tsx` is generic over a small store contract (`list`/`save`/`remove`/`isActive`/`apply`/`describeCurrent`/`canSave` plus the store's write-event name) and a `mono` tone for Delegate's monochrome chrome. The facilitator console reuses it verbatim (`components/delegate/saved-views.ts`): a view snapshots the selected status facets plus sort key/direction — defaults stored as `null`, mirroring nuqs `clearOnDefault`, so a view replays into exactly the URL shape it was saved from — and sort keys are re-validated against the known set on apply, so a hand-edited store row degrades to the default sort instead of corrupting the URL. Unlike FinBench, the facilitator's default state is savable: a named full-room view is the escape hatch back after facet filtering.
+
 ### Surface usage
 
 - **Galaxy** predates the extraction and intentionally does not consume the primitives: its overlays are bespoke (glass tooltip, planet panel, toast stack) and tightly coupled to the 3D scene. It benefits from the token layer and ships the ⌘K palette; its `components/ui/*` remain galaxy-specific.
 - **FinBench** is the reference consumer of the full stack: engine + primitives for the run explorer, saved views on top, plus `Table` primitives for the category × model matrix. `RunsTable` is the canonical wiring example.
-- **Delegate** uses the primitives in light mode (`.delegate-light`): the facilitator console renders its participant grid with `Table`, drives `?status=`/`?sort=`/`?dir=` through nuqs (comma-joined statuses, `clearOnDefault` so defaults never appear in the URL, `<Suspense>` wrapper), and receives palette scenario picks via the `delegate:select-scenario` event.
+- **Delegate** uses the primitives in light mode (`.delegate-light`): the facilitator console renders its participant grid with `Table`, drives `?status=`/`?sort=`/`?dir=` through nuqs (comma-joined statuses, `clearOnDefault` so defaults never appear in the URL, `<Suspense>` wrapper), receives palette scenario picks via the `delegate:select-scenario` event, and offers saved views through the shared popover in monochrome tone.
 
 ### Conventions for new surfaces
 
@@ -208,16 +210,18 @@ components/
                 TrajectoryPath, PlanetSystem, DustParticles, CameraRig, PostProcessing
   ui/           Galaxy overlays (LandingTitle, Tooltip, PlanetPanel, ToastStack, …)
                 plus the shared extraction: primitives/ (shadcn-style kit),
-                CommandPalette (⌘K), WebGLNotice, CompanyLogo
+                CommandPalette (⌘K), SavedViewsPopover, WebGLNotice, CompanyLogo
   finbench/     RunsTable (engine wiring), saved-views store, use-run-filters (nuqs)
+  delegate/     Facilitator saved views (store + popover adapter)
   data-table-filter/  Circle filter engine: core/ (types, config builder),
                 hooks/, components/ (popover UI), lib/ (filter fns, i18n)
 lib/            constants, data generator, galaxy layout, user-company helpers,
                 finbench snapshot loader
 store/          Zustand store (mode, selection, toasts, user stars)
 types/          Company / Trajectory / Maturity data model
-e2e/            Playwright specs (51: galaxy, delegate agent effects, finbench
-                filters + saved views, ⌘K palette, facilitator grid, reduced motion)
+e2e/            Playwright specs (56: galaxy, delegate agent effects + facilitator
+                saved views, finbench filters + saved views, ⌘K palette,
+                facilitator grid, reduced motion)
 ```
 
 ## Reduced motion

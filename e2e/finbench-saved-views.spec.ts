@@ -56,9 +56,9 @@ async function gotoWithMissFilter(page: Page) {
   await expect(counter(page)).toHaveText('1 of 14 runs');
 }
 
-/** Open the Views popover; keyboard focus moves to its content. */
+/** Open the Views popover; pointer click is safe on the in-flow trigger. */
 async function openViews(page: Page) {
-  await page.getByRole('button', { name: /Views/ }).click();
+  await page.getByRole('button', { name: 'Views' }).click();
   const dialog = viewsDialog(page);
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText(/views$/)).toBeVisible(); // "ASC 606 views"

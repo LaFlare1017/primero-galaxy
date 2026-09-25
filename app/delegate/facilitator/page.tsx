@@ -10,6 +10,8 @@ import {
 import { Suspense, useEffect, useMemo, useState } from "react";
 
 import { AgentStatusOrb } from "@/components/ui/AgentEffects";
+import { FacilitatorSavedViews } from "@/components/delegate/SavedViews";
+import type { FacilitatorViewState } from "@/components/delegate/saved-views";
 import {
   Table,
   TableBody,
@@ -153,6 +155,30 @@ function FacilitatorGrid() {
   const [sortDir, setSortDir] = useQueryState("dir", sortDirParser);
   const statusFilter = useMemo(() => new Set(statuses ?? []), [statuses]);
 
+  // Saved-view snapshot of the live state. Defaults are stored as null,
+  // mirroring clearOnDefault: participant/asc never appear in ?sort=/?dir=,
+  // so a saved view replays into exactly the same URL shape it was saved
+  // from. Unlike FinBench, the default state itself is savable.
+  const viewState = useMemo<FacilitatorViewState>(
+    () => ({
+      status: statuses,
+      sort: sortKey === "participant" ? null : sortKey,
+      dir: sortDir === "desc" ? "desc" : null,
+    }),
+    [statuses, sortKey, sortDir],
+  );
+
+  async function applyViewState(view: FacilitatorViewState) {
+    await setStatuses(view.status);
+    // Validate the stored sort key against the known set (views come from
+    // the live state, but the store is hand-editable localStorage).
+    const stored = view.sort !== null && SORT_KEY_VALUES.includes(view.sort as SortKey)
+      ? (view.sort as SortKey)
+      : null;
+    await setSortKey(stored ?? "participant");
+    await setSortDir(view.dir === "desc" ? "desc" : "asc");
+  }
+
   useEffect(() => {
     document.documentElement.classList.add("delegate-light");
     return () => document.documentElement.classList.remove("delegate-light");
@@ -265,39 +291,45 @@ function FacilitatorGrid() {
         <>
           {/* Status facets: monochrome chips; selection is a weight change,
               not a color change (Delegate keeps color for meaning). */}
-          <div className="mb-3 flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter by status">
-            {statusFacets.map(([status, count]) => {
-              const selected = statusFilter.has(status);
-              return (
+          <div className="mb-3 flex flex-wrap items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter by status">
+              {statusFacets.map(([status, count]) => {
+                const selected = statusFilter.has(status);
+                return (
+                  <button
+                    key={status}
+                    type="button"
+                    onClick={() => toggleStatus(status)}
+                    aria-pressed={selected}
+                    className={cn(
+                      "inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-[13px]",
+                      selected
+                        ? "border-black bg-black text-white font-medium"
+                        : "border-gray-300 bg-white text-gray-600 hover:border-gray-500 hover:text-black",
+                    )}
+                  >
+                    {status}
+                    <span className="tabular-nums text-[11px] opacity-70">{count}</span>
+                  </button>
+                );
+              })}
+              {/* Clear shows whenever the ?status= param exists — including
+                  the explicit all-deselected grid, where it is the escape
+                  hatch back to the full room. */}
+              {statuses !== null && (
                 <button
-                  key={status}
                   type="button"
-                  onClick={() => toggleStatus(status)}
-                  aria-pressed={selected}
-                  className={cn(
-                    "inline-flex h-7 items-center gap-1.5 rounded-md border px-2.5 text-[13px]",
-                    selected
-                      ? "border-black bg-black text-white font-medium"
-                      : "border-gray-300 bg-white text-gray-600 hover:border-gray-500 hover:text-black",
-                  )}
+                  onClick={() => void setStatuses(null)}
+                  className="ml-1 h-7 px-2 text-[13px] text-gray-500 underline-offset-2 hover:text-black hover:underline"
                 >
-                  {status}
-                  <span className="tabular-nums text-[11px] opacity-70">{count}</span>
+                  Clear
                 </button>
-              );
-            })}
-            {/* Clear shows whenever the ?status= param exists — including
-                the explicit all-deselected grid, where it is the escape
-                hatch back to the full room. */}
-            {statuses !== null && (
-              <button
-                type="button"
-                onClick={() => void setStatuses(null)}
-                className="ml-1 h-7 px-2 text-[13px] text-gray-500 underline-offset-2 hover:text-black hover:underline"
-              >
-                Clear
-              </button>
-            )}
+              )}
+            </div>
+            {/* Named status/sort combinations (Circle views pattern),
+                stored in localStorage, applied through the same URL
+                pipeline as the chips and deep links. */}
+            <FacilitatorSavedViews viewState={viewState} onApply={applyViewState} />
             <span className="ml-auto text-xs tabular-nums text-gray-500">
               {visibleRows.length} of {rows.length} participants
             </span>
