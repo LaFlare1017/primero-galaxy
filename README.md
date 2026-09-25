@@ -40,6 +40,8 @@ npm run dev        # http://localhost:3000
 - **`/`**: explainer landing page (what the galaxy is, how to read it, how to navigate), leading into the tool
 - **`/galaxy`**: the 3D galaxy itself
 
+Three products live in this repo — Galaxy (`/`, `/galaxy`, `/system-map`, `/methodology`), the FinBench benchmark dashboard (`/finbench*`), and the Delegate workshop (`/delegate*`). See [The Circle extraction](#the-circle-extraction-shared-ui-primitives-and-filter-engine) for how they share one UI kit.
+
 > Tip: for the direct experience, open `http://localhost:3000/galaxy`.
 
 **Environment**: `NEXT_PUBLIC_SITE_URL` (see `.env.local.example`) is the absolute URL of the deployed app. It becomes the `metadataBase` that resolves the Open Graph / Twitter image URLs and the canonical link; without it, builds fall back to `http://localhost:3000`. CI injects the same value from the `NEXT_PUBLIC_SITE_URL` repository secret, so set that secret to the production domain once deployed.
@@ -58,6 +60,137 @@ The E2E suite proves the interaction pipeline with **real browser input**: boot 
 
 CI also enforces the Lighthouse accessibility/SEO scores (currently **100/100 on both routes**) via `scripts/lighthouse-gate.mjs`; the gate fails the build on any regression.
 
+## The Circle extraction: shared UI primitives and filter engine
+
+The interactive chrome for FinBench and Delegate is built from UI primitives and a table-filtering engine extracted from **Circle**, our internal accounting-agent product (a frozen reference copy lives in `circle-master/`, excluded from `tsconfig`). Everything below is vendored under `components/ui/primitives/` and `components/data-table-filter/`, restyled onto this repo's token layer, and covered by the Playwright suite (51 specs across all three surfaces).
+
+| Surface | Routes | What it is | Chrome |
+|---------|--------|-----------|--------|
+| **Galaxy** | `/`, `/galaxy`, `/system-map`, `/methodology` | 3D marketing experience (this README's original subject) | dark starfield |
+| **FinBench** | `/finbench`, `/finbench/methodology`, `/finbench/tasks/[taskId]` | read-only AI accounting benchmark: scorecards, category matrix, filterable run records | dark |
+| **Delegate** | `/delegate`, `/delegate/facilitator` | agent workshop tool + live facilitator console | monochrome light |
+
+### Token layer
+
+The primitives speak standard shadcn/ui color names (`background`, `popover`, `accent`, `ring`, …), mapped in `tailwind.config.js` to `--sc-*` CSS variables defined in `app/globals.css`: dark values at `:root` (Galaxy/FinBench chrome) and light values under `.delegate-light`, including a mode-specific radius:
+
+```css
+:root            { --sc-background: #030308; --sc-popover: #0a0a1a; --sc-radius: 0.5rem; … }
+.delegate-light  { --sc-background: #ffffff; --sc-popover: #ffffff; --sc-radius: 0.375rem; … }
+```
+
+A surface opts into light mode by toggling the class on `<html>`; every primitive adapts automatically — no per-component theming.
+
+```tsx
+// app/delegate/page.tsx
+useEffect(() => {
+  document.documentElement.classList.add("delegate-light");
+  return () => document.documentElement.classList.remove("delegate-light");
+}, []);
+```
+
+### Primitives (`components/ui/primitives/`)
+
+Radix-based shadcn/ui components, ported from the Circle extraction onto the token layer above:
+
+| File | Notes |
+|------|-------|
+| `button.tsx` | cva variants (`default`/`outline`/`ghost`/…) + sizes; exports `buttonVariants` for non-button triggers |
+| `input.tsx` | `forwardRef` — callers can autofocus a field after mount (React 18 drops refs on plain function components) |
+| `popover.tsx` | portal + fixed positioning; passes through Radix props like `updatePositionStrategy` |
+| `dialog.tsx` | overlay + content; `hideClose` prop for palettes that own their dismissal (⌘K, Esc) |
+| `command.tsx` | cmdk wrapper; `CommandInput`/`CommandItem`/`CommandSeparator` are `forwardRef` |
+| `table.tsx` | semantic table family used by FinBench run records and the facilitator grid |
+| `checkbox.tsx`, `slider.tsx`, `tabs.tsx`, `calendar.tsx`, `separator.tsx`, `badge.tsx` | value pickers, numeric ranges, and chrome for the filter UI and forms |
+
+```tsx
+import { Button } from '@/components/ui/primitives/button';
+import { DialogContent } from '@/components/ui/primitives/dialog';
+
+<Button variant="outline" className="h-7 text-xs">Views</Button>
+<DialogContent hideClose className="sm:max-w-xl">…</DialogContent>
+```
+
+### The data-table-filter engine (`components/data-table-filter/`)
+
+A subject → operator → value filtering system for any tabular dataset, split into a headless core and a rendering layer:
+
+- `core/types.ts` — the model: `FiltersState` is an array of `FilterModel`s (`{ columnId, type, operator, values }`) with a typed operator vocabulary per column kind (`text` → contains, `number` → is between, `option` → is/is not, …).
+- `core/filters.ts` — `createColumnConfigHelper<T>()`, a fluent builder that infers accessor value types; `createColumns()` derives memoized option/facet getters and prefetch hooks from your data.
+- `hooks/use-data-table-filters.tsx` — the headless hook: returns `{ columns, filters, actions, strategy }`; controlled (`filters` + `onFiltersChange`) or uncontrolled (`defaultFilters`). `strategy: 'server'` swaps client-derived options/counts for server-provided ones via the `options`/`faceted` inputs.
+- `components/` — the `DataTableFilter` UI: a cmdk Filter popover (subject → operator → value), active-filter chips with ✕ removal, a Clear-all action, and a mobile layout. `lib/filter-fns.ts` holds the pure predicates; `lib/i18n.ts` + `locales/en.json` label the operators.
+
+FinBench wires it to the run-records table (from `components/finbench/`):
+
+```tsx
+// 1. Describe the filterable columns (type-safe, inferred accessors).
+const dtf = createColumnConfigHelper<FinbenchRunPublic>();
+export const runFilterColumns = [
+  dtf.option().id('result').accessor((run) => runResultKind(run))
+    .displayName('Result').icon(CheckCircle2)
+    .options([{ value: 'miss', label: 'numeric miss' }, …]).build(),
+  dtf.number().id('groundedness_score').accessor((run) => run.groundedness_score)
+    .displayName('Groundedness').icon(Gauge).build(),
+  // … text, number, and option columns
+] as const;
+
+// 2. Drive the hook from URL state and render the UI.
+const urlState = useRunFilterState();                       // nuqs ?filters=…
+const { columns, filters, actions, strategy } = useDataTableFilters({
+  strategy: 'client',
+  data: runs,
+  columnsConfig: runFilterColumns,
+  faceted: runFacetedOptions(runs),                         // option → count map
+  filters: urlState.filters,
+  onFiltersChange: urlState.setFilters,                     // controlled
+});
+
+<DataTableFilter columns={columns} filters={filters} actions={actions} strategy={strategy} />
+
+// 3. Apply the same state to your rows with the pure predicates.
+const visible = applyRunFilters(runs, filters);
+```
+
+Filter state is URL-synced through nuqs under a single `?filters=` param (a JSON-serialized `FiltersState`, validated on parse — garbage degrades to the unfiltered view), so any filter combination is a shareable deep link, e.g. the one numeric miss in the published ASC 606 snapshot. Two conventions make this work with static prerendering: the nuqs-backed page is wrapped in `<Suspense>` (URL readers force a client bailout), and an empty filter list is stored as `null` so the param disappears entirely instead of rendering `?filters=`.
+
+### Command palette (`components/ui/CommandPalette.tsx`)
+
+A ⌘K / Ctrl+K palette mounted once in the root layout, so it works on every surface. It has three internal routes — navigation, every published FinBench task, and Delegate scenarios — driven by a `route` state (Esc or Backspace-on-empty walks back to root):
+
+```tsx
+<CommandItem onSelect={() => goScenario(scenario.id)} keywords={['workshop', 'delegate']}>
+  <ClipboardList className="text-muted-foreground" /> {scenario.title}
+</CommandItem>
+```
+
+Selecting a Delegate scenario is context-aware: from another page it deep-links `/delegate?scenario=s5`; from `/delegate` itself (already mounted, a query push would not re-render it) it dispatches the `delegate:select-scenario` CustomEvent that the page listens for.
+
+### Saved views (`components/finbench/saved-views.ts`)
+
+Circle's named-views pattern adapted to FinBench: the current filter combination can be saved under a name and re-applied later. The store keeps the **engine-native `FiltersState`** (not a declarative copy), so applying a view replays through the identical nuqs pipeline as a hand-built filter or deep link. Persistence follows this repo's convention — plain `localStorage` (one namespace per benchmark track) with a `finbench:saved-views-changed` CustomEvent for same-tab updates and the `storage` event for cross-tab sync, instead of Circle's `zustand/persist`:
+
+```ts
+saveView({ name: 'Numeric misses', track, filters, description: describeFilters(filters) });
+listSavedViews(track);   // sorted by name; corrupt rows are dropped, never thrown
+deleteSavedView(view.id);
+// Applying a view = feeding its engine-native filters back to the URL state:
+onApply(view.filters);   // → nuqs setFilters → same ?filters= pipeline as a deep link
+```
+
+The `SavedViews` popover (bookmark trigger next to the filter bar) marks the active view — the one whose filters JSON-match the live state — with a check, and disables "Save current" until a filter exists.
+
+### Surface usage
+
+- **Galaxy** predates the extraction and intentionally does not consume the primitives: its overlays are bespoke (glass tooltip, planet panel, toast stack) and tightly coupled to the 3D scene. It benefits from the token layer and ships the ⌘K palette; its `components/ui/*` remain galaxy-specific.
+- **FinBench** is the reference consumer of the full stack: engine + primitives for the run explorer, saved views on top, plus `Table` primitives for the category × model matrix. `RunsTable` is the canonical wiring example.
+- **Delegate** uses the primitives in light mode (`.delegate-light`): the facilitator console renders its participant grid with `Table`, drives `?status=`/`?sort=`/`?dir=` through nuqs (comma-joined statuses, `clearOnDefault` so defaults never appear in the URL, `<Suspense>` wrapper), and receives palette scenario picks via the `delegate:select-scenario` event.
+
+### Conventions for new surfaces
+
+- Compose from `components/ui/primitives/*` and the engine before reaching for bespoke UI; style with token classes (`bg-popover`, `text-muted-foreground`) so both chrome modes work.
+- Need a ref into a primitive (autofocus, scroll-into-view)? The primitive must be `forwardRef` — check before relying on it; React 18 silently drops refs on plain function components.
+- Popover/dialog content is portaled and `position: fixed`: it re-anchors on scroll events, so open it from settled positions (or pass `updatePositionStrategy="always"` to re-anchor every frame) and drive it with the keyboard in e2e — pointer clicks on off-screen fixed content cannot be scrolled into view and hang.- Wrap any page reading URL state in `<Suspense>`; store client-only persistence in a `components/**` module with a change event, mirroring `saved-views.ts`.
+
 ## How It Works
 
 - **Data**: `/api/companies` serves a curated dataset of ~193 real Fortune 500 enterprises (`lib/fortune500-data.ts`). Each company carries estimated AI-maturity scores (0–100 across five dimensions) plus a researched note on its public AI positioning, compiled from earnings-call commentary, product launches, and reported deployments (research estimates, not audited). Layout positions are pre-computed with the force simulation; 12 AI flagship companies are marked featured.
@@ -68,16 +201,23 @@ CI also enforces the Lighthouse accessibility/SEO scores (currently **100/100 on
 ## Project Structure
 
 ```
-app/            Next.js routes: page (landing), galaxy/ (the tool), layout, /api/companies
+app/            Next.js routes: page (landing), galaxy/, finbench/ (+ tasks/[taskId],
+                methodology), delegate/ (+ facilitator), system-map/, /api/*
 components/
   galaxy/       3D scene: GalaxyScene, StarField, StarLabels, ConstellationLines,
                 TrajectoryPath, PlanetSystem, DustParticles, CameraRig, PostProcessing
-  ui/           Overlay: LandingTitle, Tooltip, BottomBar, PlanetPanel, RadarChart,
-                AddCompanyForm, ToastStack, ModeIndicator
-lib/            constants, data generator, galaxy layout, user-company helpers
+  ui/           Galaxy overlays (LandingTitle, Tooltip, PlanetPanel, ToastStack, …)
+                plus the shared extraction: primitives/ (shadcn-style kit),
+                CommandPalette (⌘K), WebGLNotice, CompanyLogo
+  finbench/     RunsTable (engine wiring), saved-views store, use-run-filters (nuqs)
+  data-table-filter/  Circle filter engine: core/ (types, config builder),
+                hooks/, components/ (popover UI), lib/ (filter fns, i18n)
+lib/            constants, data generator, galaxy layout, user-company helpers,
+                finbench snapshot loader
 store/          Zustand store (mode, selection, toasts, user stars)
 types/          Company / Trajectory / Maturity data model
-e2e/            Playwright specs
+e2e/            Playwright specs (51: galaxy, delegate agent effects, finbench
+                filters + saved views, ⌘K palette, facilitator grid, reduced motion)
 ```
 
 ## Reduced motion
