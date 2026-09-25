@@ -1,7 +1,13 @@
 "use client";
 
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import {
+  createParser,
+  parseAsStringEnum,
+  parseAsStringLiteral,
+  useQueryState,
+} from "nuqs";
+import { Suspense, useEffect, useMemo, useState } from "react";
 
 import { AgentStatusOrb } from "@/components/ui/AgentEffects";
 import {
@@ -22,9 +28,11 @@ import { cn } from "@/lib/utils";
  * are revealed together in the group debrief.
  *
  * Built on the Circle-extracted table primitives; status facets and column
- * sorting are client-side over the polled rows. Monochrome light mode:
- * color stays reserved for meaning, so facets and sort indicators differ
- * by weight and stroke, not hue.
+ * sorting are client-side over the polled rows, but their STATE lives in
+ * the URL (?status=…, ?sort=…&dir=…) so a facilitator can share a
+ * pre-filtered view. Monochrome light mode: color stays reserved for
+ * meaning, so facets and sort indicators differ by weight and stroke, not
+ * hue.
  */
 
 interface Row {
@@ -62,6 +70,36 @@ const DETECTION_RANK: Record<string, number> = {
   "caught it": 2,
 };
 
+// ── Shareable view state (nuqs, same URL-state layer as FinBench filters) ──
+
+/**
+ * Selected status facets, comma-joined in one ?status= param. Three states
+ * the component must distinguish:
+ *   param absent        → unfiltered (show everyone) — the default view
+ *   ?status=working,…   → filtered to those statuses
+ *   ?status= (empty)    → explicit "none selected" — an empty grid that is
+ *                         still shareable and rescuable via Clear
+ * Toggling the last chip off lands in the third state (per design: an
+ * explicit all-deselected grid shows zero rows, never silently "all").
+ */
+const statusListParser = createParser<string[]>({
+  parse: (value) => (value.length === 0 ? [] : value.split(",").filter((s) => s.length > 0)),
+  serialize: (value) => value.join(","),
+  eq: (a, b) => a.length === b.length && a.every((v, i) => v === b[i]),
+});
+
+const SORT_KEY_VALUES: SortKey[] = [
+  "participant",
+  "currentScenario",
+  "elapsedSeconds",
+  "status",
+  "detected",
+];
+// Defaults drop out of the URL (clearOnDefault), so an unsorted view shares
+// as a param-free URL.
+const sortKeyParser = parseAsStringEnum<SortKey>(SORT_KEY_VALUES).withDefault("participant");
+const sortDirParser = parseAsStringLiteral(["asc", "desc"] as const).withDefault("asc");
+
 function detectionLabel(row: Row): string {
   if (row.detected === undefined) return "n/a";
   return row.detected ? "caught it" : "missed";
@@ -90,14 +128,30 @@ function Icon({ name, size = 14, className = "" }: { name: string; size?: number
   );
 }
 
+/**
+ * Default export wraps the grid in Suspense: the page is statically
+ * prerendered, and useQueryState (useSearchParams) forces a CSR bailout
+ * for the prerender pass. The boundary must sit ABOVE the component that
+ * reads the URL, hence the wrapper + rename.
+ */
 export default function FacilitatorPage() {
+  return (
+    <Suspense>
+      <FacilitatorGrid />
+    </Suspense>
+  );
+}
+
+function FacilitatorGrid() {
   const [rows, setRows] = useState<Row[]>([]);
   const [generatedAt, setGeneratedAt] = useState("");
-  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
-  const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({
-    key: "participant",
-    desc: false,
-  });
+
+  // Facets + sort live in the URL so views can be shared and survive a
+  // refresh while the 4s poll keeps the underlying rows live.
+  const [statuses, setStatuses] = useQueryState("status", statusListParser);
+  const [sortKey, setSortKey] = useQueryState("sort", sortKeyParser);
+  const [sortDir, setSortDir] = useQueryState("dir", sortDirParser);
+  const statusFilter = useMemo(() => new Set(statuses ?? []), [statuses]);
 
   useEffect(() => {
     document.documentElement.classList.add("delegate-light");
@@ -132,11 +186,13 @@ export default function FacilitatorPage() {
   }, [rows]);
 
   const visibleRows = useMemo(() => {
+    // null = no ?status= param (show everyone); [] = all chips deselected
+    // (the explicit empty grid).
     const filtered =
-      statusFilter.size === 0 ? rows : rows.filter((r) => statusFilter.has(r.status));
+      statuses === null ? rows : rows.filter((r) => statusFilter.has(r.status));
+    const dir = sortDir === "desc" ? -1 : 1;
     const sorted = [...filtered].sort((a, b) => {
-      const dir = sort.desc ? -1 : 1;
-      switch (sort.key) {
+      switch (sortKey) {
         case "elapsedSeconds":
           return (a.elapsedSeconds - b.elapsedSeconds) * dir;
         case "detected":
@@ -148,28 +204,33 @@ export default function FacilitatorPage() {
             ) * dir
           );
         default:
-          return a[sort.key].localeCompare(b[sort.key]) * dir;
+          return a[sortKey].localeCompare(b[sortKey]) * dir;
       }
     });
     return sorted;
-  }, [rows, statusFilter, sort]);
+  }, [rows, statuses, statusFilter, sortKey, sortDir]);
 
   function toggleStatus(status: string) {
-    setStatusFilter((prev) => {
-      const next = new Set(prev);
-      if (next.has(status)) next.delete(status);
-      else next.add(status);
-      return next;
+    void setStatuses((prev) => {
+      const set = new Set(prev ?? []);
+      if (set.has(status)) set.delete(status);
+      else set.add(status);
+      // Sorted for a stable comma order, so toggling never churns the URL.
+      return [...set].sort((a, b) => a.localeCompare(b));
     });
   }
 
   function sortButton(key: SortKey, label: string) {
-    const active = sort.key === key;
-    const Icon = !active ? ArrowUpDown : sort.desc ? ArrowDown : ArrowUp;
+    const active = sortKey === key;
+    const Icon = !active ? ArrowUpDown : sortDir === "desc" ? ArrowDown : ArrowUp;
     return (
       <button
         type="button"
-        onClick={() => setSort((s) => ({ key, desc: active ? !s.desc : false }))}
+        onClick={() => {
+          const nextDesc = active ? sortDir !== "desc" : false;
+          void setSortKey(key);
+          void setSortDir(nextDesc ? "desc" : "asc");
+        }}
         aria-label={`Sort by ${label}`}
         className={cn(
           "inline-flex items-center gap-1 uppercase tracking-wide hover:text-black",
@@ -225,10 +286,13 @@ export default function FacilitatorPage() {
                 </button>
               );
             })}
-            {statusFilter.size > 0 && (
+            {/* Clear shows whenever the ?status= param exists — including
+                the explicit all-deselected grid, where it is the escape
+                hatch back to the full room. */}
+            {statuses !== null && (
               <button
                 type="button"
-                onClick={() => setStatusFilter(new Set())}
+                onClick={() => void setStatuses(null)}
                 className="ml-1 h-7 px-2 text-[13px] text-gray-500 underline-offset-2 hover:text-black hover:underline"
               >
                 Clear

@@ -75,7 +75,8 @@ async function waitUntilSeeded(page: Page): Promise<FacilitatorRow[]> {
   return rows;
 }
 
-async function rowFor(page: Page, participant: string) {
+/** Locator for the (single) grid row of a participant. */
+function rowFor(page: Page, participant: string) {
   return page.getByRole('row').filter({ hasText: participant });
 }
 
@@ -129,6 +130,7 @@ test.describe('Facilitator console', () => {
     const group = page.getByRole('group', { name: 'Filter by status' });
     const workingChip = group.getByRole('button', { name: /^working/ });
     const submittedChip = group.getByRole('button', { name: /^submitted/ });
+    const statusParam = () => new URL(page.url()).searchParams.get('status');
 
     // Faceted counts: every seeded status must be represented at least by
     // its seeded rows (the store accumulates, so these are lower bounds).
@@ -144,13 +146,16 @@ test.describe('Facilitator console', () => {
     ).rows.filter((r) => r.status === 'submitted').length;
     expect(submittedRowsInStore).toBeGreaterThanOrEqual(2);
 
-    // Nothing selected → all participants visible.
+    // Nothing selected → all participants visible, and the URL carries NO
+    // status param (the default view shares as a clean link).
     const counter = page.getByText(/\d+ of \d+ participants/);
     const total = Number((await counter.innerText()).match(/of (\d+)/)![1]);
     await expect(counter).toHaveText(`${total} of ${total} participants`);
+    expect(statusParam()).toBeNull();
 
-    // Select "working": rows shrink by exactly the submitted count and the
-    // chip flips to pressed with the selected (black/white) treatment.
+    // Select "working": rows shrink by exactly the submitted count, the
+    // chip flips to pressed (black/white treatment), and the selection
+    // lands in the URL.
     await workingChip.click();
     await expect(workingChip).toHaveAttribute('aria-pressed', 'true');
     await expect(workingChip).toHaveClass(/bg-black/);
@@ -160,17 +165,38 @@ test.describe('Facilitator console', () => {
     await expect(totalRows).toHaveCount(1 + (total - submittedCount)); // header + rows
     await expect(page.getByRole('row').filter({ hasText: SUBMITTED_S5 })).toHaveCount(0);
     await expect(page.getByRole('row').filter({ hasText: SUBMITTED_S3 })).toHaveCount(0);
+    await expect
+      .poll(() => statusParam(), { timeout: 5_000 })
+      .toBe('working');
 
-    // Toggle off restores the full grid.
+    // Deselecting the LAST chip is an explicit all-none state: the grid
+    // empties (by design) and the param survives as an empty ?status=,
+    // still shareable — with Clear as the escape hatch.
     await workingChip.click();
     await expect(workingChip).toHaveAttribute('aria-pressed', 'false');
-    await expect(page.getByText(`${total} of ${total} participants`)).toBeVisible();
+    await expect(page.getByText(`0 of ${total} participants`)).toBeVisible();
+    await expect
+      .poll(() => statusParam(), { timeout: 5_000 })
+      .toBe('');
+    await expect(page.getByRole('button', { name: 'Clear' })).toBeVisible();
 
-    // Selecting two facets unions them; Clear resets.
+    // Clear removes the param entirely: back to the full room.
+    await page.getByRole('button', { name: 'Clear' }).click();
+    await expect(page.getByText(`${total} of ${total} participants`)).toBeVisible();
+    await expect
+      .poll(() => statusParam(), { timeout: 5_000 })
+      .toBe(null);
+
+    // Selecting two facets unions them; the comma list is sorted for a
+    // stable URL regardless of click order.
     await workingChip.click();
     await submittedChip.click();
     await expect(submittedChip).toHaveAttribute('aria-pressed', 'true');
+    await expect(workingChip).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByText(`${total} of ${total} participants`)).toBeVisible();
+    await expect
+      .poll(() => statusParam(), { timeout: 5_000 })
+      .toBe('submitted,working');
     await page.getByRole('button', { name: 'Clear' }).click();
     await expect(workingChip).toHaveAttribute('aria-pressed', 'false');
     await expect(submittedChip).toHaveAttribute('aria-pressed', 'false');
@@ -188,39 +214,92 @@ test.describe('Facilitator console', () => {
     await expect(clear).toHaveCount(0);
   });
 
-  test('sorting by Elapsed reorders rows per the API-derived order', async ({ page }) => {
+  test('sorting state lands in ?sort=/?dir= and defaults drop out', async ({ page }) => {
     await page.goto('/delegate/facilitator');
     await waitUntilSeeded(page);
 
-    // The OLDEST participant (max elapsedSeconds) anchors the assertion: its
-    // elapsed only ticks up and its margin over the second-oldest is minutes
-    // in an accumulated store, so it stays the extreme for the whole test
-    // regardless of what fresher rows exist (this suite, other suites, dev).
-    const oldest = async () => {
-      const data = (await (await page.request.get('/api/delegate/facilitator')).json()) as {
-        rows: FacilitatorRow[];
-      };
-      return data.rows.reduce((a, b) => (b.elapsedSeconds > a.elapsedSeconds ? b : a)).participant;
+    const urlParam = (name: string) => new URL(page.url()).searchParams.get(name);
+
+    // Default is participant ascending, so the first Participant click
+    // flips to DESC. nuqs clearOnDefault drops ?sort= even when SET to the
+    // default value, so only the direction survives in the URL…
+    await page.getByRole('button', { name: 'Sort by Participant' }).click();
+    await expect
+      .poll(() => urlParam('dir'), { timeout: 5_000 })
+      .toBe('desc');
+    await expect
+      .poll(() => urlParam('sort'), { timeout: 5_000 })
+      .toBe(null);
+
+    // …and the second click returns to the default ascending, which also
+    // drops out — an unsorted view shares as a param-free link.
+    await page.getByRole('button', { name: 'Sort by Participant' }).click();
+    await expect
+      .poll(() => `${urlParam('sort')}|${urlParam('dir')}`, { timeout: 5_000 })
+      .toBe('null|null');
+
+    // A non-default key keeps ?sort= (asc is the default direction, so
+    // ?dir= drops out); the second click adds dir=desc.
+    await page.getByRole('button', { name: 'Sort by Elapsed' }).click();
+    await expect(page).toHaveURL(/sort=elapsedSeconds/, { timeout: 5_000 });
+    await expect
+      .poll(() => urlParam('dir'), { timeout: 5_000 })
+      .toBe(null);
+    await page.getByRole('button', { name: 'Sort by Elapsed' }).click();
+    await expect
+      .poll(() => `${urlParam('sort')}|${urlParam('dir')}`, { timeout: 5_000 })
+      .toBe('elapsedSeconds|desc');
+  });
+
+  test('a deep link with ?status=/?sort=/?dir= reproduces the shared view', async ({ page }) => {
+    // Open DIRECTLY on a shared view: submitted only, oldest first.
+    await page.goto('/delegate/facilitator?status=submitted&sort=elapsedSeconds&dir=desc');
+    await waitUntilSeeded(page);
+
+    // Chips reflect the URL state (pressed only for submitted).
+    const group = page.getByRole('group', { name: 'Filter by status' });
+    await expect(group.getByRole('button', { name: /^submitted/ })).toHaveAttribute('aria-pressed', 'true');
+    await expect(group.getByRole('button', { name: /^working/ })).toHaveAttribute('aria-pressed', 'false');
+
+    // Only submitted rows render: the working seeds are filtered out.
+    await expect(rowFor(page, WORKING_A)).toHaveCount(0);
+    await expect(rowFor(page, WORKING_B)).toHaveCount(0);
+    await expect(rowFor(page, SUBMITTED_S5)).toHaveCount(1);
+    await expect(rowFor(page, SUBMITTED_S3)).toHaveCount(1);
+
+    // The counter matches the API's submitted count exactly.
+    const api = (await (await page.request.get('/api/delegate/facilitator')).json()) as {
+      rows: FacilitatorRow[];
     };
+    const submittedInStore = api.rows.filter((r) => r.status === 'submitted').length;
+    await expect(
+      page.getByText(`${submittedInStore} of ${api.rows.length} participants`)
+    ).toBeVisible();
 
-    // First cell of the first body row (row 0 is the header).
-    const firstBodyRow = () => page.getByRole('row').nth(1);
-    const lastBodyRow = () => page.getByRole('row').last();
+    // The desc sort applied: the OLDEST SUBMITTED participant sits on top
+    // (the anchor must come from the filtered set — the oldest row overall
+    // is a working session that ?status=submitted filters out).
+    const submittedRows = api.rows.filter((r) => r.status === 'submitted');
+    const oldest = submittedRows.reduce((a, b) => (b.elapsedSeconds > a.elapsedSeconds ? b : a))
+      .participant;
+    await expect(page.getByRole('row').nth(1)).toContainText(oldest);
 
-    // Participant sort (default asc) flips direction on the second click.
-    await page.getByRole('button', { name: 'Sort by Participant' }).click();
-    const ascFirst = await firstBodyRow().locator('td').first().innerText();
-    await page.getByRole('button', { name: 'Sort by Participant' }).click();
-    const descFirst = await firstBodyRow().locator('td').first().innerText();
-    expect(ascFirst).not.toBe(descFirst);
+    // The shared URL survives the round-trip (copy-paste stable).
+    const params = new URL(page.url()).searchParams;
+    expect(params.get('status')).toBe('submitted');
+    expect(params.get('sort')).toBe('elapsedSeconds');
+    expect(params.get('dir')).toBe('desc');
+  });
 
-    // Elapsed asc: the oldest row sits at the BOTTOM of the table.
-    await page.getByRole('button', { name: 'Sort by Elapsed' }).click();
-    await expect(lastBodyRow()).toContainText(await oldest());
+  test('an unknown ?status= value filters to the empty grid without crashing', async ({ page }) => {
+    await page.goto('/delegate/facilitator?status=bogus&sort=nope');
+    await waitUntilSeeded(page);
 
-    // Second click → descending: the oldest row moves to the TOP.
-    await page.getByRole('button', { name: 'Sort by Elapsed' }).click();
-    await expect(firstBodyRow()).toContainText(await oldest());
+    // Unknown status: the filter matches nothing → explicit empty grid.
+    await expect(page.getByText(/0 of \d+ participants/)).toBeVisible();
+    // Unknown sort key: the parser falls back to the default (no crash,
+    // table still renders its header).
+    await expect(page.getByRole('row').nth(0)).toBeVisible();
   });
 
   test('new sessions stream in via the 4s poll without a reload', async ({ page }) => {
