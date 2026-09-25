@@ -6,6 +6,7 @@ import { useMemo, useState } from 'react';
 import { DataTableFilter } from '@/components/data-table-filter/components/data-table-filter';
 import { useDataTableFilters } from '@/components/data-table-filter/hooks/use-data-table-filters';
 import type { FiltersState } from '@/components/data-table-filter/core/types';
+import { SavedViews } from '@/components/finbench/SavedViews';
 import { useRunFilterState } from '@/components/finbench/use-run-filters';
 import {
   applyRunFilters,
@@ -22,7 +23,7 @@ import {
   TableRow,
 } from '@/components/ui/primitives/table';
 import { cn } from '@/lib/utils';
-import type { FinbenchRunPublic, FinbenchTaskPublic } from '@/lib/finbench/snapshot';
+import type { FinbenchRunPublic, FinbenchTaskPublic, FinbenchTrack } from '@/lib/finbench/snapshot';
 
 /**
  * Run-records explorer for the FinBench dashboard, built on the full
@@ -63,9 +64,11 @@ function ResultBadge({ run }: { run: FinbenchRunPublic }) {
 export function RunsTable({
   runs,
   tasks,
+  track,
 }: {
   runs: FinbenchRunPublic[];
   tasks: FinbenchTaskPublic[];
+  track: FinbenchTrack;
 }) {
   const categoryByTask = useMemo(() => {
     const map = new Map<string, FinbenchTaskPublic>();
@@ -118,12 +121,19 @@ export function RunsTable({
   return (
     <div className="rounded-xl border border-border-subtle bg-nebula/40">
       <div className="border-b border-border-subtle p-3">
-        <DataTableFilter
-          columns={columns}
-          filters={filters}
-          actions={actions}
-          strategy={strategy}
-        />
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <DataTableFilter
+              columns={columns}
+              filters={filters}
+              actions={actions}
+              strategy={strategy}
+            />
+          </div>
+          {/* Named filter combinations (Circle views pattern): stored in
+              localStorage, applied through the same ?filters= pipeline. */}
+          <SavedViews track={track} filters={filters} onApply={urlState.setFilters} />
+        </div>
         <div className="mt-2 flex items-center justify-end">
           <span className="text-xs tabular-nums text-muted-foreground">
             {filtered.length} of {runs.length} runs

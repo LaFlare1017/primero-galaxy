@@ -351,7 +351,7 @@ export default async function FinbenchOverview({
         </p>
         {/* Circle-extracted UI kit: faceted filters + sortable table. */}
         <div className="mt-6">
-          <RunsTable runs={snapshot.runs} tasks={snapshot.tasks} />
+          <RunsTable runs={snapshot.runs} tasks={snapshot.tasks} track={track} />
         </div>
       </section>
     </main>
