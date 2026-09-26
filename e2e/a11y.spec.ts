@@ -112,6 +112,9 @@ test.describe('Galaxy accessibility', () => {
     await input.fill('Nvidia');
     const option = page.getByRole('option', { name: /Nvidia/ });
     await expect(option).toBeVisible();
+    // Pin the highlighted row before Enter: the combobox selects
+    // results[activeIndex], so the visible option must BE the selected one.
+    await expect(option).toHaveAttribute('aria-selected', 'true');
     await input.press('Enter');
     await expect
       .poll(

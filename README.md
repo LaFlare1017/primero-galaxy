@@ -191,7 +191,9 @@ The popover UI itself is shared: `components/ui/SavedViewsPopover.tsx` is generi
 
 - Compose from `components/ui/primitives/*` and the engine before reaching for bespoke UI; style with token classes (`bg-popover`, `text-muted-foreground`) so both chrome modes work.
 - Need a ref into a primitive (autofocus, scroll-into-view)? The primitive must be `forwardRef` — check before relying on it; React 18 silently drops refs on plain function components.
-- Popover/dialog content is portaled and `position: fixed`: it re-anchors on scroll events, so open it from settled positions (or pass `updatePositionStrategy="always"` to re-anchor every frame) and drive it with the keyboard in e2e — pointer clicks on off-screen fixed content cannot be scrolled into view and hang.- Wrap any page reading URL state in `<Suspense>`; store client-only persistence in a `components/**` module with a change event, mirroring `saved-views.ts`.
+- Popover/dialog content is portaled and `position: fixed`: it re-anchors on scroll events, so open it from settled positions (or pass `updatePositionStrategy="always"` to re-anchor every frame) and drive it with the keyboard in e2e — pointer clicks on off-screen fixed content cannot be scrolled into view and hang.
+- cmdk lists (⌘K palette, FinBench filter popover): Enter activates whatever is highlighted at keypress time, and a controlled search must round-trip through React state before the list reflects it — so a keyboard-driven test narrows the list, then pins the selected row (`[cmdk-item][data-selected="true"]`, in a retry loop) before pressing Enter. Pointer clicks on items are always safe (items own their click handlers); the palette spec relies on this.
+- Wrap any page reading URL state in `<Suspense>`; store client-only persistence in a `components/**` module with a change event, mirroring `saved-views.ts`.
 
 ## How It Works
 

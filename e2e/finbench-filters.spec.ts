@@ -144,27 +144,25 @@ test('driving the UI produces the same URL format as the deep links', async ({ p
   const subjectSearch = page.getByPlaceholder('Search...');
   await expect(subjectSearch).toBeFocused();
 
-  // Keyboard-first cmdk flow: type to filter the subject list, Enter picks
-  // the highlighted item. (The popover content is fixed-position and can
-  // extend below the fold, so pointer clicks on items are not reliable —
-  // keyboard is cmdk's native interaction model.)
-  //
-  // The search is a CONTROLLED cmdk value, so the typed text must
-  // round-trip through React state before Enter: cmdk selects whatever is
-  // highlighted at keypress time, and a race would pick the stale default
-  // highlight. Wait until the list has narrowed to exactly one visible
-  // item — the round-trip proof and the unique Enter target in one.
-  await subjectSearch.fill('Result');
-  await expect(page.locator('[cmdk-item]:visible', { hasText: 'Result' })).toHaveCount(1);
+  // Keyboard-first cmdk flow — drive the SELECTION, not the search. The
+  // subject search is controlled AND typed text summons quick-filter rows
+  // that also carry the column name, so search-based waits can catch a
+  // transient match and Enter can land on a quick row. With no typing
+  // there are no quick-filter rows: ArrowDown from the default highlight
+  // (Model) until Result is the selected row, pinned in a retry loop.
+  await expect(async () => {
+    const selected = page.locator('[cmdk-item][data-selected="true"]');
+    if (!(await selected.innerText()).includes('Result')) {
+      await subjectSearch.press('ArrowDown');
+    }
+    await expect(selected).toHaveText(/Result/);
+  }).toPass({ timeout: 10_000 });
   await subjectSearch.press('Enter');
 
   // The value view mounts with its own autofocused search (same
   // placeholder); its option rows exist only there, so their visibility
-  // proves the swap completed. Drive the SELECTION, not the search: cmdk's
-  // subsequence filter matches both options ("miss" is a subsequence of
-  // "numeric pass") and a fill can land mid-swap in the dying subject
-  // input. ArrowDown until the miss option is the selected one, then Enter
-  // toggles exactly that row.
+  // proves the swap completed. Same discipline: ArrowDown until the miss
+  // option is the selected one, then Enter toggles exactly that row.
   const valueSearch = page.getByPlaceholder('Search...');
   await expect(valueSearch).toBeFocused();
   await expect(page.locator('[cmdk-item]', { hasText: 'miss' })).toBeVisible();

@@ -414,6 +414,9 @@ test('searching a company by name flies to its star and opens its profile', asyn
   const option = page.getByRole('option', { name: /Nvidia/ });
   await expect(option).toBeVisible();
   await expect(option).toContainText('Technology');
+  // Pin the highlighted row before Enter: the combobox selects
+  // results[activeIndex], so the visible option must BE the selected one.
+  await expect(option).toHaveAttribute('aria-selected', 'true');
   await input.press('Enter');
 
   // Store flips to planet mode, the camera flies in, and the profile panel
@@ -1421,6 +1424,7 @@ test('brands without indexed favicons ship stable local logos in the planet pane
   await input.fill('Berkshire');
   const option = page.getByRole('option', { name: /Berkshire/ });
   await expect(option).toBeVisible();
+  await expect(option).toHaveAttribute('aria-selected', 'true');
   await input.press('Enter');
 
   await expect
