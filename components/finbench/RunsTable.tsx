@@ -1,7 +1,8 @@
 'use client';
 
 import { ArrowUpDown } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { parseAsStringEnum, parseAsStringLiteral, useQueryState } from 'nuqs';
+import { useMemo } from 'react';
 
 import { DataTableFilter } from '@/components/data-table-filter/components/data-table-filter';
 import { useDataTableFilters } from '@/components/data-table-filter/hooks/use-data-table-filters';
@@ -35,6 +36,18 @@ import type { FinbenchRunPublic, FinbenchTaskPublic, FinbenchTrack } from '@/lib
  */
 
 type SortKey = 'task_id' | 'model_version' | 'latency_ms';
+
+const SORT_KEYS: SortKey[] = ['task_id', 'model_version', 'latency_ms'];
+
+/**
+ * Column sort in the URL (the last table state in the repo that was still
+ * component-local): ?sort=<key>&dir=desc, mirroring the facilitator
+ * console's conventions. Defaults drop out via clearOnDefault, so a clean
+ * view shares as a param-free URL and a saved view replays into exactly
+ * the URL shape it was saved from.
+ */
+const sortKeyParser = parseAsStringEnum<SortKey>(SORT_KEYS).withDefault('task_id');
+const sortDirParser = parseAsStringLiteral(['asc', 'desc'] as const).withDefault('asc');
 
 function percent(value: number): string {
   return `${Math.round(value * 100)}%`;
@@ -89,27 +102,31 @@ export function RunsTable({
     onFiltersChange: urlState.setFilters,
   });
 
-  const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({
-    key: 'task_id',
-    desc: false,
-  });
+  const [sortKey, setSortKey] = useQueryState('sort', sortKeyParser);
+  const [sortDir, setSortDir] = useQueryState('dir', sortDirParser);
+  const sort = { key: sortKey, desc: sortDir === 'desc' };
 
   const filtered = useMemo(() => {
     const rows = applyRunFilters(runs, filters);
+    const desc = sortDir === 'desc' ? -1 : 1;
     rows.sort((a, b) => {
-      const dir = sort.desc ? -1 : 1;
-      if (sort.key === 'latency_ms') return (a.latency_ms - b.latency_ms) * dir;
-      return a[sort.key].localeCompare(b[sort.key]) * dir;
+      if (sortKey === 'latency_ms') return (a.latency_ms - b.latency_ms) * desc;
+      return a[sortKey].localeCompare(b[sortKey]) * desc;
     });
     return rows;
-  }, [runs, filters, sort]);
+  }, [runs, filters, sortKey, sortDir]);
 
   function sortButton(key: SortKey, label: string) {
-    const active = sort.key === key;
+    const active = sortKey === key;
     return (
       <button
         type="button"
-        onClick={() => setSort((s) => ({ key, desc: active ? !s.desc : false }))}
+        aria-label={`Sort by ${label}`}
+        onClick={() => {
+          const nextDesc = active ? sortDir !== 'desc' : false;
+          void setSortKey(key);
+          void setSortDir(nextDesc ? 'desc' : 'asc');
+        }}
         className={cn('inline-flex items-center gap-1 hover:text-foreground', active && 'text-foreground')}
       >
         {label}

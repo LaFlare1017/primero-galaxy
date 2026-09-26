@@ -151,7 +151,7 @@ const { columns, filters, actions, strategy } = useDataTableFilters({
 const visible = applyRunFilters(runs, filters);
 ```
 
-Filter state is URL-synced through nuqs under a single `?filters=` param (a JSON-serialized `FiltersState`, validated on parse — garbage degrades to the unfiltered view), so any filter combination is a shareable deep link, e.g. the one numeric miss in the published ASC 606 snapshot. Two conventions make this work with static prerendering: the nuqs-backed page is wrapped in `<Suspense>` (URL readers force a client bailout), and an empty filter list is stored as `null` so the param disappears entirely instead of rendering `?filters=`.
+Filter state is URL-synced through nuqs under a single `?filters=` param (a JSON-serialized `FiltersState`, validated on parse — garbage degrades to the unfiltered view), so any filter combination is a shareable deep link, e.g. the one numeric miss in the published ASC 606 snapshot. The run table's column sort rides alongside as `?sort=`/`?dir=` (nuqs, `clearOnDefault` against task/asc — same shape as the facilitator console), so a sorted view is shareable too and a saved view replays into exactly the view it was saved from. Two conventions make this work with static prerendering: the nuqs-backed page is wrapped in `<Suspense>` (URL readers force a client bailout), and an empty filter list is stored as `null` so the param disappears entirely instead of rendering `?filters=`.
 
 ### Command palette (`components/ui/CommandPalette.tsx`)
 

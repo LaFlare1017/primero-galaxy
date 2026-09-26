@@ -25,7 +25,7 @@ const TRACK_TABS: Record<FinbenchTrack, string> = {
 export default async function FinbenchOverview({
   searchParams,
 }: {
-  searchParams: Promise<{ track?: string; month?: string }>;
+  searchParams: Promise<{ track?: string }>;
 }) {
   const params = await searchParams;
   const track = (params.track === 'govcon' ? 'govcon' : 'asc606') as FinbenchTrack;

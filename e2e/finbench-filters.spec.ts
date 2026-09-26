@@ -160,25 +160,20 @@ test('driving the UI produces the same URL format as the deep links', async ({ p
 
   // The value view mounts with its own autofocused search (same
   // placeholder); its option rows exist only there, so their visibility
-  // proves the swap completed. cmdk keeps whatever item was highlighted at
-  // mount and its subsequence filter matches both options ("miss" is a
-  // subsequence of "numeric pass" too), so the search alone does not move
-  // the selection: Home jumps to the top-scored item, which the score sort
-  // guarantees is the tighter match — "numeric miss".
+  // proves the swap completed. Drive the SELECTION, not the search: cmdk's
+  // subsequence filter matches both options ("miss" is a subsequence of
+  // "numeric pass") and a fill can land mid-swap in the dying subject
+  // input. ArrowDown until the miss option is the selected one, then Enter
+  // toggles exactly that row.
   const valueSearch = page.getByPlaceholder('Search...');
   await expect(valueSearch).toBeFocused();
-  await valueSearch.fill('miss');
-  // The re-sort lands a frame after typing, so press Home and VERIFY the
-  // selected item in a retry loop — a keypress that slips in before the
-  // re-order just re-selects the (then-wrong) first item, and the next
-  // press fixes it. Home is idempotent, the assertion pins the exact
-  // Enter target, and cmdk's score sort puts the tighter subsequence
-  // match first: "numeric miss".
+  await expect(page.locator('[cmdk-item]', { hasText: 'miss' })).toBeVisible();
   await expect(async () => {
-    await valueSearch.press('Home');
-    await expect(
-      page.locator('[cmdk-item][data-selected="true"]', { hasText: 'miss' })
-    ).toBeVisible();
+    const selected = page.locator('[cmdk-item][data-selected="true"]');
+    if (!(await selected.innerText()).includes('miss')) {
+      await valueSearch.press('ArrowDown');
+    }
+    await expect(selected).toHaveText(/miss/);
   }).toPass({ timeout: 10_000 });
   await valueSearch.press('Enter');
 
@@ -227,17 +222,35 @@ test('filter popover exposes all eight filterable columns', async ({ page }) => 
   }
 });
 
-test('sorting by Task header reorders the rows', async ({ page }) => {
+test('sorting by Task header reorders the rows and lands in the URL', async ({ page }) => {
   await page.goto('/finbench');
   await expect(page.getByText('of 14 runs')).toBeVisible();
 
+  const urlParam = (name: string) => new URL(page.url()).searchParams.get(name);
   const firstTask = () => page.locator(`${TASK_COL} >> nth=0`).innerText();
   const asc = await firstTask();
-  await page.getByRole('button', { name: 'Task' }).click();
-  const desc = await firstTask();
-  expect(asc).not.toBe(desc);
 
-  // Second click toggles back to ascending.
-  await page.getByRole('button', { name: 'Task' }).click();
-  expect(await firstTask()).toBe(asc);
+  // First click: the Task button IS active at the default (task_id, asc),
+  // so it flips to descending — only ?dir= survives (the default key never
+  // appears in the URL).
+  await page.getByRole('button', { name: 'Sort by Task' }).click();
+  expect(await firstTask()).not.toBe(asc);
+  await expect.poll(() => urlParam('dir'), { timeout: 5_000 }).toBe('desc');
+  expect(urlParam('sort')).toBeNull();
+
+  // A non-default key keeps ?sort= (asc drops ?dir=); the second click
+  // adds dir=desc.
+  await page.getByRole('button', { name: 'Sort by Latency' }).click();
+  await expect.poll(() => urlParam('sort'), { timeout: 5_000 }).toBe('latency_ms');
+  await expect.poll(() => urlParam('dir'), { timeout: 5_000 }).toBe(null);
+  await page.getByRole('button', { name: 'Sort by Latency' }).click();
+  await expect
+    .poll(() => `${urlParam('sort')}|${urlParam('dir')}`, { timeout: 5_000 })
+    .toBe('latency_ms|desc');
+
+  // The sort is state, not a one-shot import: the params survive a reload.
+  await page.reload();
+  await expect(page.getByText('of 14 runs')).toBeVisible();
+  expect(urlParam('sort')).toBe('latency_ms');
+  expect(urlParam('dir')).toBe('desc');
 });
