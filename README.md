@@ -219,9 +219,9 @@ lib/            constants, data generator, galaxy layout, user-company helpers,
                 finbench snapshot loader
 store/          Zustand store (mode, selection, toasts, user stars)
 types/          Company / Trajectory / Maturity data model
-e2e/            Playwright specs (59: galaxy, delegate agent effects + facilitator
+e2e/            Playwright specs (70: galaxy, delegate agent effects + facilitator
                 saved views incl. share, finbench filters + saved views, ⌘K palette,
-                facilitator grid, reduced motion)
+                facilitator grid, reduced motion, axe a11y gate)
 ```
 
 ## Reduced motion
@@ -233,6 +233,13 @@ The app honors the OS-level `prefers-reduced-motion` setting on three layers:
 - **WebGL / canvas**: react-three-fiber render loops gate themselves through the shared `usePrefersReducedMotion` hook. Idle decoration (galaxy rotation drift, star breathing and flicker, planet spin and moon orbits, ring pulses, auto-orbit, trajectory travel loop, system-map payload dots) is frozen; functional motion (star appear stagger, hover and selection feedback, camera fly-to on selection, zoom-driven fades) is preserved so the scenes stay fully operable as near-static diagrams. The Libraries.dev effects in Delegate (composer beam, thinking orb) unmount instead of animating; meaning is carried by text, borders, and disabled states.
 
 The pass is proven end to end by `e2e/reduced-motion.spec.ts`, which emulates the setting in Playwright: the Delegate working state keeps its live-region status and disabled composer with no decorative canvas mounted, and the Galaxy starfield quaternion is sampled twice and shown frozen while the scene keeps rendering.
+
+## Accessibility
+
+Two automated gates run in CI and fail on regressions:
+
+- **axe-core** (`e2e/a11y.spec.ts`, part of the Playwright suite) scans the WCAG 2.1 A/AA rule tags across all three surfaces — including interactive states, not just loaded routes: the galaxy planet panel and Add-Your-Company dialog, the FinBench Filter popover and deep-linked chip state, and the Delegate workspace while the agent is working plus the seeded facilitator console. Any violation fails the run; new exclusions must be added explicitly (with a justification) in the spec, never silently.
+- **Lighthouse** (the `lighthouse` CI job) enforces a 100/100 accessibility + SEO score on `/` and `/galaxy` via `scripts/lighthouse-gate.mjs`.
 
 ## Roadmap
 

@@ -94,6 +94,7 @@ export function ActiveFilter<TData, TType extends ColumnDataType>({
       <Button
         variant="ghost"
         className="rounded-none rounded-r-2xl text-xs w-7 h-full"
+        aria-label={`Remove ${column.displayName} filter`}
         onClick={() => actions.removeFilter(filter.columnId)}
       >
         <X className="size-4 -translate-x-0.5" />

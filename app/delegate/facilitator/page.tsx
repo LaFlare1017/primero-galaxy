@@ -355,7 +355,7 @@ function FacilitatorGrid() {
                     )}
                   >
                     {status}
-                    <span className="tabular-nums text-[11px] opacity-70">{count}</span>
+                    <span className="tabular-nums text-[11px]">{count}</span>
                   </button>
                 );
               })}

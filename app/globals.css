@@ -342,7 +342,7 @@ body::before {
   --sc-muted-foreground: #8e8eae;
   --sc-accent: #1a1a3a;
   --sc-accent-foreground: #ffffff;
-  --sc-destructive: #ff453a;
+  --sc-destructive: #b91c1c;
   --sc-border: #26264a;
   --sc-input: #26264a;
   --sc-ring: #7b61ff;
@@ -363,7 +363,7 @@ body::before {
   --sc-muted-foreground: #71717a;
   --sc-accent: #f4f4f5;
   --sc-accent-foreground: #0a0a0a;
-  --sc-destructive: #dc2626;
+  --sc-destructive: #b91c1c;
   --sc-border: #e4e4e7;
   --sc-input: #e4e4e7;
   --sc-ring: #0a0a0a;

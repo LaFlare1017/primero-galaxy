@@ -21,6 +21,7 @@ function FilterActionsImpl({
     <Button
       className={cn('h-7 !px-2', !hasFilters && 'hidden')}
       variant="destructive"
+      aria-label="Clear all filters"
       onClick={actions?.removeAllFilters}
     >
       <FilterXIcon />

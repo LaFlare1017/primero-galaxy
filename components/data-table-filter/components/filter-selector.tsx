@@ -145,6 +145,7 @@ function FilterSelectorImpl<TData>({
         <Button
           variant="outline"
           className={cn('h-7', hasFilters && 'w-fit !px-2')}
+          aria-label={hasFilters ? 'Filter runs' : undefined}
         >
           <FilterIcon className="size-4" />
           {!hasFilters && <span>{t('filter', locale)}</span>}

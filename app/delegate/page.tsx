@@ -356,9 +356,9 @@ export default function DelegatePage() {
                       : "border-gray-200 text-black hover:border-black"
                   }`}
                 >
-                  <span className={scenarioId === s.id ? "text-gray-400" : "text-gray-400"}>{s.n}.</span>
+                  <span className={scenarioId === s.id ? "text-gray-400" : "text-gray-500"}>{s.n}.</span>
                   <span className="flex-1">{s.title}</span>
-                  <span className={scenarioId === s.id ? "text-gray-300" : "text-gray-400"}>
+                  <span className={scenarioId === s.id ? "text-gray-400" : "text-gray-500"}>
                     <Icon name="clock" size={12} /> {s.mins} min
                   </span>
                 </button>
@@ -403,7 +403,7 @@ export default function DelegatePage() {
         </button>
         {showBrief && (
           <p className="text-xs text-gray-600 flex-1 truncate">
-            <span className="text-gray-400 uppercase tracking-wide mr-2">Brief</span>
+            <span className="text-gray-500 uppercase tracking-wide mr-2">Brief</span>
             {brief}
           </p>
         )}
@@ -451,7 +451,7 @@ export default function DelegatePage() {
               </div>
             ))}
             {thinking && (
-              <div className="text-xs text-gray-400 pl-1 flex items-center gap-2" role="status">
+              <div className="text-xs text-gray-500 pl-1 flex items-center gap-2" role="status">
                 <AgentStatusOrb active={thinking} />
                 <span>agent is working with the ERP…</span>
               </div>
@@ -470,6 +470,7 @@ export default function DelegatePage() {
               />
               <button
                 onClick={send}
+                aria-label="Send message"
                 disabled={!!submitted || thinking || !draft.trim()}
                 className="rounded-md bg-black text-white disabled:opacity-30 px-4 text-sm font-medium hover:bg-zinc-800 flex items-center gap-1.5"
               >
@@ -490,7 +491,7 @@ export default function DelegatePage() {
                   setEntryIds([]);
                 }}
                 className={`px-3 py-2 uppercase tracking-wide flex items-center gap-1.5 border-b-2 -mb-px ${
-                  tab === t.id ? "border-black text-black font-medium" : "border-transparent text-gray-400 hover:text-black"
+                  tab === t.id ? "border-black text-black font-medium" : "border-transparent text-gray-500 hover:text-black"
                 }`}
               >
                 <Icon name={t.icon} size={13} />

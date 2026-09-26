@@ -155,7 +155,7 @@ export function PlanetPanel() {
                 />
               </div>
               {!selected.isUserAdded && (
-                <p className="mt-1.5 text-[10px] text-ui-muted/60">
+                <p className="mt-1.5 text-[10px] text-ui-muted">
                   Directional estimate from public AI disclosures (research use only)
                 </p>
               )}
@@ -166,7 +166,7 @@ export function PlanetPanel() {
               <div className="flex justify-center">
                 <RadarChart company={selected} />
               </div>
-              <div className="mt-1 flex items-center justify-center gap-1.5 text-[10px] text-ui-muted/70">
+              <div className="mt-1 flex items-center justify-center gap-1.5 text-[10px] text-ui-muted">
                 <svg width="18" height="8" aria-hidden="true">
                   <line
                     x1="0"
@@ -188,7 +188,7 @@ export function PlanetPanel() {
                 <span className="text-[11px] font-medium uppercase tracking-label text-ui-muted">
                   Maturity dimensions
                 </span>
-                <span className="flex items-center gap-1.5 text-[10px] text-ui-muted/70">
+                <span className="flex items-center gap-1.5 text-[10px] text-ui-muted">
                   <button
                     onClick={() => setShowMethodology(!showMethodology)}
                     className="rounded-sm px-1 py-0.5 text-[10px] text-ui-muted transition-colors hover:text-star-bright"
@@ -220,7 +220,7 @@ export function PlanetPanel() {
                       {DIMENSIONS.map((d) => (
                         <div key={d.key}>
                           <div className="text-[11px] font-medium text-ui-dim">{d.label}</div>
-                          <p className="mt-0.5 text-[10px] leading-relaxed text-ui-muted/80">
+                          <p className="mt-0.5 text-[10px] leading-relaxed text-ui-muted">
                             {d.description}
                           </p>
                         </div>
