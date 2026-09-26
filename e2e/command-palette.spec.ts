@@ -13,7 +13,8 @@ import { expect, test, type Page } from '@playwright/test';
  *   4. typing filters the task list (cmdk fuzzy matching); an unknown
  *      string shows CommandEmpty
  *   5. picking a scenario from /finbench crosses pages to
- *      /delegate?scenario=s5 with the scenario preselected * 6. picking a scenario while already on /delegate selects it in place
+ *      /delegate?scenario=s5 with the scenario preselected
+ *   6. picking a scenario while already on /delegate selects it in place
  *      (no remount) and the URL follows via the controlled ?scenario= param
  *
  * The palette is client-only state (dialog + cmdk), so tests drive real
@@ -25,8 +26,8 @@ import { expect, test, type Page } from '@playwright/test';
  * there is no controlled-value round-trip race to wait out (the finbench
  * filter popover needed that dance; see finbench-filters.spec.ts for the
  * pin-the-data-selected pattern). If a test here is ever converted to
- * keyboard selection, it must do the same after typing: narrow the list,
- * pin [cmdk-item][data-selected="true"] in a retry loop, then Enter.
+ * keyboard selection, use the shared helper in ./cmdk.ts (selectCmdkItem)
+ * — do not hand-roll the retry loop.
  */
 
 const TASK_TOTAL = 25; // 14 asc606 + 11 govcon (public/finbench/*.json)

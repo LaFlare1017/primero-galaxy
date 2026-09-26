@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+import { selectCmdkItem } from './cmdk';
+
 /**
  * End-to-end proof of the FinBench run-records filter engine (the Circle
  * data-table-filter port) and its URL-synced deep links (nuqs, ?filters=).
@@ -144,36 +146,19 @@ test('driving the UI produces the same URL format as the deep links', async ({ p
   const subjectSearch = page.getByPlaceholder('Search...');
   await expect(subjectSearch).toBeFocused();
 
-  // Keyboard-first cmdk flow — drive the SELECTION, not the search. The
-  // subject search is controlled AND typed text summons quick-filter rows
-  // that also carry the column name, so search-based waits can catch a
-  // transient match and Enter can land on a quick row. With no typing
-  // there are no quick-filter rows: ArrowDown from the default highlight
-  // (Model) until Result is the selected row, pinned in a retry loop.
-  await expect(async () => {
-    const selected = page.locator('[cmdk-item][data-selected="true"]');
-    if (!(await selected.innerText()).includes('Result')) {
-      await subjectSearch.press('ArrowDown');
-    }
-    await expect(selected).toHaveText(/Result/);
-  }).toPass({ timeout: 10_000 });
-  await subjectSearch.press('Enter');
+  // Keyboard-first cmdk flow via the shared helper: drive the SELECTION,
+  // not the search (typing can summon quick-filter rows that also match
+  // the query; the helper arrows until the target is data-selected).
+  // The subject view's default highlight is Model; Result is one step down.
+  await selectCmdkItem(page, subjectSearch, /Result/);
 
   // The value view mounts with its own autofocused search (same
   // placeholder); its option rows exist only there, so their visibility
-  // proves the swap completed. Same discipline: ArrowDown until the miss
-  // option is the selected one, then Enter toggles exactly that row.
+  // proves the swap completed before the helper drives it.
   const valueSearch = page.getByPlaceholder('Search...');
   await expect(valueSearch).toBeFocused();
   await expect(page.locator('[cmdk-item]', { hasText: 'miss' })).toBeVisible();
-  await expect(async () => {
-    const selected = page.locator('[cmdk-item][data-selected="true"]');
-    if (!(await selected.innerText()).includes('miss')) {
-      await valueSearch.press('ArrowDown');
-    }
-    await expect(selected).toHaveText(/miss/);
-  }).toPass({ timeout: 10_000 });
-  await valueSearch.press('Enter');
+  await selectCmdkItem(page, valueSearch, /miss/);
 
   // The same view the deep link produces…
   await expect(page.getByText('1 of 14 runs')).toBeVisible();
