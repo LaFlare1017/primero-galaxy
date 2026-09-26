@@ -207,6 +207,58 @@ test.describe('Facilitator run links', () => {
       .toBe(null);
   });
 
+  test('the watch pane sweeps the visible participants with prev/next', async ({ page }) => {
+    // Three sessions with labels that sort as a CONTIGUOUS block: the
+    // stamp leads ("E2E <stamp> SweepA/B/C"), so this execution's trio is
+    // adjacent in the participant-sorted sweep even though the store keeps
+    // every prior execution's rows (whose stamps sort before/after).
+    const b = await startRun(page, `E2E ${STAMP} SweepB`, 's2');
+    const c = await startRun(page, `E2E ${STAMP} SweepC`, 's3');
+    await startRun(page, `E2E ${STAMP} SweepA`, 's1');
+
+    // Deep-link the watch to the middle of the trio. The room is large,
+    // so only the indicator FORMAT is asserted, not absolute numbers.
+    await page.goto(`/delegate/facilitator?watch=${b.runId}`);
+    const paneB = page.getByRole('region', { name: `Watching run for E2E ${STAMP} SweepB` });
+    await expect(paneB).toBeVisible();
+    await expect(paneB.getByText(/^\d+ of \d+$/)).toBeVisible();
+    await expect(paneB.getByText('2 · Intercompany')).toBeVisible();
+
+    // Next from B lands on its sorted neighbor C; the URL pointer follows
+    // and the mirror switches (the header label swaps, the old pane goes).
+    await paneB.getByRole('button', { name: 'Watch next participant' }).click();
+    const paneC = page.getByRole('region', { name: `Watching run for E2E ${STAMP} SweepC` });
+    await expect(paneC).toBeVisible();
+    await expect(paneC.getByText('3 · Q1 flux')).toBeVisible();
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('watch'), { timeout: 5_000 })
+      .toBe(c.runId);
+    await expect(paneB).toHaveCount(0);
+
+    // Previous from C returns to B: both directions walk the displayed
+    // order without page scroll or row clicks.
+    await paneC.getByRole('button', { name: 'Watch previous participant' }).click();
+    await expect(page.getByRole('region', { name: `Watching run for E2E ${STAMP} SweepB` })).toBeVisible();
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('watch'), { timeout: 5_000 })
+      .toBe(b.runId);
+
+    // The sweep follows the DISPLAYED room: facet to submitted-only and
+    // the working trio leaves the sweep — stepping from a run that is no
+    // longer visible enters the shrunken sweep at its first row, which is
+    // the first submitted row on screen.
+    await page.getByRole('group', { name: 'Filter by status' }).getByRole('button', { name: /^submitted/ }).click();
+    await page.getByRole('button', { name: 'Watch next participant' }).click();
+    const submittedInStore = (
+      (await (await page.request.get('/api/delegate/facilitator')).json()) as {
+        rows: Array<{ status: string }>;
+      }
+    ).rows.filter((r) => r.status === 'submitted').length;
+    await expect(page.getByText(`1 of ${submittedInStore}`)).toBeVisible();
+    const firstName = await page.locator('tbody tr').first().locator('td').first().innerText();
+    await expect(page.getByRole('region', { name: `Watching run for ${firstName}` })).toBeVisible();
+  });
+
   test('a copied submitted-run link restores read-only in a fresh context', async ({ page, browser }) => {
     const seeded = await startRun(page, SUBMITTED, 's5');
     const submit = await page.request.post('/api/delegate/submit', {

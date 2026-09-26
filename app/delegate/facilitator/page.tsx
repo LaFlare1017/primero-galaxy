@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowDown, ArrowUp, ArrowUpDown, Eye, ExternalLink, Link2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ChevronLeft, ChevronRight, Eye, ExternalLink, Link2, X } from "lucide-react";
 import {
   createParser,
   parseAsString,
@@ -251,7 +251,19 @@ const WATCH_POLL_MS = 3000;
  * live chat. Everything is rebuilt from the event log, so the mirror is
  * the same data the participant's own restored screen shows.
  */
-function WatchPane({ runId, onClose }: { runId: string; onClose: () => void }) {
+function WatchPane({
+  runId,
+  onClose,
+  onStep,
+  position,
+  canStep,
+}: {
+  runId: string;
+  onClose: () => void;
+  onStep: (delta: number) => void;
+  position: { index: number; total: number } | null;
+  canStep: boolean;
+}) {
   const [label, setLabel] = useState("");
   const [scenario, setScenario] = useState("");
   const [startedAt, setStartedAt] = useState<number | null>(null);
@@ -339,14 +351,41 @@ function WatchPane({ runId, onClose }: { runId: string; onClose: () => void }) {
         <span className={cn("text-[13px]", submittedAt ? "font-medium text-black" : "text-gray-500")}>
           {submittedAt ? "submitted" : "working"}
         </span>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close watch pane"
-          className="ml-auto text-gray-400 hover:text-black"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
+        <div className="ml-auto flex items-center gap-1">
+          {/* Sweep controls: cycle through the currently visible
+              participants without re-clicking rows. */}
+          {position !== null && (
+            <span className="mr-1 text-xs tabular-nums text-gray-500">
+              {position.index + 1} of {position.total}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => onStep(-1)}
+            disabled={!canStep}
+            aria-label="Watch previous participant"
+            className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-600 hover:border-gray-500 hover:text-black disabled:opacity-40"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onStep(1)}
+            disabled={!canStep}
+            aria-label="Watch next participant"
+            className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-600 hover:border-gray-500 hover:text-black disabled:opacity-40"
+          >
+            <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close watch pane"
+            className="ml-1 text-gray-400 hover:text-black"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
       </div>
       <div className="max-h-72 space-y-2 overflow-y-auto p-3">
         {messages.length === 0 ? (
@@ -545,6 +584,26 @@ function FacilitatorGrid() {
     return sorted;
   }, [rows, statuses, statusFilter, sortKey, sortDir]);
 
+  // ── Watch sweep: next/previous over the currently visible rows ──
+  // Derived from visibleRows (the grid as displayed, facets + sort
+  // applied), so sweeping the "working" facet sweeps exactly the
+  // participants the facilitator is watching. Every visible row has a
+  // run (status comes from runs), so the list is always steppable.
+  const sweepList = useMemo(() => visibleRows.map((r) => r.runId).filter((id): id is string => !!id), [visibleRows]);
+  const sweepIndex = sweepList.indexOf(watchId ?? "");
+  const stepWatch = useCallback(
+    (delta: number) => {
+      if (sweepList.length === 0) return;
+      const current = sweepList.indexOf(watchId ?? "");
+      // The watched run may not be in the visible set (facets changed or a
+      // deep-linked ?watch=): stepping from "not found" enters the sweep
+      // at the ends; otherwise wrap around the displayed room.
+      const next = current === -1 ? (delta > 0 ? 0 : sweepList.length - 1) : (current + delta + sweepList.length) % sweepList.length;
+      void setWatchId(sweepList[next]);
+    },
+    [sweepList, watchId, setWatchId],
+  );
+
   function toggleStatus(status: string) {
     void setStatuses((prev) => {
       const set = new Set(prev ?? []);
@@ -642,8 +701,20 @@ function FacilitatorGrid() {
         </div>
       )}
 
-      {/* Live mirror of the watched run (selection lives in ?watch=). */}
-      {watchId !== null && <WatchPane runId={watchId} onClose={() => void setWatchId(null)} />}
+      {/* Live mirror of the watched run (selection lives in ?watch=). The
+          sweep cycles the CURRENTLY VISIBLE rows — respecting the active
+          facets and sort — and remounts per switch so the mirror is always
+          the entered-on run's. */}
+      {watchId !== null && (
+        <WatchPane
+          key={watchId}
+          runId={watchId}
+          onClose={() => void setWatchId(null)}
+          onStep={stepWatch}
+          position={sweepList.length > 0 ? { index: sweepIndex, total: sweepList.length } : null}
+          canStep={sweepList.length > 1}
+        />
+      )}
 
       {rows.length === 0 ? (
         <div className="text-sm text-gray-500 border border-dashed border-gray-300 rounded-md p-6">
