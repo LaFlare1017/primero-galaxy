@@ -1,6 +1,6 @@
 "use client";
 
-import { parseAsStringEnum, useQueryState } from "nuqs";
+import { parseAsString, parseAsStringEnum, useQueryState } from "nuqs";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 
 import { AgentStatusOrb, ComposerBeam, DecisionBeam } from "@/components/ui/AgentEffects";
@@ -58,6 +58,20 @@ const SCENARIO_IDS: ScenarioId[] = SCENARIOS.map((s) => s.id);
  */
 const scenarioParser = parseAsStringEnum<ScenarioId>(SCENARIO_IDS).withDefault("s1");
 
+/**
+ * Open run (the URL-state audit's opportunity 1): the run id in the URL is
+ * a capability token — the same credential the chat/submit APIs already
+ * trust — so a refresh, crash, or a link from the facilitator can restore
+ * the live workspace instead of dead-ending on the landing screen while
+ * the run keeps recording on the server. Cleared when the workspace closes
+ * (submitted navigation, scenario menu) so a stale param can never spawn a
+ * phantom run; restore happens only with explicit consent. Nullable (no
+ * default): absent must be null, never an empty string — the session API
+ * validates sessionId as 1–64 chars and would 400 on "".
+ */
+const runParser = parseAsString;
+const sessionParser = parseAsString;
+
 const SCENARIO6_DRAFTS = [
   { id: "ACC-2026-03-U", desc: "March utilities (meter not yet read)", amount: 18432.17 },
   { id: "ACC-2026-03-W", desc: "Accrued wages (March 29–31)", amount: 61408.55 },
@@ -114,6 +128,8 @@ function DelegateWorkspace() {
   // ── Session state ──
   const [participant, setParticipant] = useState("");
   const [scenarioId, setScenarioId] = useQueryState("scenario", scenarioParser);
+  const [runParam, setRunParam] = useQueryState("run", runParser);
+  const [sessionParam, setSessionParam] = useQueryState("session", sessionParser);
   const [runId, setRunId] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [brief, setBrief] = useState("");
@@ -160,6 +176,78 @@ function DelegateWorkspace() {
   const [submitted, setSubmitted] = useState<{ detected: boolean; debriefNote: string } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showBrief, setShowBrief] = useState(true);
+
+  // ── Restore offer: the URL carries an open run (?run=…&session=…). The
+  // server already records everything needed to resume — the session API
+  // takes sessionId+label, and the event log holds the durable thread — so
+  // this only asks the human, then rebuilds via
+  // GET /api/delegate/run/[runId]/state. Restore is CONSENT-REQUIRED (a
+  // stale param after a scenario switch must not silently append runs to a
+  // session) and never auto-starts anything; submitted runs restore
+  // read-only (the submitted transcript is the scored artifact — the chat
+  // route already 409s late messages). ──
+  const [restoreCandidate, setRestoreCandidate] = useState<null | {
+    runId: string;
+    sessionId: string;
+  }>(null);
+  const [restoring, setRestoring] = useState(false);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (runParam && !runId) setRestoreCandidate({ runId: runParam, sessionId: sessionParam ?? "" });
+    // runId in deps would re-offer after an intentional decline.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runParam, sessionParam]);
+
+  const restoreRun = useCallback(
+    async (candidate: { runId: string; sessionId: string }) => {
+      setRestoring(true);
+      setRestoreError(null);
+      try {
+        const res = await fetch(`/api/delegate/run/${encodeURIComponent(candidate.runId)}/state`);
+        if (!res.ok) {
+          // Stale/unknown run (server data cleared, typo, other cohort):
+          // drop the offer and the param — start fresh is the only path.
+          setRestoreCandidate(null);
+          setRestoreError("That run could not be found. Start a scenario instead.");
+          void setRunParam(null);
+          return;
+        }
+        const state = (await res.json()) as {
+          sessionId: string;
+          participantLabel: string;
+          scenarioId: string;
+          startedAt: string;
+          submittedAt?: string;
+          detected?: boolean;
+          debriefNote?: string;
+          manifest: { learnerBrief?: string };
+          messages: Array<{ role: "user" | "assistant"; content: string; toolCalls?: ToolRow[]; ts: string }>;
+        };
+        setSessionId(state.sessionId);
+        setScenarioId(state.scenarioId as ScenarioId);
+        setRunId(candidate.runId);
+        // The session's own label: keeps the next scenario start eligible
+        // to RESUME the same session (the API matches on label).
+        setParticipant(state.participantLabel);
+        setBrief(state.manifest.learnerBrief ?? "");
+        setStartedAt(new Date(state.startedAt).getTime());
+        setElapsed(Math.floor((Date.now() - new Date(state.startedAt).getTime()) / 1000));
+        setMessages(state.messages);
+        setSubmitted(
+          state.submittedAt
+            ? { detected: state.detected ?? false, debriefNote: state.debriefNote ?? "" }
+            : null,
+        );
+        setRestoreCandidate(null);
+        void setSessionParam(state.sessionId);
+        // ?run= stays as the restored run's live pointer.
+      } finally {
+        setRestoring(false);
+      }
+    },
+    [setRunParam, setSessionParam, setScenarioId],
+  );
 
   // ── s6 control state: reviewed drafts + the learner's post decision ──
   const [reviewedDrafts, setReviewedDrafts] = useState<Set<string>>(new Set());
@@ -215,12 +303,22 @@ function DelegateWorkspace() {
     const res = await fetch("/api/delegate/session", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ participantLabel: participant || "Participant", scenarioId: nextScenario ?? scenarioId, sessionId: sessionId ?? undefined }),
+      body: JSON.stringify({
+        participantLabel: participant || "Participant",
+        scenarioId: nextScenario ?? scenarioId,
+        // React state first (same-mount transitions); the ?session= param
+        // covers a fresh page load whose URL carries the session across
+        // (palette switch mid-session, or a run link opened in a new tab).
+        sessionId: sessionId ?? sessionParam ?? undefined,
+      }),
     });
     const data = (await res.json()) as { runId: string; sessionId: string; manifest: { learnerBrief?: string } };
     setSessionId(data.sessionId);
     setRunId(data.runId);
     if (nextScenario) setScenarioId(nextScenario);
+    // The URL becomes the run pointer (refresh/crash restore, shareable).
+    void setRunParam(data.runId);
+    void setSessionParam(data.sessionId);
     setBrief(data.manifest.learnerBrief ?? "");
     setStartedAt(Date.now());
     setMessages([]);
@@ -237,7 +335,7 @@ function DelegateWorkspace() {
     setAuthorizedPost(false);
     setPostFeedback(null);
     setTab("gl");
-  }, [participant, scenarioId, sessionId, setScenarioId]);
+  }, [participant, scenarioId, sessionId, sessionParam, setScenarioId, setRunParam, setSessionParam]);
 
   useEffect(() => {
     if (!startedAt || submitted) return;
@@ -390,6 +488,39 @@ function DelegateWorkspace() {
           >
             Start scenario <Icon name="send" size={14} />
           </button>
+          {/* Restore offer: consent-required re-entry into a run the URL
+              points at (refresh/crash recovery, facilitator handoff). */}
+          {restoreCandidate && !restoring && (
+            <div className="rounded-md border border-gray-300 bg-gray-50 p-3 space-y-2">
+              <p className="text-sm font-medium">Reopen your previous session?</p>
+              <p className="text-xs text-gray-500">
+                This link points at a scenario that is still in progress on the facilitator console. Reopen it, or start fresh.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => void restoreRun(restoreCandidate)}
+                  className="rounded bg-black text-white px-3 py-1.5 text-xs font-medium hover:bg-zinc-800"
+                >
+                  Reopen previous session
+                </button>
+                <button
+                  onClick={() => {
+                    setRestoreCandidate(null);
+                    void setRunParam(null);
+                    void setSessionParam(null);
+                  }}
+                  className="rounded border border-gray-300 px-3 py-1.5 text-xs text-gray-600 hover:text-black hover:border-black"
+                >
+                  Start fresh instead
+                </button>
+              </div>
+            </div>
+          )}
+          {restoreError && !restoreCandidate && (
+            <p role="alert" className="text-xs text-gray-600 border border-gray-200 rounded px-3 py-2">
+              {restoreError}
+            </p>
+          )}
         </div>
       </div>
     );
@@ -779,6 +910,8 @@ function DelegateWorkspace() {
                   onClick={() => {
                     setRunId(null);
                     setSessionId(null);
+                    void setRunParam(null);
+                    void setSessionParam(null);
                   }}
                   className="rounded border border-black px-3 py-1.5 text-xs font-medium hover:bg-gray-50"
                 >

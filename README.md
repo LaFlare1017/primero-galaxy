@@ -185,7 +185,7 @@ The popover UI itself is shared: `components/ui/SavedViewsPopover.tsx` is generi
 
 - **Galaxy** predates the extraction and intentionally does not consume the primitives: its overlays are bespoke (glass tooltip, planet panel, toast stack) and tightly coupled to the 3D scene. It benefits from the token layer and ships the ⌘K palette; its `components/ui/*` remain galaxy-specific.
 - **FinBench** is the reference consumer of the full stack: engine + primitives for the run explorer, saved views on top, plus `Table` primitives for the category × model matrix. `RunsTable` is the canonical wiring example.
-- **Delegate** uses the primitives in light mode (`.delegate-light`): the facilitator console renders its participant grid with `Table`, drives `?status=`/`?sort=`/`?dir=` through nuqs (comma-joined statuses, `clearOnDefault` so defaults never appear in the URL, `<Suspense>` wrapper), receives palette scenario picks via the `delegate:select-scenario` event, and offers saved views through the shared popover in monochrome tone — icon picker, rename, and shareable URLs included (an opened shared link toasts, then the toast and its `?view=` param self-strip).
+- **Delegate** uses the primitives in light mode (`.delegate-light`): the facilitator console renders its participant grid with `Table`, drives `?status=`/`?sort=`/`?dir=` through nuqs (comma-joined statuses, `clearOnDefault` so defaults never appear in the URL, `<Suspense>` wrapper), receives palette scenario picks via the `delegate:select-scenario` event, and offers saved views through the shared popover in monochrome tone — icon picker, rename, and shareable URLs included (an opened shared link toasts, then the toast and its `?view=` param self-strip). The participant screen is restorable from the URL too: starting a run writes `?run=`/`?session=`, so a refresh (or a shared run link) offers to reopen the workspace — declining strips both params, a submitted run restores read-only with its detection result and debrief note, and an unknown run id degrades to start-fresh guidance. All of it is backed by `GET /api/delegate/run/[runId]/state`, which rebuilds the transcript (each turn's tool calls included) from the append-only event log.
 
 ### Conventions for new surfaces
 
@@ -219,9 +219,9 @@ lib/            constants, data generator, galaxy layout, user-company helpers,
                 finbench snapshot loader
 store/          Zustand store (mode, selection, toasts, user stars)
 types/          Company / Trajectory / Maturity data model
-e2e/            Playwright specs (70: galaxy, delegate agent effects + facilitator
-                saved views incl. share, finbench filters + saved views, ⌘K palette,
-                facilitator grid, reduced motion, axe a11y gate)
+e2e/            Playwright specs (74: galaxy, delegate agent effects, ?run= run
+                resume, facilitator saved views incl. share, finbench filters +
+                saved views, ⌘K palette, facilitator grid, reduced motion, a11y)
 ```
 
 ## Reduced motion
