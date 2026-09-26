@@ -77,6 +77,16 @@ test.describe('Delegate ?run= resume', () => {
 
     // One real agent turn: the mock agent answers "reconcile" prompts with
     // two tool calls, giving the restored transcript something to prove.
+    // Before the turn, copy the run link from the top bar (the
+    // participant-side share, per the saved-views Share pattern) and prove
+    // it is the same resumable URL the restore flow understands.
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.getByRole('button', { name: 'Copy session link' }).click();
+    await expect(page.getByRole('button', { name: 'Copy session link' })).toContainText('Copied');
+    const shared = new URL(await page.evaluate(() => navigator.clipboard.readText()));
+    expect(shared.pathname).toBe('/delegate');
+    expect(shared.searchParams.get('run')).toBe(runId);
+    expect(shared.searchParams.get('session')).toBeTruthy();
     await page.locator(COMPOSER).fill('Please reconcile the bank account.');
     await page.keyboard.press('Enter');
     await expect(
@@ -169,6 +179,16 @@ test.describe('Delegate ?run= resume', () => {
     expect(submit.ok()).toBeTruthy();
 
     await page.goto(`/delegate?run=${seeded.runId}&session=${seeded.sessionId}`);
+
+    // Consent gate: the params are the only copy of the pointer until
+    // restore is accepted, so the landing card offers the copy there too —
+    // and it yields the same resumable URL.
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.getByRole('button', { name: 'Copy link' }).click();
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()), { timeout: 5_000 })
+      .toContain(`run=${seeded.runId}`);
+
     await page.getByRole('button', { name: 'Reopen previous session' }).click();
     await waitRestored(page, seeded.runId);
 

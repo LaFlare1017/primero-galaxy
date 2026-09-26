@@ -5,6 +5,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 
 import { AgentStatusOrb, ComposerBeam, DecisionBeam } from "@/components/ui/AgentEffects";
 import { MessageBody } from "@/components/ui/MessageBody";
+import { cn } from "@/lib/utils";
 
 /**
  * Delegate — participant view (handoff §7).
@@ -91,6 +92,7 @@ const ICON_PATHS: Record<string, string> = {
   search: "M21 21l-4.35-4.35M17 11a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z",
   doc: "M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l5 5v11a2 2 0 0 1-2 2Z",
   check: "M5 13l4 4L19 7",
+  link: "M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71",
   pen: "M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z",
   shield: "M12 3l8 3v6c0 4.5-3.2 7.7-8 9-4.8-1.3-8-4.5-8-9V6l8-3Z",
   users: "M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm14 10v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75",
@@ -192,6 +194,33 @@ function DelegateWorkspace() {
   }>(null);
   const [restoring, setRestoring] = useState(false);
   const [restoreError, setRestoreError] = useState<string | null>(null);
+  /**
+   * Share flash for the run link (the saved-views Share pattern): the
+   * button that just copied flips to "Copied" for 1.5s — visible
+   * confirmation without a toast.
+   */
+  const [copiedTarget, setCopiedTarget] = useState<"run" | null>(null);
+
+  /**
+   * Copy the resumable run link (the participant-side half of the audit's
+   * state-sharing goal): hands the session to the facilitator or reopens
+   * it on another device — the receiver always lands on the consent
+   * offer. During the consent gate the ids still live only in the URL, so
+   * the ?run=/?session= params are the fallback source.
+   */
+  const copyRunLink = useCallback(() => {
+    const params = new URL(window.location.href).searchParams;
+    const id = runId ?? params.get("run");
+    if (!id) return;
+    const url = new URL("/delegate", window.location.origin);
+    url.searchParams.set("run", id);
+    const sid = sessionId ?? params.get("session");
+    if (sid) url.searchParams.set("session", sid);
+    void navigator.clipboard.writeText(url.toString()).then(() => {
+      setCopiedTarget("run");
+      window.setTimeout(() => setCopiedTarget(null), 1500);
+    });
+  }, [runId, sessionId]);
 
   useEffect(() => {
     if (runParam && !runId) setRestoreCandidate({ runId: runParam, sessionId: sessionParam ?? "" });
@@ -521,6 +550,18 @@ function DelegateWorkspace() {
               {restoreError}
             </p>
           )}
+          {/* Offer the link even at the consent gate: the params are the
+              only copy of the pointer until restore is accepted. */}
+          {restoreCandidate && !restoring && (
+            <button
+              type="button"
+              onClick={copyRunLink}
+              className="flex items-center gap-1 text-xs rounded border border-gray-300 px-2 py-1 text-gray-600 hover:border-black hover:text-black"
+            >
+              <Icon name="link" size={12} />
+              {copiedTarget === "run" ? "Copied" : "Copy link"}
+            </button>
+          )}
         </div>
       </div>
     );
@@ -557,6 +598,23 @@ function DelegateWorkspace() {
             {brief}
           </p>
         )}
+        {/* Share the run link (saved-views Share pattern): hand the session
+            to the facilitator or reopen it on another device. */}
+        <button
+          type="button"
+          onClick={copyRunLink}
+          title="Copy session link"
+          aria-label="Copy session link"
+          className={cn(
+            "flex items-center gap-1 text-xs rounded border px-2 py-1",
+            copiedTarget === "run"
+              ? "border-black bg-black text-white font-medium"
+              : "border-gray-300 text-gray-600 hover:border-black hover:text-black",
+          )}
+        >
+          <Icon name="link" size={12} />
+          {copiedTarget === "run" ? "Copied" : "Copy link"}
+        </button>
       </div>
 
       {/* Split panes */}

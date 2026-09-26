@@ -148,14 +148,38 @@ test('driving the UI produces the same URL format as the deep links', async ({ p
   // the highlighted item. (The popover content is fixed-position and can
   // extend below the fold, so pointer clicks on items are not reliable —
   // keyboard is cmdk's native interaction model.)
+  //
+  // The search is a CONTROLLED cmdk value, so the typed text must
+  // round-trip through React state before Enter: cmdk selects whatever is
+  // highlighted at keypress time, and a race would pick the stale default
+  // highlight. Wait until the list has narrowed to exactly one visible
+  // item — the round-trip proof and the unique Enter target in one.
   await subjectSearch.fill('Result');
+  await expect(page.locator('[cmdk-item]:visible', { hasText: 'Result' })).toHaveCount(1);
   await subjectSearch.press('Enter');
 
-  // The value list mounts with its own autofocused search; filter + Enter
-  // toggles the option on.
+  // The value view mounts with its own autofocused search (same
+  // placeholder); its option rows exist only there, so their visibility
+  // proves the swap completed. cmdk keeps whatever item was highlighted at
+  // mount and its subsequence filter matches both options ("miss" is a
+  // subsequence of "numeric pass" too), so the search alone does not move
+  // the selection: Home jumps to the top-scored item, which the score sort
+  // guarantees is the tighter match — "numeric miss".
   const valueSearch = page.getByPlaceholder('Search...');
   await expect(valueSearch).toBeFocused();
   await valueSearch.fill('miss');
+  // The re-sort lands a frame after typing, so press Home and VERIFY the
+  // selected item in a retry loop — a keypress that slips in before the
+  // re-order just re-selects the (then-wrong) first item, and the next
+  // press fixes it. Home is idempotent, the assertion pins the exact
+  // Enter target, and cmdk's score sort puts the tighter subsequence
+  // match first: "numeric miss".
+  await expect(async () => {
+    await valueSearch.press('Home');
+    await expect(
+      page.locator('[cmdk-item][data-selected="true"]', { hasText: 'miss' })
+    ).toBeVisible();
+  }).toPass({ timeout: 10_000 });
   await valueSearch.press('Enter');
 
   // The same view the deep link produces…
