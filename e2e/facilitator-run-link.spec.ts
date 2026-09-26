@@ -25,6 +25,10 @@ import { expect, test, type Page } from '@playwright/test';
 const STAMP = Date.now().toString(36).slice(-5);
 const LIVE = `E2E LinkLive ${STAMP}`;
 const SUBMITTED = `E2E LinkSub ${STAMP}`;
+// The watch tests seed their own sessions: the store accumulates rows
+// across tests in this file, and a shared label would match two rows.
+const WATCH_LIVE = `E2E LinkWatch ${STAMP}`;
+const WATCH_SUB = `E2E LinkWatchS ${STAMP}`;
 
 const MIN_40_WORDS =
   'WHAT I CONCLUDED: The revenue recognition defect was identified and the ' +
@@ -33,6 +37,24 @@ const MIN_40_WORDS =
   'the period. WHAT I AM UNSURE ABOUT: Nothing material remains open here.';
 
 const COMPOSER = 'input[placeholder="Ask the agent or direct its work…"]';
+
+/** Watch a participant's run from the grid row; wait for the mirror. */
+async function watchRun(page: Page, participant: string): Promise<void> {
+  await page
+    .getByRole('row')
+    .filter({ hasText: participant })
+    .getByRole('button', { name: `Watch ${participant}` })
+    .click();
+  await expect(page.getByRole('region', { name: `Watching run for ${participant}` })).toBeVisible();
+}
+
+/** One real agent turn through the chat API (mirrors as two messages). */
+async function chatTurn(page: Page, runId: string, message: string): Promise<void> {
+  const res = await page.request.post('/api/delegate/chat', {
+    data: { runId, message },
+  });
+  expect(res.ok()).toBeTruthy();
+}
 
 interface StartResponse {
   sessionId: string;
@@ -117,6 +139,72 @@ test.describe('Facilitator run links', () => {
     await expect(receiver.getByRole('button', { name: 'Reopen previous session' })).toHaveCount(0);
 
     await receiverContext.close();
+  });
+
+  test('the watch pane mirrors a live run and follows it without a reload', async ({ page }) => {
+    const seeded = await startRun(page, WATCH_LIVE, 's1');
+
+    await page.goto('/delegate/facilitator');
+    await watchRun(page, WATCH_LIVE);
+
+    // Selection lives in the URL: shareable, survives a reload.
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('watch'), { timeout: 5_000 })
+      .toBe(seeded.runId);
+    await expect(page.getByText('No messages yet')).toBeVisible();
+
+    // Seed a turn AFTER the pane is open: the mirror must follow without a
+    // reload — both messages, with the turn's tool calls collapsed.
+    await chatTurn(page, seeded.runId, 'Please reconcile the bank account.');
+    const pane = page.getByRole('region', { name: `Watching run for ${WATCH_LIVE}` });
+    await expect(pane.getByText('Please reconcile the bank account.')).toBeVisible({ timeout: 15_000 });
+    await expect(pane.getByText('I reconciled the March operating account', { exact: false })).toBeVisible();
+    const toolSummary = pane.getByText('2 tool calls (expand to see what the agent did)');
+    await expect(toolSummary).toBeVisible();
+    await toolSummary.click();
+    await expect(pane.getByText('get_bank_feed')).toBeVisible();
+    await expect(pane.getByText('query_gl')).toBeVisible();
+    await expect(pane.getByText('agent is working with the ERP')).toBeVisible();
+
+    // The mirror survives a reload (state, not a one-shot import).
+    await page.reload();
+    await expect(page.getByRole('region', { name: `Watching run for ${WATCH_LIVE}` })).toBeVisible();
+    await expect(page.getByText('Please reconcile the bank account.')).toBeVisible();
+
+    // Close drops the ?watch= param and the pane.
+    await page.getByRole('button', { name: 'Close watch pane' }).click();
+    await expect(page.getByRole('region', { name: `Watching run for ${WATCH_LIVE}` })).toHaveCount(0);
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('watch'))
+      .toBe(null);
+  });
+
+  test('the watch pane freezes a submitted run at its submitted clock', async ({ page }) => {
+    const seeded = await startRun(page, WATCH_SUB, 's5');
+    const submit = await page.request.post('/api/delegate/submit', {
+      data: { runId: seeded.runId, answer: MIN_40_WORDS },
+    });
+    expect(submit.ok()).toBeTruthy();
+
+    await page.goto('/delegate/facilitator');
+    await watchRun(page, WATCH_SUB);
+    const pane = page.getByRole('region', { name: `Watching run for ${WATCH_SUB}` });
+
+    // The clock is frozen at submittedAt (not counting up) and the run is
+    // marked submitted; the participant screen would be read-only too.
+    const clock = () => pane.locator('span.font-mono').innerText();
+    const t1 = await clock();
+    await expect(pane.getByText('submitted', { exact: true })).toBeVisible();
+    await page.waitForTimeout(2100);
+    const t2 = await clock();
+    expect(t2).toBe(t1);
+
+    // Eye toggle off: the pane closes and the param drops.
+    await page.getByRole('row').filter({ hasText: WATCH_SUB }).getByRole('button', { name: `Watch ${WATCH_SUB}` }).click();
+    await expect(pane).toHaveCount(0);
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('watch'))
+      .toBe(null);
   });
 
   test('a copied submitted-run link restores read-only in a fresh context', async ({ page, browser }) => {

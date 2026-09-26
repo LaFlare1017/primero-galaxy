@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowDown, ArrowUp, ArrowUpDown, ExternalLink, Link2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Eye, ExternalLink, Link2, X } from "lucide-react";
 import {
   createParser,
   parseAsString,
@@ -12,6 +12,7 @@ import {
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { AgentStatusOrb } from "@/components/ui/AgentEffects";
+import { MessageBody } from "@/components/ui/MessageBody";
 import { FacilitatorSavedViews } from "@/components/delegate/SavedViews";
 import type { FacilitatorViewState } from "@/components/delegate/saved-views";
 import {
@@ -118,6 +119,15 @@ type ScenarioFocusId = (typeof SCENARIO_FOCUS_IDS)[number];
  */
 const scenarioFocusParser = parseAsStringEnum<ScenarioFocusId>([...SCENARIO_FOCUS_IDS]);
 
+/**
+ * Watched run (?watch=<runId>): the console mirrors that run live from
+ * GET /api/delegate/run/[runId]/state — status, elapsed clock, and the
+ * transcript as it grows — without opening a tab. The run id is the same
+ * capability token the chat/submit APIs already trust, so the read changes
+ * nothing about the v1 posture; scores stay debrief-only either way.
+ */
+const watchParser = parseAsString;
+
 const SCENARIO_FOCUS_NAMES: Record<ScenarioFocusId, string> = {
   s1: "Scenario 1 · Bank recon",
   s2: "Scenario 2 · Intercompany",
@@ -222,7 +232,189 @@ function Icon({ name, size = 14, className = "" }: { name: string; size?: number
   );
 }
 
+/** One transcript message as served by the run-state endpoint. */
+interface WatchMessage {
+  role: "user" | "assistant";
+  content: string;
+  ts: string;
+  toolCalls?: Array<{ tool: string; args?: Record<string, unknown>; summary?: string }>;
+}
+
+const WATCH_POLL_MS = 3000;
+
 /**
+ * Live mirror of a participant's run (the audit's end-to-end sharing,
+ * taken to the console itself): polls GET /api/delegate/run/[runId]/state
+ * and renders what the participant sees — status, the elapsed clock
+ * derived from run.startedAt (frozen once submitted), and the transcript
+ * as it grows, with each turn's tool calls collapsed exactly like the
+ * live chat. Everything is rebuilt from the event log, so the mirror is
+ * the same data the participant's own restored screen shows.
+ */
+function WatchPane({ runId, onClose }: { runId: string; onClose: () => void }) {
+  const [label, setLabel] = useState("");
+  const [scenario, setScenario] = useState("");
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [submittedAt, setSubmittedAt] = useState<string | null>(null);
+  const [messages, setMessages] = useState<WatchMessage[]>([]);
+  const [elapsed, setElapsed] = useState(0);
+  const [missing, setMissing] = useState(false);
+
+  // One poller: the run-state endpoint doubles as the live tick, so a
+  // growing transcript (and the submitted transition) arrive with the
+  // same cadence as the grid's own rows.
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      try {
+        const res = await fetch(`/api/delegate/run/${encodeURIComponent(runId)}/state`, {
+          cache: "no-store",
+        });
+        if (!alive) return;
+        if (!res.ok) {
+          setMissing(true);
+          return;
+        }
+        const data = (await res.json()) as {
+          participantLabel: string;
+          scenarioId: string;
+          startedAt: string;
+          submittedAt?: string | null;
+          messages: WatchMessage[];
+        };
+        setMissing(false);
+        setLabel(data.participantLabel);
+        setScenario(SCENARIO_FOCUS_NAMES[data.scenarioId as ScenarioFocusId] ?? data.scenarioId);
+        setStartedAt(new Date(data.startedAt).getTime());
+        setSubmittedAt(data.submittedAt ?? null);
+        setMessages(data.messages ?? []);
+      } catch {
+        // keep last good mirror
+      }
+    };
+    tick();
+    const t = setInterval(tick, WATCH_POLL_MS);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [runId]);
+
+  // Elapsed clock, frozen at the submitted time once the run is in.
+  useEffect(() => {
+    if (startedAt === null) return;
+    const compute = () =>
+      setElapsed(
+        Math.max(
+          0,
+          Math.round(((submittedAt ? new Date(submittedAt).getTime() : Date.now()) - startedAt) / 1000),
+        ),
+      );
+    compute();
+    if (submittedAt) return;
+    const t = setInterval(compute, 1000);
+    return () => clearInterval(t);
+  }, [startedAt, submittedAt]);
+
+  const mm = String(Math.floor(elapsed / 60)).padStart(2, "0");
+  const ss = String(elapsed % 60).padStart(2, "0");
+
+  if (missing) {
+    return (
+      <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
+        <p className="font-medium text-black">This run could not be found.</p>
+        <p className="mt-1 text-xs">It may have been cleared from the workshop store. Close the pane and pick another row.</p>
+      </div>
+    );
+  }
+
+  return (
+    <section className="mb-4 rounded-md border border-gray-200" aria-label={`Watching run for ${label}`}>
+      <div className="flex items-center gap-3 border-b border-gray-200 bg-gray-50 px-3 py-2">
+        <span className="text-[13px] font-medium text-black">{label || "…"}</span>
+        <span className="text-[13px] text-gray-500">{scenario}</span>
+        <span className="font-mono text-xs tabular-nums text-gray-500">
+          {mm}:{ss}
+        </span>
+        <span className={cn("text-[13px]", submittedAt ? "font-medium text-black" : "text-gray-500")}>
+          {submittedAt ? "submitted" : "working"}
+        </span>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close watch pane"
+          className="ml-auto text-gray-400 hover:text-black"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+      <div className="max-h-72 space-y-2 overflow-y-auto p-3">
+        {messages.length === 0 ? (
+          <p className="text-xs text-gray-500">No messages yet — the participant has not prompted the agent.</p>
+        ) : (
+          messages.map((m, i) => (
+            <div key={i} className={m.role === "user" ? "flex justify-end" : "flex justify-start"}>
+              <div
+                className={`max-w-[92%] rounded-lg px-3 py-2 text-sm ${
+                  m.role === "user" ? "bg-black text-white" : "bg-white border border-gray-200 text-black"
+                }`}
+              >
+                <MessageBody content={m.content} />
+                {m.toolCalls && m.toolCalls.length > 0 && (
+                  <details className="mt-2 group">
+                    <summary className={`cursor-pointer text-xs ${m.role === "user" ? "text-gray-300" : "text-gray-500 hover:text-black"}`}>
+                      {m.toolCalls.length} tool call{m.toolCalls.length > 1 ? "s" : ""} (expand to see what the agent did)
+                    </summary>
+                    <div className="mt-1 space-y-1">
+                      {m.toolCalls.map((tc, j) => (
+                        <div key={j} className="rounded bg-gray-50 border border-gray-200 px-2 py-1 text-xs font-mono text-gray-600">
+                          <span className="text-black font-semibold">{tc.tool}</span> {JSON.stringify(tc.args ?? {})}
+                          {tc.summary ? ` → ${tc.summary}` : ""}
+                        </div>
+                      ))}
+                    </div>
+                  </details>
+                )}
+              </div>
+            </div>
+          ))
+        )}
+        {!submittedAt && messages.length > 0 && (
+          <div className="flex justify-start">
+            <div className="text-xs text-gray-500 pl-1 flex items-center gap-2">
+              <AgentStatusOrb active />
+              <span>agent is working with the ERP…</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * The Link cell's watch toggle: eye button that flips to pressed
+ * (black/white) while the pane mirrors this row's run.
+ */
+function WatchCell({ row, active, onToggle }: { row: Row; active: boolean; onToggle: () => void }) {
+  if (!row.runId) return null;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={active}
+      aria-label={`Watch ${row.participant}`}
+      className={cn(
+        "inline-flex h-7 w-7 items-center justify-center rounded-md border",
+        active
+          ? "border-black bg-black text-white"
+          : "border-gray-300 bg-white text-gray-600 hover:border-gray-500 hover:text-black",
+      )}
+    >
+      <Eye className="h-3 w-3" aria-hidden="true" />
+    </button>
+  );
+}/**
  * Default export wraps the grid in Suspense: the page is statically
  * prerendered, and useQueryState (useSearchParams) forces a CSR bailout
  * for the prerender pass. The boundary must sit ABOVE the component that
@@ -247,6 +439,7 @@ function FacilitatorGrid() {
   const [sortDir, setSortDir] = useQueryState("dir", sortDirParser);
   const [viewName, setViewName] = useQueryState("view", viewNameParser);
   const [scenarioFocus, setScenarioFocus] = useQueryState("scenario", scenarioFocusParser);
+  const [watchId, setWatchId] = useQueryState("watch", watchParser);
   const statusFilter = useMemo(() => new Set(statuses ?? []), [statuses]);
   const [sharedView, setSharedView] = useState<string | null>(null);
   // Row whose run link was just copied: the button flips to "Copied" for
@@ -449,6 +642,9 @@ function FacilitatorGrid() {
         </div>
       )}
 
+      {/* Live mirror of the watched run (selection lives in ?watch=). */}
+      {watchId !== null && <WatchPane runId={watchId} onClose={() => void setWatchId(null)} />}
+
       {rows.length === 0 ? (
         <div className="text-sm text-gray-500 border border-dashed border-gray-300 rounded-md p-6">
           <p>No sessions yet. Participants start at /delegate.</p>
@@ -545,7 +741,17 @@ function FacilitatorGrid() {
                   <TableCell className="py-2">{detectionLabel(r)}</TableCell>
                   <TableCell className="py-2 text-black">{r.flaggedBehavior ?? ""}</TableCell>
                   <TableCell className="py-2">
-                    <RunLinkCell row={r} copied={copiedRunId === r.runId} onCopy={copyRunLink} />
+                    <div className="flex items-center gap-1.5">
+                      <WatchCell
+                        row={r}
+                        active={watchId !== null && watchId === r.runId}
+                        onToggle={() => {
+                          if (!r.runId) return;
+                          void setWatchId(watchId === r.runId ? null : r.runId);
+                        }}
+                      />
+                      <RunLinkCell row={r} copied={copiedRunId === r.runId} onCopy={copyRunLink} />
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
