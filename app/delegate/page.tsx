@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { parseAsStringEnum, useQueryState } from "nuqs";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 
 import { AgentStatusOrb, ComposerBeam, DecisionBeam } from "@/components/ui/AgentEffects";
 import { MessageBody } from "@/components/ui/MessageBody";
@@ -44,6 +45,18 @@ const SCENARIOS = [
 ] as const;
 
 type ScenarioId = (typeof SCENARIOS)[number]["id"];
+
+const SCENARIO_IDS: ScenarioId[] = SCENARIOS.map((s) => s.id);
+
+/**
+ * Controlled `?scenario=` state (nuqs, same URL layer as the facilitator's
+ * `?status=/?sort=/?dir=`): the source of truth for the preselected
+ * scenario, written by the scenario cards, a deep link, or an in-place ⌘K
+ * palette pick — so the address bar can never diverge from the selection.
+ * Defaults drop out of the URL (clearOnDefault); an unknown value falls
+ * back to the default instead of breaking the page.
+ */
+const scenarioParser = parseAsStringEnum<ScenarioId>(SCENARIO_IDS).withDefault("s1");
 
 const SCENARIO6_DRAFTS = [
   { id: "ACC-2026-03-U", desc: "March utilities (meter not yet read)", amount: 18432.17 },
@@ -90,9 +103,17 @@ function Icon({ name, size = 14, className = "" }: { name: keyof typeof ICON_PAT
 }
 
 export default function DelegatePage() {
+  return (
+    <Suspense>
+      <DelegateWorkspace />
+    </Suspense>
+  );
+}
+
+function DelegateWorkspace() {
   // ── Session state ──
   const [participant, setParticipant] = useState("");
-  const [scenarioId, setScenarioId] = useState<ScenarioId>("s1");
+  const [scenarioId, setScenarioId] = useQueryState("scenario", scenarioParser);
   const [runId, setRunId] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [brief, setBrief] = useState("");
@@ -116,23 +137,21 @@ export default function DelegatePage() {
   const [glEntity, setGlEntity] = useState("HLI-US");
   const [glGroup, setGlGroup] = useState<"account" | "">("account");
 
-  // ── Deep link: ?scenario=s3 preselects a scenario (command palette). The
-  // custom event covers same-page selection from the palette, where the page
-  // is already mounted and a query-only push would not remount it. ──
+  // ── Same-page scenario pick from the ⌘K palette: the page is already
+  // mounted, so a query-only push would not remount it — the palette
+  // dispatches this event instead, and it writes through the controlled
+  // ?scenario= param so the URL follows the selection. (Cross-page picks
+  // arrive as a plain ?scenario= deep link, which nuqs parses directly.) ──
   useEffect(() => {
-    const requested = new URLSearchParams(window.location.search).get("scenario");
-    if (requested && SCENARIOS.some((s) => s.id === requested)) {
-      setScenarioId(requested as ScenarioId);
-    }
     const onSelect = (event: Event) => {
       const detail = (event as CustomEvent<string>).detail;
       if (detail && SCENARIOS.some((s) => s.id === detail)) {
-        setScenarioId(detail as ScenarioId);
+        void setScenarioId(detail as ScenarioId);
       }
     };
     window.addEventListener("delegate:select-scenario", onSelect);
     return () => window.removeEventListener("delegate:select-scenario", onSelect);
-  }, []);
+  }, [setScenarioId]);
 
   // ── Answer panel ──
   const [conclusion, setConclusion] = useState("");
@@ -218,7 +237,7 @@ export default function DelegatePage() {
     setAuthorizedPost(false);
     setPostFeedback(null);
     setTab("gl");
-  }, [participant, scenarioId, sessionId]);
+  }, [participant, scenarioId, sessionId, setScenarioId]);
 
   useEffect(() => {
     if (!startedAt || submitted) return;

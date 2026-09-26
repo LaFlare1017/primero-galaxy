@@ -15,7 +15,7 @@ import { expect, test, type Page } from '@playwright/test';
  *   5. picking a scenario from /finbench crosses pages to
  *      /delegate?scenario=s5 with the scenario preselected
  *   6. picking a scenario while already on /delegate selects it in place
- *      via the delegate:select-scenario CustomEvent — no navigation
+ *      (no remount) and the URL follows via the controlled ?scenario= param
  *
  * The palette is client-only state (dialog + cmdk), so tests drive real
  * keyboard input and assert visible UI, not implementation handles.
@@ -121,10 +121,14 @@ test.describe('Command palette (⌘K)', () => {
     await page.getByRole('option', { name: 'Pick a scenario…' }).click();
     await page.getByRole('option', { name: /3\. Draft Q1 flux commentary/ }).click();
 
-    // Same page: no navigation, no ?scenario= param; the menu selection
-    // flips in place (the participant can just press Start).
+    // Same page: the workspace does not remount; the menu selection flips
+    // in place (the participant can just press Start) and the controlled
+    // ?scenario= param follows — so the address bar can never diverge from
+    // the selection (a refresh replays exactly what is on screen).
     expect(new URL(page.url()).pathname).toBe('/delegate');
-    expect(new URL(page.url()).searchParams.get('scenario')).toBeNull();
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('scenario'), { timeout: 5_000 })
+      .toBe('s3');
     const selected = page.locator('button', { hasText: 'Draft Q1 flux commentary' });
     await expect(selected).toBeVisible();
     await expect(selected).toHaveClass(/bg-black/);
