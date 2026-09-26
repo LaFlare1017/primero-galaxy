@@ -50,6 +50,18 @@ export function FacilitatorSavedViews({
       isActive: (view) => sameViewState(view.view, viewState),
       apply: (view) => onApply(view.view),
       describeCurrent: () => describeFacilitatorState(viewState),
+      // Sharing: the view state is exactly the URL's nuqs state, so the
+      // link reuses the deep-link shape — origin + /delegate/facilitator
+      // plus each non-null part as a query param, and &view=<name> for the
+      // import toast on the receiving end.
+      shareUrl: (view) => {
+        const params = new URLSearchParams();
+        if (view.view.status !== null) params.set('status', view.view.status.join(','));
+        if (view.view.sort !== null) params.set('sort', view.view.sort);
+        if (view.view.dir !== null) params.set('dir', view.view.dir);
+        params.set('view', view.name);
+        return `${window.location.origin}/delegate/facilitator?${params.toString()}`;
+      },
     }),
     [viewState, onApply],
   );

@@ -1,6 +1,14 @@
 'use client';
 
-import { Bookmark, BookmarkPlus, Check, ChevronDown, Pencil, Trash2 } from 'lucide-react';
+import {
+  Bookmark,
+  BookmarkPlus,
+  Check,
+  ChevronDown,
+  Link2,
+  Pencil,
+  Trash2,
+} from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Input } from '@/components/ui/primitives/input';
@@ -56,6 +64,13 @@ export interface SavedViewsStore<V extends SavedViewLike> {
   apply(view: V): void;
   /** One-line summary of the state being saved, shown in the save form. */
   describeCurrent(): string;
+  /**
+   * Builds the shareable URL for a view, when the surface supports it
+   * (e.g. the facilitator console encodes ?status/?sort/?dir). When
+   * present, each row gains a Share button that copies the link without
+   * closing the popover.
+   */
+  shareUrl?(view: V): string;
 }
 
 /** Emoji chip palette for the icon picker, from Circle's mock views. */
@@ -73,7 +88,9 @@ interface SavedViewsPopoverProps<V extends SavedViewLike> {
 
 /**
  * Bookmark-style trigger + list/save popover. Focus walks: Save current →
- * rows (apply) → row edit → row delete. Keyboard is the reliable
+ * rows (apply) → row share → row edit → row delete. When the store supplies
+ * shareUrl, each row gains a Share button that copies a link to the view.
+ * Keyboard is the reliable
  * interaction model for portaled fixed-position popover content (see e2e
  * conventions); pointer clicks work for in-flow elements like the trigger.
  */
@@ -89,6 +106,7 @@ export function SavedViewsPopover<V extends SavedViewLike>({
   const [name, setName] = useState('');
   const [icon, setIcon] = useState<string | undefined>(undefined);
   const [savedFlash, setSavedFlash] = useState<string | null>(null);
+  const [shareFlash, setShareFlash] = useState<string | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(() => setViews(store.list()), [store]);
@@ -130,6 +148,18 @@ export function SavedViewsPopover<V extends SavedViewLike>({
     setSavedFlash(id);
     window.setTimeout(() => setSavedFlash(null), 1500);
   }, []);
+
+  /** Copies the view's link and briefly flips the Share button to "Copied". */
+  const share = useCallback(
+    (view: V) => {
+      if (!store.shareUrl) return;
+      void navigator.clipboard.writeText(store.shareUrl(view)).then(() => {
+        setShareFlash(view.id);
+        window.setTimeout(() => setShareFlash(null), 1500);
+      });
+    },
+    [store],
+  );
 
   const confirmSave = useCallback(() => {
     const trimmed = name.trim();
@@ -331,6 +361,21 @@ export function SavedViewsPopover<V extends SavedViewLike>({
                             {view.description ?? store.describeCurrent()}
                           </span>
                         </span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`Share view ${view.name}`}
+                        onClick={() => share(view)}
+                        className={cn(
+                          'mt-0.5 rounded p-1 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100',
+                          mono ? 'text-gray-500 hover:text-black' : 'text-muted-foreground hover:text-foreground',
+                        )}
+                      >
+                        {shareFlash === view.id ? (
+                          <Check className="size-3.5" />
+                        ) : (
+                          <Link2 className="size-3.5" />
+                        )}
                       </button>
                       <button
                         type="button"

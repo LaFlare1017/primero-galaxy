@@ -1,8 +1,10 @@
 "use client";
 
-import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowDown, ArrowUp, ArrowUpDown, X } from "lucide-react";
 import {
   createParser,
+  parseAsString,
   parseAsStringEnum,
   parseAsStringLiteral,
   useQueryState,
@@ -102,6 +104,14 @@ const SORT_KEY_VALUES: SortKey[] = [
 const sortKeyParser = parseAsStringEnum<SortKey>(SORT_KEY_VALUES).withDefault("participant");
 const sortDirParser = parseAsStringLiteral(["asc", "desc"] as const).withDefault("asc");
 
+/**
+ * Name of an imported shared view. Carries no state of its own — the view's
+ * state rides the normal ?status=/?sort=/?dir= params — it only names the
+ * snapshot for the receiver ("Opened shared view 'Working watch'") and is
+ * stripped from the URL immediately so a refresh never re-toasts.
+ */
+const viewNameParser = parseAsString;
+
 function detectionLabel(row: Row): string {
   if (row.detected === undefined) return "n/a";
   return row.detected ? "caught it" : "missed";
@@ -153,7 +163,18 @@ function FacilitatorGrid() {
   const [statuses, setStatuses] = useQueryState("status", statusListParser);
   const [sortKey, setSortKey] = useQueryState("sort", sortKeyParser);
   const [sortDir, setSortDir] = useQueryState("dir", sortDirParser);
+  const [viewName, setViewName] = useQueryState("view", viewNameParser);
   const statusFilter = useMemo(() => new Set(statuses ?? []), [statuses]);
+  const [sharedView, setSharedView] = useState<string | null>(null);
+
+  // Imported shared view: acknowledge the ?view= name once with a toast,
+  // then drop the param (replaceState via nuqs) so a refresh doesn't
+  // re-toast. The state itself was already applied by the other params.
+  useEffect(() => {
+    if (viewName === null) return;
+    setSharedView(viewName);
+    void setViewName(null);
+  }, [viewName, setViewName]);
 
   // Saved-view snapshot of the live state. Defaults are stored as null,
   // mirroring clearOnDefault: participant/asc never appear in ?sort=/?dir=,
@@ -281,6 +302,31 @@ function FacilitatorGrid() {
           agent activity · refreshed {generatedAt ? new Date(generatedAt).toLocaleTimeString() : "not yet"} · individual scores reveal at the group debrief
         </span>
       </div>
+
+      {/* Imported shared view: ephemeral monochrome acknowledgment. */}
+      <AnimatePresence>
+        {sharedView !== null && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            role="status"
+            className="mb-3 flex items-center justify-between rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-[13px] text-gray-600"
+          >
+            <span>
+              Opened shared view <span className="font-medium text-black">{sharedView}</span>
+            </span>
+            <button
+              type="button"
+              aria-label="Dismiss shared view notification"
+              onClick={() => setSharedView(null)}
+              className="text-gray-400 hover:text-black"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {rows.length === 0 ? (
         <div className="text-sm text-gray-500 border border-dashed border-gray-300 rounded-md p-6">

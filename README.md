@@ -179,13 +179,13 @@ onApply(view.filters);   // → nuqs setFilters → same ?filters= pipeline as a
 
 The `SavedViews` popover (bookmark trigger next to the filter bar) marks the active view — the one whose filters JSON-match the live state — with a check, and disables "Save current" until a filter exists.
 
-The popover UI itself is shared: `components/ui/SavedViewsPopover.tsx` is generic over a small store contract (`list`/`save`/`remove`/`isActive`/`apply`/`describeCurrent`/`canSave` plus the store's write-event name) and a `mono` tone for Delegate's monochrome chrome. The facilitator console reuses it verbatim (`components/delegate/saved-views.ts`): a view snapshots the selected status facets plus sort key/direction — defaults stored as `null`, mirroring nuqs `clearOnDefault`, so a view replays into exactly the URL shape it was saved from — and sort keys are re-validated against the known set on apply, so a hand-edited store row degrades to the default sort instead of corrupting the URL. Unlike FinBench, the facilitator's default state is savable: a named full-room view is the escape hatch back after facet filtering.
+The popover UI itself is shared: `components/ui/SavedViewsPopover.tsx` is generic over a small store contract (`list`/`save`/`update`/`remove`/`isActive`/`apply`/`describeCurrent`/`canSave` plus the store's write-event name, and an optional `shareUrl`) and a `mono` tone for Delegate's monochrome chrome. Views carry an emoji chip (a 14-icon palette Circle-style) and can be renamed or re-iconed after saving: the edit form reuses the save form prefilled and submits through `update()`, leaving the derived description untouched. When a store supplies `shareUrl`, each row gains a Share button that copies a link to the view without closing the popover. The facilitator console reuses it verbatim (`components/delegate/saved-views.ts`): a view snapshots the selected status facets plus sort key/direction — defaults stored as `null`, mirroring nuqs `clearOnDefault`, so a view replays into exactly the URL shape it was saved from — and sort keys are re-validated against the known set on apply, so a hand-edited store row degrades to the default sort instead of corrupting the URL. Unlike FinBench, the facilitator's default state is savable: a named full-room view is the escape hatch back after facet filtering. It is also the one surface with sharing: Share copies `origin + /delegate/facilitator?status=…&sort=…&dir=…&view=<name>` — the same deep-link shape, plus the view name for the receiver — and opening such a link shows an ephemeral "Opened shared view" toast, strips the `?view=` param immediately so a refresh never re-toasts, and leaves the state itself to the ordinary params.
 
 ### Surface usage
 
 - **Galaxy** predates the extraction and intentionally does not consume the primitives: its overlays are bespoke (glass tooltip, planet panel, toast stack) and tightly coupled to the 3D scene. It benefits from the token layer and ships the ⌘K palette; its `components/ui/*` remain galaxy-specific.
 - **FinBench** is the reference consumer of the full stack: engine + primitives for the run explorer, saved views on top, plus `Table` primitives for the category × model matrix. `RunsTable` is the canonical wiring example.
-- **Delegate** uses the primitives in light mode (`.delegate-light`): the facilitator console renders its participant grid with `Table`, drives `?status=`/`?sort=`/`?dir=` through nuqs (comma-joined statuses, `clearOnDefault` so defaults never appear in the URL, `<Suspense>` wrapper), receives palette scenario picks via the `delegate:select-scenario` event, and offers saved views through the shared popover in monochrome tone.
+- **Delegate** uses the primitives in light mode (`.delegate-light`): the facilitator console renders its participant grid with `Table`, drives `?status=`/`?sort=`/`?dir=` through nuqs (comma-joined statuses, `clearOnDefault` so defaults never appear in the URL, `<Suspense>` wrapper), receives palette scenario picks via the `delegate:select-scenario` event, and offers saved views through the shared popover in monochrome tone — icon picker, rename, and shareable URLs included (an opened shared link toasts, then the toast and its `?view=` param self-strip).
 
 ### Conventions for new surfaces
 
@@ -219,8 +219,8 @@ lib/            constants, data generator, galaxy layout, user-company helpers,
                 finbench snapshot loader
 store/          Zustand store (mode, selection, toasts, user stars)
 types/          Company / Trajectory / Maturity data model
-e2e/            Playwright specs (56: galaxy, delegate agent effects + facilitator
-                saved views, finbench filters + saved views, ⌘K palette,
+e2e/            Playwright specs (59: galaxy, delegate agent effects + facilitator
+                saved views incl. share, finbench filters + saved views, ⌘K palette,
                 facilitator grid, reduced motion)
 ```
 
