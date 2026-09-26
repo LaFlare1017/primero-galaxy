@@ -101,6 +101,31 @@ const SORT_KEY_VALUES: SortKey[] = [
   "status",
   "detected",
 ];
+
+/**
+ * Scenario ids, mirroring the participant page's SCENARIOS (kept local:
+ * the surfaces share the URL-state conventions, not the module).
+ */
+const SCENARIO_FOCUS_IDS = ["s1", "s2", "s3", "s4", "s5", "s6"] as const;
+type ScenarioFocusId = (typeof SCENARIO_FOCUS_IDS)[number];
+
+/**
+ * Scenario focus (deep-linkable): ?scenario=s3 dims the room down to that
+ * scenario — rows on it get the marker — and offers to open the participant
+ * view with the same scenario preselected. Unlike the participant page
+ * there is no default scenario, so absent must be null (no withDefault and
+ * no clearOnDefault needed) and an unknown value degrades to no focus.
+ */
+const scenarioFocusParser = parseAsStringEnum<ScenarioFocusId>([...SCENARIO_FOCUS_IDS]);
+
+const SCENARIO_FOCUS_NAMES: Record<ScenarioFocusId, string> = {
+  s1: "Scenario 1 · Bank recon",
+  s2: "Scenario 2 · Intercompany",
+  s3: "Scenario 3 · Q1 flux",
+  s4: "Scenario 4 · AR aging",
+  s5: "Scenario 5 · Revenue recognition",
+  s6: "Scenario 6 · Post accruals",
+};
 // Defaults drop out of the URL (clearOnDefault), so an unsorted view shares
 // as a param-free URL.
 const sortKeyParser = parseAsStringEnum<SortKey>(SORT_KEY_VALUES).withDefault("participant");
@@ -181,6 +206,7 @@ function FacilitatorGrid() {
   const [sortKey, setSortKey] = useQueryState("sort", sortKeyParser);
   const [sortDir, setSortDir] = useQueryState("dir", sortDirParser);
   const [viewName, setViewName] = useQueryState("view", viewNameParser);
+  const [scenarioFocus, setScenarioFocus] = useQueryState("scenario", scenarioFocusParser);
   const statusFilter = useMemo(() => new Set(statuses ?? []), [statuses]);
   const [sharedView, setSharedView] = useState<string | null>(null);
   // Row whose run link was just copied: the button flips to "Copied" for
@@ -357,6 +383,32 @@ function FacilitatorGrid() {
         )}
       </AnimatePresence>
 
+      {scenarioFocus !== null && (
+        <div className="mb-3 flex items-center justify-between rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-[13px] text-gray-600">
+          <span>
+            Watching for <span className="font-medium text-black">{SCENARIO_FOCUS_NAMES[scenarioFocus]}</span> — sessions on it are highlighted below.
+          </span>
+          <div className="flex items-center gap-3">
+            <a
+              href={`/delegate?scenario=${scenarioFocus}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-600 hover:border-gray-500 hover:text-black"
+            >
+              Open scenario as a participant
+            </a>
+            <button
+              type="button"
+              onClick={() => void setScenarioFocus(null)}
+              aria-label="Clear scenario focus"
+              className="text-gray-400 hover:text-black"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {rows.length === 0 ? (
         <div className="text-sm text-gray-500 border border-dashed border-gray-300 rounded-md p-6">
           <p>No sessions yet. Participants start at /delegate.</p>
@@ -427,8 +479,19 @@ function FacilitatorGrid() {
             </TableHeader>
             <TableBody>
               {visibleRows.map((r, i) => (
-                <TableRow key={i} className="border-gray-100 hover:bg-gray-50">
-                  <TableCell className="py-2 font-medium text-black">{r.participant}</TableCell>
+                <TableRow
+                  key={i}
+                  className={cn(
+                    "border-gray-100 hover:bg-gray-50",
+                    scenarioFocus !== null && r.currentScenario === scenarioFocus && "bg-gray-100",
+                  )}
+                >
+                  <TableCell className="py-2 font-medium text-black">
+                    {r.participant}
+                    {r.currentScenario === scenarioFocus && (
+                      <span aria-hidden="true" className="text-gray-400"> ◂</span>
+                    )}
+                  </TableCell>
                   <TableCell className="py-2">{SCENARIO_NAMES[r.currentScenario] ?? r.currentScenario}</TableCell>
                   <TableCell className="py-2 font-mono text-xs">
                     {Math.floor(r.elapsedSeconds / 60)}:{String(r.elapsedSeconds % 60).padStart(2, "0")}

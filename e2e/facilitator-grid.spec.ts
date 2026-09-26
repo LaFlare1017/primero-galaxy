@@ -291,6 +291,51 @@ test.describe('Facilitator console', () => {
     expect(params.get('dir')).toBe('desc');
   });
 
+  test('?scenario= focuses the room and can launch the participant view', async ({ page }) => {
+    // WORKING_A was seeded on s1, so the focused rows are the real ones.
+    await page.goto('/delegate/facilitator?scenario=s1');
+    await waitUntilSeeded(page);
+
+    // Focus banner names the scenario, offers the participant view, and the
+    // param SURVIVES — focus is state, not a one-shot import like ?view=.
+    await expect(page.getByText('Watching for')).toContainText('Scenario 1 · Bank recon');
+    await expect(page.getByRole('link', { name: 'Open scenario as a participant' })).toBeVisible();
+    expect(new URL(page.url()).searchParams.get('scenario')).toBe('s1');
+
+    // Seeded rows on the focused scenario are highlighted; others are not.
+    const focused = await rowFor(page, WORKING_A).getAttribute('class');
+    expect(focused).toContain('bg-gray-100');
+    const unfocused = await rowFor(page, SUBMITTED_S5).getAttribute('class');
+    expect(unfocused).not.toContain('bg-gray-100');
+    await expect(rowFor(page, WORKING_A)).toContainText('◂');
+
+    // Launch: the participant view opens in a new tab with the scenario
+    // preselected — the landing screen marks the focused card selected.
+    const [popup] = await Promise.all([
+      page.waitForEvent('popup'),
+      page.getByRole('link', { name: 'Open scenario as a participant' }).click(),
+    ]);
+    await expect
+      .poll(() => new URL(popup.url()).searchParams.get('scenario'), { timeout: 10_000 })
+      .toBe('s1');
+    const s1Card = popup.getByRole('button', { name: /Reconcile the March operating bank account/ });
+    await expect(s1Card).toHaveClass(/bg-black/);
+    await popup.close();
+
+    // Clear removes the focus: banner gone, highlight gone, param dropped.
+    await page.getByRole('button', { name: 'Clear scenario focus' }).click();
+    await expect(page.getByText('Watching for')).toHaveCount(0);
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('scenario'))
+      .toBe(null);
+    expect(await rowFor(page, WORKING_A).getAttribute('class')).not.toContain('bg-gray-100');
+
+    // A bogus value degrades to no focus instead of crashing.
+    await page.goto('/delegate/facilitator?scenario=bogus');
+    await waitUntilSeeded(page);
+    await expect(page.getByText('Watching for')).toHaveCount(0);
+  });
+
   test('an unknown ?status= value filters to the empty grid without crashing', async ({ page }) => {
     await page.goto('/delegate/facilitator?status=bogus&sort=nope');
     await waitUntilSeeded(page);
