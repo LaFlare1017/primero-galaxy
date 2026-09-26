@@ -218,6 +218,36 @@ test.describe('Delegate ?run= resume', () => {
     await fourthContext.close();
   });
 
+  test('the restore offer previews the run it points at', async ({ page, browser }) => {
+    const seeded = await startRun(page, 's2');
+
+    // Receiver context, as if the link was handed over.
+    const receiverContext = await browser.newContext();
+    const receiver = await receiverContext.newPage();
+    await receiver.goto(`/delegate?run=${seeded.runId}&session=${seeded.sessionId}`);
+    const preview = receiver.getByRole('region', { name: 'Run preview' });
+    await expect(preview).toBeVisible();
+    // Best-effort preview from the state endpoint: scenario name, elapsed
+    // clock (ticks for a live run), message count, session owner.
+    await expect(preview.getByText('Why doesn\'t intercompany balance?')).toBeVisible();
+    await expect(preview.getByText(/^\d{2}:\d{2}$/)).toBeVisible();
+    await expect(preview.getByText('no conversation yet')).toBeVisible();
+    await expect(preview.getByText('session of E2E Resume')).toBeVisible();
+    await expect(preview.getByText('in progress')).toBeVisible();
+
+    // The clock ticks while the offer stands (live run).
+    const t1 = await preview.locator('span.font-mono').innerText();
+    await receiver.waitForTimeout(2100);
+    const t2 = await preview.locator('span.font-mono').innerText();
+    expect(t2).not.toBe(t1);
+
+    // Accept: restore still verifies authoritatively and lands in the
+    // workspace — the preview never gates it.
+    await receiver.getByRole('button', { name: 'Reopen previous session' }).click();
+    await waitRestored(receiver, seeded.runId);
+    await receiverContext.close();
+  });
+
   test('a submitted run restores read-only with its detection result', async ({ page }) => {
     const seeded = await startRun(page, 's5');
     const submit = await page.request.post('/api/delegate/submit', {
@@ -235,6 +265,15 @@ test.describe('Delegate ?run= resume', () => {
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()), { timeout: 5_000 })
       .toContain(`run=${seeded.runId}`);
+
+    // The offer previews the submitted state BEFORE consenting: the clock
+    // is frozen at submittedAt and the read-only outcome is stated.
+    const preview = page.getByRole('region', { name: 'Run preview' });
+    await expect(preview.getByText(/message with the agent|no conversation yet/)).toBeVisible();
+    await expect(preview.getByText('submitted — reopens read-only')).toBeVisible();
+    const t1 = await preview.locator('span.font-mono').innerText();
+    await page.waitForTimeout(2100);
+    expect(await preview.locator('span.font-mono').innerText()).toBe(t1);
 
     await page.getByRole('button', { name: 'Reopen previous session' }).click();
     await waitRestored(page, seeded.runId);

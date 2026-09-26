@@ -248,6 +248,72 @@ function DelegateWorkspace() {
     setSharedLinkToast(runParam);
   }, [runParam, arrivalRun]);
 
+  /**
+   * Best-effort preview of the run behind the consent offer: scenario
+   * name, elapsed time, message count, and whose session it is — fetched
+   * from the same state endpoint the accept path trusts, so the receiver
+   * knows what they are rejoining BEFORE consenting. Strictly informational:
+   * only the accept click verifies and re-opens the run (the endpoint can
+   * 404 moments later), so a failed/missing preview must never block or
+   * fake the offer.
+   */
+  const [preview, setPreview] = useState<null | {
+    participantLabel: string;
+    scenarioName: string;
+    startedAt: number;
+    submittedAt: string | null;
+    messageCount: number;
+  }>(null);
+  useEffect(() => {
+    let alive = true;
+    if (!restoreCandidate) {
+      setPreview(null);
+      return;
+    }
+    setPreview(null);
+    (async () => {
+      try {
+        const res = await fetch(`/api/delegate/run/${encodeURIComponent(restoreCandidate.runId)}/state`);
+        if (!alive || !res.ok) return;
+        const data = (await res.json()) as {
+          participantLabel: string;
+          scenarioId: string;
+          startedAt: string;
+          submittedAt?: string | null;
+          messages: unknown[];
+        };
+        if (!alive) return;
+        setPreview({
+          participantLabel: data.participantLabel,
+          scenarioName: SCENARIOS.find((s) => s.id === data.scenarioId)?.title ?? data.scenarioId,
+          startedAt: new Date(data.startedAt).getTime(),
+          submittedAt: data.submittedAt ?? null,
+          messageCount: data.messages.length,
+        });
+      } catch {
+        // Preview stays null; the plain offer remains.
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [restoreCandidate]);
+  // Preview clock: ticks for a live run, frozen at submittedAt once in.
+  const [previewElapsed, setPreviewElapsed] = useState(0);
+  useEffect(() => {
+    if (!preview) return;
+    const compute = () =>
+      setPreviewElapsed(
+        Math.max(0, Math.round(((preview.submittedAt ? new Date(preview.submittedAt).getTime() : Date.now()) - preview.startedAt) / 1000)),
+      );
+    compute();
+    if (preview.submittedAt) return;
+    const t = setInterval(compute, 1000);
+    return () => clearInterval(t);
+  }, [preview]);
+  const previewMin = String(Math.floor(previewElapsed / 60)).padStart(2, "0");
+  const previewSec = String(previewElapsed % 60).padStart(2, "0");
+
   useEffect(() => {
     if (runParam && !runId) setRestoreCandidate({ runId: runParam, sessionId: sessionParam ?? "" });
     // runId in deps would re-offer after an intentional decline.
@@ -568,9 +634,34 @@ function DelegateWorkspace() {
           {restoreCandidate && !restoring && (
             <div className="rounded-md border border-gray-300 bg-gray-50 p-3 space-y-2">
               <p className="text-sm font-medium">Reopen your previous session?</p>
-              <p className="text-xs text-gray-500">
-                This link points at a scenario that is still in progress on the facilitator console. Reopen it, or start fresh.
-              </p>
+              {/* Preview of the run behind the offer (best effort): scenario
+                  name, elapsed clock — frozen for a submitted run — message
+                  count, and whose session it is.*/}
+              <section aria-label="Run preview" className="rounded border border-gray-200 bg-white px-2.5 py-2 text-xs">
+                {preview ? (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-black">{preview.scenarioName}</span>
+                      <span className="font-mono tabular-nums text-gray-500">
+                        {previewMin}:{previewSec}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 text-gray-500">
+                      <span>
+                        {preview.messageCount === 0
+                          ? "no conversation yet"
+                          : `${preview.messageCount} message${preview.messageCount === 1 ? "" : "s"} with the agent`}
+                      </span>
+                      <span>{preview.submittedAt ? "submitted — reopens read-only" : "in progress"}</span>
+                    </div>
+                    {preview.participantLabel ? (
+                      <div className="text-gray-500">session of {preview.participantLabel}</div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <p className="text-gray-500">This link points at a scenario on the facilitator console. Reopen it, or start fresh.</p>
+                )}
+              </section>
               <div className="flex gap-2">
                 <button
                   onClick={() => void restoreRun(restoreCandidate)}
