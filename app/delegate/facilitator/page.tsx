@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowDown, ArrowUp, ArrowUpDown, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Link2, X } from "lucide-react";
 import {
   createParser,
   parseAsString,
@@ -9,7 +9,7 @@ import {
   parseAsStringLiteral,
   useQueryState,
 } from "nuqs";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 
 import { AgentStatusOrb } from "@/components/ui/AgentEffects";
 import { FacilitatorSavedViews } from "@/components/delegate/SavedViews";
@@ -42,6 +42,8 @@ import { cn } from "@/lib/utils";
 interface Row {
   participant: string;
   cohort: string;
+  runId?: string;
+  sessionId: string;
   currentScenario: string;
   startedAt: string;
   submittedAt?: string;
@@ -117,6 +119,21 @@ function detectionLabel(row: Row): string {
   return row.detected ? "caught it" : "missed";
 }
 
+/**
+ * Resumable participant link for a row (URL-state audit sequencing §7.4):
+ * the same `?run=`/`?session=` pointer the participant screen writes when a
+ * run starts. Opening it lands on the consent-required restore offer; a
+ * submitted run restores read-only. The ids are opaque capability tokens,
+ * so the label stays out of the URL (audit §5).
+ */
+function runLink(row: Row): string | null {
+  if (!row.runId) return null;
+  const url = new URL("/delegate", window.location.origin);
+  url.searchParams.set("run", row.runId);
+  url.searchParams.set("session", row.sessionId);
+  return url.toString();
+}
+
 function Icon({ name, size = 14, className = "" }: { name: string; size?: number; className?: string }) {
   const paths: Record<string, string> = {
     monitor: "M8 21h8m-4-4v4M4 5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5Z",
@@ -166,6 +183,18 @@ function FacilitatorGrid() {
   const [viewName, setViewName] = useQueryState("view", viewNameParser);
   const statusFilter = useMemo(() => new Set(statuses ?? []), [statuses]);
   const [sharedView, setSharedView] = useState<string | null>(null);
+  // Row whose run link was just copied: the button flips to "Copied" for
+  // a moment (the saved-views Share flash, in grid form).
+  const [copiedRunId, setCopiedRunId] = useState<string | null>(null);
+
+  const copyRunLink = useCallback((row: Row) => {
+    const link = runLink(row);
+    if (!link) return;
+    void navigator.clipboard.writeText(link).then(() => {
+      setCopiedRunId(row.runId ?? null);
+      window.setTimeout(() => setCopiedRunId(null), 1500);
+    });
+  }, []);
 
   // Imported shared view: acknowledge the ?view= name once with a toast,
   // then drop the param (replaceState via nuqs) so a refresh doesn't
@@ -390,6 +419,10 @@ function FacilitatorGrid() {
                 <TableHead className="text-[11px] uppercase">{sortButton("status", "Status")}</TableHead>
                 <TableHead className="text-[11px] uppercase">{sortButton("detected", "Detection")}</TableHead>
                 <TableHead className="text-[11px] uppercase text-gray-500">Flags</TableHead>
+                <TableHead className="text-[11px] uppercase text-gray-500">
+                  <span className="sr-only">Copy run link</span>
+                  <span aria-hidden="true">Link</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -408,6 +441,24 @@ function FacilitatorGrid() {
                   </TableCell>
                   <TableCell className="py-2">{detectionLabel(r)}</TableCell>
                   <TableCell className="py-2 text-black">{r.flaggedBehavior ?? ""}</TableCell>
+                  <TableCell className="py-2">
+                    {r.runId ? (
+                      <button
+                        type="button"
+                        onClick={() => copyRunLink(r)}
+                        aria-label={`Copy run link for ${r.participant}`}
+                        className={cn(
+                          "inline-flex h-7 items-center gap-1 rounded-md border px-2 text-xs",
+                          copiedRunId === r.runId
+                            ? "border-black bg-black text-white font-medium"
+                            : "border-gray-300 bg-white text-gray-600 hover:border-gray-500 hover:text-black",
+                        )}
+                      >
+                        <Link2 className="h-3 w-3" aria-hidden="true" />
+                        {copiedRunId === r.runId ? "Copied" : "Copy link"}
+                      </button>
+                    ) : null}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

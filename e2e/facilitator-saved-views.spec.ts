@@ -102,7 +102,7 @@ async function tabUntil(page: Page, needle: string, maxTabs = 6): Promise<void> 
 
 /** Open the Views popover; pointer click is safe on the in-flow trigger. */
 async function openViews(page: Page) {
-  await page.getByRole('button', { name: 'Views' }).click();
+  await page.getByRole('button', { name: 'Views', exact: true }).click();
   await expect(viewsDialog(page)).toBeVisible();
 }
 

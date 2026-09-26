@@ -53,6 +53,11 @@ export async function GET() {
     return {
       participant: session.participantLabel,
       cohort: session.cohortId,
+      // Opaque ids, same capability posture as the participant screen: the
+      // grid's copy-run-link action builds /delegate?run=…&session=… from
+      // them (the URL-state audit's end-to-end sharing, sequencing §7.4).
+      runId: current?.id,
+      sessionId: session.id,
       currentScenario: current?.scenarioId ?? "n/a",
       startedAt: session.startedAt,
       submittedAt: current?.submittedAt,
