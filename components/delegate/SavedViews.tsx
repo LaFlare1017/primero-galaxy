@@ -8,6 +8,7 @@ import {
   FACILITATOR_VIEWS_CHANGED_EVENT,
   listFacilitatorViews,
   saveFacilitatorView,
+  updateFacilitatorView,
   type FacilitatorSavedView,
   type FacilitatorViewState,
 } from '@/components/delegate/saved-views';
@@ -41,6 +42,7 @@ export function FacilitatorSavedViews({
           view: viewState,
         }),
       remove: deleteFacilitatorView,
+      update: updateFacilitatorView,
       changedEvent: FACILITATOR_VIEWS_CHANGED_EVENT,
       // Unlike FinBench, the default state IS savable: a named "Full room"
       // view is a real escape hatch for a facilitator resuming a session.

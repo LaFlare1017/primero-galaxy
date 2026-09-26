@@ -208,6 +208,51 @@ test.describe('FinBench saved views', () => {
     expect(stored).toEqual([]);
   });
 
+  test('a view can be renamed and re-iconed', async ({ page }) => {
+    await gotoWithMissFilter(page);
+    await saveViewByName(page, 'Old name');
+
+    const dialog = viewsDialog(page);
+    // Focus walks the popover: row apply → row edit.
+    await tabUntil(page, 'Edit view Old name');
+    await page.keyboard.press('Enter');
+
+    // The edit form reuses the save form, prefilled.
+    const nameInput = dialog.getByLabel('View name');
+    await expect(nameInput).toBeFocused();
+    await expect(nameInput).toHaveValue('Old name');
+    // Keyboard-only editing: locator.fill enforces pointer actionability,
+    // which hangs on the portaled popover; select-all + insertText works
+    // with the input already focused.
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.insertText('Renamed view');
+
+    // Pick an icon: one Shift+Tab walks back into the emoji group onto the
+    // LAST chip (🗂️ — the palette runs 🔖 → 🗂️ and the input follows it);
+    // Enter selects and focus stays, then the walk forward re-enters the
+    // input on the way to the save button.
+    await page.keyboard.press('Shift+Tab');
+    expect(await focusedText(page)).toContain('Icon 🗂️');
+    await page.keyboard.press('Enter');
+    await tabUntil(page, 'Save view');
+    await page.keyboard.press('Enter');
+
+    await expect(dialog.getByText('Renamed view')).toBeVisible();
+    await expect(dialog.getByText('Old name')).toHaveCount(0);
+    // The chosen chip renders on the row.
+    await expect(dialog.getByText('🗂️', { exact: true })).toBeVisible();
+
+    // A rename keeps the derived description and the stored filters.
+    await page.keyboard.press('Escape');
+    await page.reload();
+    await expect(counter(page)).toBeVisible();
+    await openViews(page);
+    await expect(dialog.getByText('Renamed view')).toBeVisible();
+    await expect(dialog.getByText('🗂️', { exact: true })).toBeVisible();
+    await applyView(page, 'Renamed view');
+    await expect(counter(page)).toHaveText('1 of 14 runs');
+  });
+
   test('Save current is disabled until a filter combination exists', async ({ page }) => {
     await page.goto('/finbench');
     await expect(counter(page)).toHaveText('14 of 14 runs');

@@ -8,6 +8,7 @@ import {
   describeFilters,
   listSavedViews,
   saveView,
+  updateSavedView,
   SAVED_VIEWS_CHANGED_EVENT,
   type SavedView,
 } from '@/components/finbench/saved-views';
@@ -45,6 +46,7 @@ export function SavedViews({
           filters,
         }),
       remove: deleteSavedView,
+      update: updateSavedView,
       changedEvent: SAVED_VIEWS_CHANGED_EVENT,
       // FinBench's default state (no filters) is not a view worth naming;
       // require at least one filter, like Circle's views require a filter.

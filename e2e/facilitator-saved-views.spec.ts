@@ -252,6 +252,45 @@ test.describe('Facilitator saved views', () => {
     expect(stored).toEqual([]);
   });
 
+  test('a view can be renamed and re-iconed', async ({ page }) => {
+    await saveViewByName(page, 'Working watch');
+
+    const dialog = viewsDialog(page);
+    // Focus walks the popover: row apply → row edit.
+    await tabUntil(page, 'Edit view Working watch');
+    await page.keyboard.press('Enter');
+
+    // The edit form reuses the save form, prefilled.
+    const nameInput = dialog.getByLabel('View name');
+    await expect(nameInput).toBeFocused();
+    await expect(nameInput).toHaveValue('Working watch');
+    // Keyboard-only editing: locator.fill enforces pointer actionability,
+    // which hangs on the portaled popover; select-all + insertText works
+    // with the input already focused.
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.insertText('Live board');
+
+    // Pick an icon: Shift+Tab twice walks back to the trophy chip.
+    await page.keyboard.press('Shift+Tab');
+    await page.keyboard.press('Shift+Tab');
+    expect(await focusedText(page)).toContain('Icon 🏆');
+    await page.keyboard.press('Enter');
+    await tabUntil(page, 'Save view');
+    await page.keyboard.press('Enter');
+
+    await expect(dialog.getByText('Live board')).toBeVisible();
+    await expect(dialog.getByText('Working watch')).toHaveCount(0);
+    await expect(dialog.getByText('🏆', { exact: true })).toBeVisible();
+
+    // The rename survives a reload.
+    await page.keyboard.press('Escape');
+    await page.reload();
+    await waitUntilSeeded(page);
+    await openViews(page);
+    await expect(viewsDialog(page).getByText('Live board')).toBeVisible();
+    await expect(viewsDialog(page).getByText('🏆', { exact: true })).toBeVisible();
+  });
+
   test('a hand-edited store row with an unknown sort key applies safely', async ({ page }) => {
     // The store is plain localStorage; a stale/hand-edited view must not
     // crash the page or push a bogus key into the URL.
