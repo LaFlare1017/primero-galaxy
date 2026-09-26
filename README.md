@@ -60,6 +60,8 @@ The E2E suite proves the interaction pipeline with **real browser input**: boot 
 
 CI also enforces the Lighthouse accessibility/SEO scores (currently **100/100 on both routes**) via `scripts/lighthouse-gate.mjs`; the gate fails the build on any regression.
 
+On CI (`retries: 2`, `trace: on-all-retries`), a flaky test **passes** the job — so the run is followed by `scripts/flaky-report.mjs`, which parses the JSON report and writes the flaky table (test, attempts, first-failure point) into the job summary and exposes a `flaky_count` output: the flake rate is a visible metric, never silently absorbed. Report and retry-attempt traces upload on every run, green or not. Locally the suite runs with `retries: 0` — a flake is a failure you see immediately, and the deterministic patterns in `e2e/cmdk.ts` exist precisely to keep it rare.
+
 ## The Circle extraction: shared UI primitives and filter engine
 
 The interactive chrome for FinBench and Delegate is built from UI primitives and a table-filtering engine extracted from **Circle**, our internal accounting-agent product (a frozen reference copy lives in `circle-master/`, excluded from `tsconfig`). Everything below is vendored under `components/ui/primitives/` and `components/data-table-filter/`, restyled onto this repo's token layer, and covered by the Playwright suite (51 specs across all three surfaces).

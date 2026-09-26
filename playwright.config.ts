@@ -21,13 +21,26 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 2 : 0,
-  reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : [['list']],
+  reporter: process.env.CI
+    ? [
+        ['list'],
+        ['html', { open: 'never' }],
+        // Machine-readable run for scripts/flaky-report.mjs: on CI a flaky
+        // test PASSES (retries), so the failure-only artifacts would never
+        // show it. The JSON report marks it `flaky` and the workflow
+        // surfaces the count in the job summary.
+        ['json', { outputFile: 'test-results/results.json' }],
+      ]
+    : [['list']],
   use: {
     baseURL: 'http://localhost:3100',
     headless: true,
     viewport: { width: 1440, height: 900 },
     screenshot: 'only-on-failure',
-    trace: 'retain-on-failure',
+    // Forensics for the flakes the retries smooth over: record traces on
+    // RETRY attempts only, so a stable run pays nothing and a flaky test
+    // ships the trace of the attempt that failed.
+    trace: process.env.CI ? 'on-all-retries' : 'retain-on-failure',
   },
   webServer: {
     command:

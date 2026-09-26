@@ -44,11 +44,24 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       # The playwright.config webServer builds + starts the production build
-      # itself, so no separate server step is needed here.
+      # itself, so no separate server step is needed here. CI=1 enables the
+      # config's retries (2) and the JSON reporter that feeds the flaky
+      # report below.
       - run: npm run test:e2e
-      - name: Upload Playwright report on failure
+        env:
+          CI: '1'
+      # A flaky test PASSES under retries, so failure-gated artifacts never
+      # show it. Parse the JSON report, write the flaky table into the job
+      # summary, and expose flaky_count as a step output.
+      - name: Surface flaky tests in the job summary
+        if: always() && !cancelled()
+        id: flaky
+        run: node scripts/flaky-report.mjs test-results/results.json
+      - name: Upload Playwright report and traces
+        # Not failure-gated: a green run with flaky tests still ships the
+        # html report plus the retry-attempt traces (trace: on-all-retries).
+        if: always() && !cancelled()
         uses: actions/upload-artifact@v7
-        if: failure()
         with:
           name: playwright-report
           path: |
