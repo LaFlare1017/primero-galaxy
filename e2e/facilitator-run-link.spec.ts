@@ -11,7 +11,9 @@ import { expect, test, type Page } from '@playwright/test';
  * the copied link is opened in a FRESH browser context (no session state,
  * as if handed to another tab or machine) and must land on the
  * consent-required restore offer — accepting restores the live workspace,
- * and a submitted run restores read-only.
+ * and a submitted run restores read-only. Each row also offers an Open
+ * action (the same URL as a real anchor, new tab): the popup flows prove
+ * it restores the same way, live transcript included.
  *
  * Seeding is real API traffic (POST /api/delegate/session, chat, submit);
  * labels are stamped per run because the delegate store accumulates
@@ -72,6 +74,31 @@ test.describe('Facilitator run links', () => {
     expect(shared.searchParams.get('session')).toBe(seeded.sessionId);
     expect(link).not.toContain(LIVE);
 
+    // One real agent turn through the chat API, so the Open flow can prove
+    // the restored workspace carries the transcript rebuilt from the event
+    // log — not just an empty composer.
+    const chat = await page.request.post('/api/delegate/chat', {
+      data: { runId: seeded.runId, message: 'Please reconcile the bank account.' },
+    });
+    expect(chat.ok()).toBeTruthy();
+
+    // The row's Open action: the same URL as a real anchor, new tab.
+    const [popup] = await Promise.all([
+      page.waitForEvent('popup'),
+      page.getByRole('row').filter({ hasText: LIVE }).getByRole('link', { name: `Open run for ${LIVE}` }).click(),
+    ]);
+    await expect(popup.getByPlaceholder('e.g. Jordan')).toBeVisible();
+    await popup.getByRole('button', { name: 'Reopen previous session' }).click();
+    await expect
+      .poll(() => new URL(popup.url()).searchParams.get('run'), { timeout: 10_000 })
+      .toBe(seeded.runId);
+    await expect(popup.locator(COMPOSER)).toBeVisible();
+    await expect(popup.getByText('Please reconcile the bank account.')).toBeVisible();
+    await expect(
+      popup.getByText('I reconciled the March operating account', { exact: false }),
+    ).toBeVisible();
+    await popup.close();
+
     // Receiver side: a fresh context (no session state, another machine).
     const receiverContext = await browser.newContext();
     const receiver = await receiverContext.newPage();
@@ -116,5 +143,21 @@ test.describe('Facilitator run links', () => {
     await expect(receiver.locator('input[placeholder="Scenario submitted"]')).toBeDisabled();
 
     await receiverContext.close();
+
+    // The row's Open action restores the same read-only view in a tab
+    // spawned by the grid itself.
+    const [popup] = await Promise.all([
+      page.waitForEvent('popup'),
+      page
+        .getByRole('row')
+        .filter({ hasText: SUBMITTED })
+        .getByRole('link', { name: `Open run for ${SUBMITTED}` })
+        .click(),
+    ]);
+    await expect(popup.getByPlaceholder('e.g. Jordan')).toBeVisible();
+    await popup.getByRole('button', { name: 'Reopen previous session' }).click();
+    await expect(popup.getByText('Defect detected: your answer named it')).toBeVisible();
+    await expect(popup.locator('input[placeholder="Scenario submitted"]')).toBeDisabled();
+    await popup.close();
   });
 });

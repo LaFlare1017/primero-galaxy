@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { ArrowDown, ArrowUp, ArrowUpDown, Link2, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ExternalLink, Link2, X } from "lucide-react";
 import {
   createParser,
   parseAsString,
@@ -157,6 +157,46 @@ function runLink(row: Row): string | null {
   url.searchParams.set("run", row.runId);
   url.searchParams.set("session", row.sessionId);
   return url.toString();
+}
+
+/**
+ * The two run-link actions for a row (URL-state audit sequencing §7.4):
+ * Open launches the participant's run in a new tab — the consent-required
+ * restore offer still gates the workspace on arrival — and Copy puts the
+ * same resumable URL on the clipboard, flipping to "Copied" briefly
+ * (the saved-views Share flash, in grid form).
+ */
+function RunLinkCell({ row, copied, onCopy }: { row: Row; copied: boolean; onCopy: (row: Row) => void }) {
+  const link = runLink(row);
+  if (!link) return null;
+  return (
+    <div className="flex items-center gap-1.5">
+      <a
+        href={link}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={`Open run for ${row.participant}`}
+        className="inline-flex h-7 items-center gap-1 rounded-md border border-gray-300 bg-white px-2 text-xs text-gray-600 hover:border-gray-500 hover:text-black"
+      >
+        <ExternalLink className="h-3 w-3" aria-hidden="true" />
+        Open
+      </a>
+      <button
+        type="button"
+        onClick={() => onCopy(row)}
+        aria-label={`Copy run link for ${row.participant}`}
+        className={cn(
+          "inline-flex h-7 items-center gap-1 rounded-md border px-2 text-xs",
+          copied
+            ? "border-black bg-black text-white font-medium"
+            : "border-gray-300 bg-white text-gray-600 hover:border-gray-500 hover:text-black",
+        )}
+      >
+        <Link2 className="h-3 w-3" aria-hidden="true" />
+        {copied ? "Copied" : "Copy link"}
+      </button>
+    </div>
+  );
 }
 
 function Icon({ name, size = 14, className = "" }: { name: string; size?: number; className?: string }) {
@@ -472,7 +512,7 @@ function FacilitatorGrid() {
                 <TableHead className="text-[11px] uppercase">{sortButton("detected", "Detection")}</TableHead>
                 <TableHead className="text-[11px] uppercase text-gray-500">Flags</TableHead>
                 <TableHead className="text-[11px] uppercase text-gray-500">
-                  <span className="sr-only">Copy run link</span>
+                  <span className="sr-only">Open or copy run link</span>
                   <span aria-hidden="true">Link</span>
                 </TableHead>
               </TableRow>
@@ -505,22 +545,7 @@ function FacilitatorGrid() {
                   <TableCell className="py-2">{detectionLabel(r)}</TableCell>
                   <TableCell className="py-2 text-black">{r.flaggedBehavior ?? ""}</TableCell>
                   <TableCell className="py-2">
-                    {r.runId ? (
-                      <button
-                        type="button"
-                        onClick={() => copyRunLink(r)}
-                        aria-label={`Copy run link for ${r.participant}`}
-                        className={cn(
-                          "inline-flex h-7 items-center gap-1 rounded-md border px-2 text-xs",
-                          copiedRunId === r.runId
-                            ? "border-black bg-black text-white font-medium"
-                            : "border-gray-300 bg-white text-gray-600 hover:border-gray-500 hover:text-black",
-                        )}
-                      >
-                        <Link2 className="h-3 w-3" aria-hidden="true" />
-                        {copiedRunId === r.runId ? "Copied" : "Copy link"}
-                      </button>
-                    ) : null}
+                    <RunLinkCell row={r} copied={copiedRunId === r.runId} onCopy={copyRunLink} />
                   </TableCell>
                 </TableRow>
               ))}
