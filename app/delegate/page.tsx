@@ -222,6 +222,32 @@ function DelegateWorkspace() {
     });
   }, [runId, sessionId]);
 
+  /**
+   * Receiver half of the share loop (the facilitator ?view= toast, landing
+   * edition): arriving at the landing screen through a shared run link is
+   * acknowledged once with a status toast. The run id present at MOUNT
+   * (not one written by this page's own start()) is what counts as an
+   * arrival, and sessionStorage marks the run as toasted for the tab
+   * session — a refresh never re-toasts. It stands in for the
+   * facilitator's strip-the-param trick because ?run= IS the restore
+   * candidate and must survive the consent decision.
+   */
+  const [arrivalRun] = useState(() => new URL(window.location.href).searchParams.get("run"));
+  const [sharedLinkToast, setSharedLinkToast] = useState<string | null>(null);
+  useEffect(() => {
+    if (runParam === null || runParam !== arrivalRun) {
+      setSharedLinkToast(null);
+      return;
+    }
+    // The tab that STARTED the run knows it: a refresh there is the
+    // participant's own reload, not a shared-link arrival.
+    if (window.sessionStorage.getItem(`delegate:started:${runParam}`)) return;
+    const key = `delegate:shared-link-seen:${runParam}`;
+    if (window.sessionStorage.getItem(key)) return;
+    window.sessionStorage.setItem(key, "1");
+    setSharedLinkToast(runParam);
+  }, [runParam, arrivalRun]);
+
   useEffect(() => {
     if (runParam && !runId) setRestoreCandidate({ runId: runParam, sessionId: sessionParam ?? "" });
     // runId in deps would re-offer after an intentional decline.
@@ -348,6 +374,9 @@ function DelegateWorkspace() {
     // The URL becomes the run pointer (refresh/crash restore, shareable).
     void setRunParam(data.runId);
     void setSessionParam(data.sessionId);
+    // Mark this tab as the run's origin: a refresh here is the
+    // participant's own reload, so the shared-link toast must not fire.
+    window.sessionStorage.setItem(`delegate:started:${data.runId}`, "1");
     setBrief(data.manifest.learnerBrief ?? "");
     setStartedAt(Date.now());
     setMessages([]);
@@ -517,6 +546,23 @@ function DelegateWorkspace() {
           >
             Start scenario <Icon name="send" size={14} />
           </button>
+          {/* Shared-link arrival toast: ephemeral monochrome
+              acknowledgment, mirroring the facilitator ?view= toast. */}
+          {sharedLinkToast !== null && (
+            <div role="status" className="flex items-center justify-between rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-[13px] text-gray-600">
+              <span>
+                Opened a shared session link — this scenario belongs to a run in progress. Reopen it below, or start fresh.
+              </span>
+              <button
+                type="button"
+                aria-label="Dismiss shared link notification"
+                onClick={() => setSharedLinkToast(null)}
+                className="text-gray-400 hover:text-black"
+              >
+                <Icon name="check" size={14} />
+              </button>
+            </div>
+          )}
           {/* Restore offer: consent-required re-entry into a run the URL
               points at (refresh/crash recovery, facilitator handoff). */}
           {restoreCandidate && !restoring && (

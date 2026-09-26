@@ -171,6 +171,53 @@ test.describe('Delegate ?run= resume', () => {
     await expect(page.getByRole('button', { name: 'Reopen previous session' })).toHaveCount(0);
   });
 
+  test('a shared run link toasts on arrival, and only once per tab', async ({ page, browser }) => {
+    const seeded = await startRun(page, 's2');
+
+    // Receiver: a fresh context, as if the link was handed over.
+    const receiverContext = await browser.newContext();
+    const receiver = await receiverContext.newPage();
+    await receiver.goto(`/delegate?run=${seeded.runId}&session=${seeded.sessionId}`);
+    await expect(receiver.getByRole('status')).toContainText('Opened a shared session link');
+    expect(new URL(receiver.url()).searchParams.get('run')).toBe(seeded.runId);
+
+    // The offer stays usable: reopen restores, and the toast leaves with
+    // the landing screen.
+    await receiver.getByRole('button', { name: 'Reopen previous session' }).click();
+    await waitRestored(receiver, seeded.runId);
+    await expect(receiver.getByRole('status')).toHaveCount(0);
+    await receiverContext.close();
+
+    // A different tab session sees the toast again (per-tab, not global).
+    const secondContext = await browser.newContext();
+    const second = await secondContext.newPage();
+    await second.goto(`/delegate?run=${seeded.runId}&session=${seeded.sessionId}`);
+    await expect(second.getByRole('status')).toContainText('Opened a shared session link');
+    await secondContext.close();
+
+    // The SAME tab reloading never re-toasts.
+    const thirdContext = await browser.newContext();
+    const third = await thirdContext.newPage();
+    await third.goto(`/delegate?run=${seeded.runId}&session=${seeded.sessionId}`);
+    await expect(third.getByRole('status')).toBeVisible();
+    await third.reload();
+    await expect(third.getByRole('status')).toHaveCount(0);
+    // Still restorable after the silent reload.
+    await expect(third.getByRole('button', { name: 'Reopen previous session' })).toBeVisible();
+    await thirdContext.close();
+
+    // Declining clears the arrival: starting fresh never shows the toast.
+    const fourthContext = await browser.newContext();
+    const fourth = await fourthContext.newPage();
+    await fourth.goto(`/delegate?run=${seeded.runId}&session=${seeded.sessionId}`);
+    await fourth.getByRole('button', { name: 'Start fresh instead' }).click();
+    await expect(fourth.getByPlaceholder('e.g. Jordan')).toBeVisible();
+    await expect(fourth.getByRole('status')).toHaveCount(0);
+    await fourth.getByRole('button', { name: /Start scenario/ }).click();
+    await expect(fourth.locator(COMPOSER)).toBeVisible();
+    await fourthContext.close();
+  });
+
   test('a submitted run restores read-only with its detection result', async ({ page }) => {
     const seeded = await startRun(page, 's5');
     const submit = await page.request.post('/api/delegate/submit', {
