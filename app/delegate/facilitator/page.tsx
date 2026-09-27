@@ -17,7 +17,7 @@ import { FacilitatorSavedViews } from "@/components/delegate/SavedViews";
 import type { FacilitatorViewState } from "@/components/delegate/saved-views";
 import { useElapsedClock } from "@/components/delegate/useElapsedClock";
 import { useKeySequence } from "@/components/delegate/useKeySequence";
-import { useKeyboardShortcuts } from "@/components/delegate/useKeyboardShortcuts";
+import { useKeyboardShortcuts, type ShortcutHandlers } from "@/components/delegate/useKeyboardShortcuts";
 import {
   Table,
   TableBody,
@@ -502,6 +502,19 @@ function WatchCell({ row, active, onToggle }: { row: Row; active: boolean; onTog
       <Eye className="h-3 w-3" aria-hidden="true" />
     </button>
   );
+}
+/**
+ * One key inside a keyboard chip, in the console's monochrome register:
+ * a hairline border, not a filled pill, because the chip that holds it is
+ * already the emphasis. <kbd> rather than a span, so the key is still a
+ * key for anything that reads the markup.
+ */
+function ChordKey({ children }: { children: string }) {
+  return (
+    <kbd className="inline-flex h-4 min-w-4 items-center justify-center rounded border border-gray-400 bg-white px-1 align-middle font-sans text-[10px] leading-none text-black">
+      {children}
+    </kbd>
+  );
 }/**
  * Default export wraps the grid in Suspense: the page is statically
  * prerendered, and useQueryState (useSearchParams) forces a CSR bailout
@@ -737,13 +750,27 @@ function FacilitatorGrid() {
   // better with a chord borrowed from GitHub and Gmail — g i is the near
   // end, g n the far one, and g on its own does nothing. An unbound second
   // key falls through, so g j still walks (see useKeySequence).
-  useKeySequence(
-    {
+  //
+  // The map is memoised rather than inline for the one reason that matters
+  // here: the armed-chord hint below reads its list of completing keys off
+  // THIS object, so the chip can only ever name keys the hook actually
+  // dispatches. One list of chords, read twice.
+  const jumpSequences = useMemo<ShortcutHandlers>(
+    () => ({
       "g i": () => jumpSweep("first"),
       "g n": () => jumpSweep("last"),
-    },
-    sweepList.length > 0,
+    }),
+    [jumpSweep],
   );
+  const armedChord = useKeySequence(jumpSequences, sweepList.length > 0);
+  // The second keys the armed prefix is waiting for, derived from the same
+  // map: every sequence that starts with the prefix, minus the prefix.
+  const armedChordNextKeys =
+    armedChord === null
+      ? []
+      : Object.keys(jumpSequences)
+          .filter((seq) => seq.startsWith(`${armedChord} `))
+          .map((seq) => seq.split(" ")[1]);
 
   // ── Sweep by keyboard ──
   // Left/Right step the watched room, Home/End jump to its ends, so a
@@ -933,6 +960,30 @@ function FacilitatorGrid() {
               title="j and k walk the visible rows, wrapping at the ends; Enter or w opens the watch pane on the row you stopped on; g then i or g then n jumps to the first or last visible row"
             >
               j/k to walk, Enter/w to watch, g i/g n to jump
+            </span>
+            {/* Armed-chord affordance. A prefix key does nothing on
+                purpose, which leaves it invisible: nothing moves, nothing
+                opens, and a facilitator who pressed g has no way to tell
+                a chord they have not finished from one the console never
+                heard. The chip says which half is waiting, in the same
+                keyboard-legend row as the shortcut hint it belongs to, and
+                it is a live region because a screen reader has no other
+                way to learn a chord is half-typed. Mounted empty and only
+                filled while armed: a live region has to be in the document
+                before its content changes to be announced. */}
+            <span role="status" className="text-xs">
+              {armedChord !== null && (
+                <span className="ml-2 inline-block rounded border border-black bg-gray-50 px-1.5 py-0.5 align-middle text-[11px] font-medium text-black">
+                  <ChordKey>{armedChord}</ChordKey>
+                  {' then '}
+                  {armedChordNextKeys.map((key, index) => (
+                    <span key={key}>
+                      {index > 0 ? ' or ' : ''}
+                      <ChordKey>{key}</ChordKey>
+                    </span>
+                  ))}
+                </span>
+              )}
             </span>
           </div>
 

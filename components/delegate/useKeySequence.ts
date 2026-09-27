@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { shortcutAllowed } from '@/components/delegate/shortcuts';
 import type { ShortcutHandlers } from '@/components/delegate/useKeyboardShortcuts';
@@ -33,6 +33,16 @@ import type { ShortcutHandlers } from '@/components/delegate/useKeyboardShortcut
  * through the shared policy in ./shortcuts, so a chord behaves exactly
  * like a single-key shortcut in a text field, a content-editable host, or
  * an open overlay, and a modified press is never claimed.
+ *
+ * Returns the ARMED PREFIX, or null when nothing is waiting — `'g'` right
+ * after the first key of `g i`. A prefix that does nothing is also a
+ * prefix nobody can see: the key was declined on purpose, so the surface
+ * owes the person who pressed it some sign that the console heard them
+ * and is waiting for the rest. Rendering that state is the caller's job,
+ * and it is the only honest place to do it — the hook knows the prefix,
+ * the surface knows what the console looks like. Worth rendering into a
+ * live region: a sighted facilitator reads the chip, and a screen
+ * reader has no other way to learn that a chord is half-typed.
  */
 
 /** How long a prefix stays armed, in ms. Long enough to type a chord, short
@@ -43,7 +53,7 @@ export function useKeySequence(
   sequences: ShortcutHandlers,
   enabled = true,
   timeoutMs: number = DEFAULT_SEQUENCE_TIMEOUT_MS,
-): void {
+): string | null {
   // Latest bindings in a ref, for the same reason as useKeyboardShortcuts:
   // consumers pass an inline object, and depending on it directly would
   // tear the listener down on every render.
@@ -52,13 +62,19 @@ export function useKeySequence(
     latest.current = sequences;
   });
 
+  // The armed prefix (a space-joined prefix of a sequence key), held twice
+  // on purpose: in a ref because the listener must read the current value
+  // without the subscription depending on it, and in state because the
+  // surface has to be able to render it.
+  const [pending, setPending] = useState<string | null>(null);
+  const pendingRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (!enabled) return;
-    // The armed prefix, as a space-joined prefix of a sequence key.
-    let pending: string | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
     const disarm = () => {
-      pending = null;
+      pendingRef.current = null;
+      setPending(null);
       if (timer !== null) {
         clearTimeout(timer);
         timer = null;
@@ -66,7 +82,8 @@ export function useKeySequence(
     };
     const onKeyDown = (event: KeyboardEvent) => {
       if (!shortcutAllowed(event)) return;
-      const step = pending === null ? event.key : `${pending} ${event.key}`;
+      const armed = pendingRef.current;
+      const step = armed === null ? event.key : `${armed} ${event.key}`;
       const handler = latest.current[step];
       if (handler) {
         disarm();
@@ -74,7 +91,7 @@ export function useKeySequence(
         handler(event);
         return;
       }
-      if (pending !== null) {
+      if (armed !== null) {
         // The chord this key completes is not one we define, so the chord
         // is not ours. Disarm and leave the event completely alone: the
         // key belongs to whatever else is bound, which is what makes
@@ -87,7 +104,8 @@ export function useKeySequence(
       // claiming its default would be claiming a shortcut we have not
       // performed.
       if (Object.keys(latest.current).some((seq) => seq.startsWith(`${event.key} `))) {
-        pending = event.key;
+        pendingRef.current = event.key;
+        setPending(event.key);
         if (timer !== null) clearTimeout(timer);
         timer = setTimeout(disarm, timeoutMs);
       }
@@ -98,4 +116,6 @@ export function useKeySequence(
       disarm();
     };
   }, [enabled, timeoutMs]);
+
+  return pending;
 }

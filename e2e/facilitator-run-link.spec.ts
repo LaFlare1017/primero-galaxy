@@ -656,6 +656,105 @@ test.describe('Facilitator run links', () => {
     await page.keyboard.press('Escape');
   });
 
+  test('a half-typed chord shows what completes it, and the console forgets on its own', async ({ page }) => {
+    // How fast the chip has to be gone before "gone" is believed: inside
+    // the 1500ms prefix window, so a chip that only disappears when the
+    // lapse timer fires is a failure, not a pass.
+    const PROMPT_MS = 500;
+    // The affordance half of the chord. A prefix key does nothing on
+    // purpose, so without this the press is invisible: nothing moves and
+    // nothing opens, and a facilitator cannot tell a chord they have not
+    // finished from one the console never heard. The chip names the half
+    // that is waiting, and it must not lie in either direction — it
+    // appears the moment g arms, it clears the moment the chord resolves
+    // OR lapses, and it never appears where the letters are being typed.
+    await startRun(page, `E2E ${STAMP} ArmedA`, 's1');
+    await startRun(page, `E2E ${STAMP} ArmedB`, 's2');
+
+    await page.goto('/delegate/facilitator');
+    const pane = page.locator('section[aria-label^="Watching run for"]');
+    const rows = page.locator('tbody tr');
+    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+    // A role filter with a kbd inside, not getByRole('status') alone: the
+    // palette aria-hides the toolbar, and the chip has to stay silent
+    // there too — which a role-based locator could not see to prove.
+    const chip = page.locator('[role="status"]').filter({ has: page.locator('kbd') });
+    const cursored = page.locator('tbody tr[aria-current="true"]');
+    expect(await rows.count()).toBeGreaterThan(1);
+
+    // At rest: no chip, and no half-typed chord left over from the
+    // session that loaded the page. The bound is the point of every
+    // toHaveCount(0) here: an unbounded one is satisfied by a chip that
+    // finally goes away a second and a half later, which is the LAPSE
+    // timer doing the work the assertion is supposed to prove this code
+    // did. PROMPT (500ms) is far inside the 1500ms prefix window, so
+    // "gone now" cannot quietly become "gone eventually".
+    await expect(chip).toHaveCount(0, { timeout: PROMPT_MS });
+
+    // g arms the chord and acts on nothing — but says so, naming both the
+    // key that was pressed and every key that completes it. The text is
+    // read off the same map the hook dispatches from, so it cannot name a
+    // key that is not bound.
+    await page.keyboard.press('g');
+    await expect(chip).toBeVisible();
+    await expect(chip).toHaveText('g then i or n');
+    await expect(chip.locator('kbd')).toHaveText(['g', 'i', 'n']);
+    // Announced, not just drawn: the live region is the only way a screen
+    // reader learns a chord is half-typed.
+    await expect(chip).toHaveAttribute('role', 'status');
+    // Still inert — the chip is an announcement, not an action.
+    await expect(cursored).toHaveCount(0);
+    await expect(pane).toHaveCount(0);
+
+    // Resolving the chord takes the chip down with it.
+    await page.keyboard.press('n');
+    await expect(chip).toHaveCount(0, { timeout: PROMPT_MS });
+    await expect(rows.last()).toHaveAttribute('aria-current', 'true');
+    await expect(pane).toHaveCount(0);
+
+    // So does an unbound second key: g j is not a chord, the walk still
+    // happens, and the console is no longer waiting for anything. This is
+    // the one that matters most — a prefix left armed here would swallow
+    // the NEXT key as a chord, which is exactly the bug the bound above
+    // is here to catch.
+    await page.keyboard.press('g');
+    await expect(chip).toBeVisible();
+    await page.keyboard.press('j');
+    await expect(chip).toHaveCount(0, { timeout: PROMPT_MS });
+    await expect(rows.first()).toHaveAttribute('aria-current', 'true');
+
+    // And so does the lapse — the same timer the hook already relies on to
+    // stop a forgotten g firing at a stray letter, now visible as the chip
+    // going out on its own.
+    await page.keyboard.press('g');
+    await expect(chip).toBeVisible();
+    await page.waitForTimeout(2200);
+    await expect(chip).toHaveCount(0);
+    await page.keyboard.press('i');
+    await page.waitForTimeout(300);
+    await expect(rows.first()).toHaveAttribute('aria-current', 'true');
+    await expect(pane).toHaveCount(0);
+
+    // Inside the palette the letters belong to the field, so no chord arms
+    // and no chip appears to describe one.
+    await page.keyboard.press('Control+KeyK');
+    const search = page.getByPlaceholder('Type a command or search…');
+    await expect(search).toBeFocused();
+    await search.press('g');
+    await expect(chip).toHaveCount(0, { timeout: PROMPT_MS });
+    await expect(search).toHaveValue('g');
+    await page.keyboard.press('Escape');
+    // Wait for the dialog to detach before pressing again: Radix closes it
+    // asynchronously, and a key pressed while the input is still focused
+    // on its way out belongs to the field, not the grid. The affordance
+    // returns WITH the keyboard — the silence inside was the policy, not a
+    // dead hint.
+    await expect(search).toHaveCount(0);
+    await page.keyboard.press('g');
+    await expect(chip).toHaveText('g then i or n');
+    await page.keyboard.press('Escape');
+  });
+
   test('the saved-views popover shields the room from j, k, and w', async ({ page }) => {
     // A popover is the overlay the sweep must not fire through: it is open
     // on top of the grid, portaled onto the end of <body> rather than
