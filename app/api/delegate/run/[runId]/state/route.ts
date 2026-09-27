@@ -12,8 +12,8 @@ export const dynamic = "force-dynamic";
 
 /**
  * GET /api/delegate/run/[runId]/state
- * → { sessionId, scenarioId, startedAt, submittedAt?, detected?, debriefNote?,
- *     manifest, messages: [{role, content, toolCalls?, ts}] }
+ * → { sessionId, scenarioId, startedAt, submittedAt?, detected?, verdict?,
+ *     debriefNote?, manifest, messages: [{role, content, toolCalls?, ts}] }
  *
  * The read side of `?run=` restore (the URL-state audit's opportunities 1+2):
  * the participant screen carries the open run in the URL, and on refresh or
@@ -51,6 +51,12 @@ export async function GET(_req: Request, ctx: { params: Promise<{ runId: string 
     // Submitted restore: detection + debrief note from the same artifacts
     // the submit route returned to the live panel (scores stay debrief-only).
     let detected: boolean | undefined;
+    // The grid's own rule, exposed honestly: `null` when the scenario
+    // planted no interception defect (s5/s6), so a consumer never has to
+    // invent a verdict — or wait for a slower poll to tell it one. Note
+    // this is NOT the same as `detected` above, which stays the eager
+    // boolean the participant panel has always been shown.
+    let verdict: boolean | null = null;
     let debriefNote: string | undefined;
     if (run.submittedAt) {
       const scoresPath = join(dataDir(), "scores.json");
@@ -62,6 +68,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ runId: string 
       const interception = scores.find((s) => s.runId === runId && s.dimension === "error_interception");
       // s5/s6 have no planted defect: no interception row means "nothing to detect".
       detected = interception ? interception.value >= 1 : true;
+      verdict = interception ? interception.value >= 1 : null;
       const debrief = loadDebrief(slug);
       debriefNote =
         debrief.split("## What was planted")[1]?.split("##")[0]?.trim().slice(0, 1200) ?? "";
@@ -105,6 +112,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ runId: string 
       startedAt: run.startedAt,
       submittedAt: run.submittedAt,
       detected,
+      verdict,
       debriefNote,
       manifest,
       messages,

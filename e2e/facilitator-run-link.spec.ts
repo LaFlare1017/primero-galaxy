@@ -228,13 +228,16 @@ test.describe('Facilitator run links', () => {
     const result = pane.getByRole('region', { name: 'Submitted result' });
     await expect(result).toBeVisible({ timeout: 15_000 });
 
-    // The verdict is the grid's own, neither invented nor softened, and the
-    // Detection cell behind the pane agrees with it.
+    // The verdict is the scorer's own, neither invented nor softened, and
+    // the Detection cell behind the pane agrees with it. It rides the same
+    // poll as the note, so it cannot lag a beat behind the block it belongs to.
     const state = (await (await page.request.get(`/api/delegate/run/${seeded.runId}/state`)).json()) as {
       detected?: boolean;
+      verdict?: boolean | null;
       debriefNote?: string;
     };
     expect(typeof state.detected).toBe('boolean');
+    expect(typeof state.verdict).toBe('boolean');
     expect(state.debriefNote ?? '').not.toBe('');
 
     // innerText collapses the note's newlines, so compare on flattened text.
@@ -242,7 +245,7 @@ test.describe('Facilitator run links', () => {
     const flatNote = flat(state.debriefNote as string);
     const shown = flat(await result.innerText());
     const verdict = /Detection: (caught it|missed)/.exec(shown);
-    expect(verdict).not.toBeNull();
+    expect(verdict, 'the verdict must arrive with the block, not after it').not.toBeNull();
     await expect(page.getByRole('row').filter({ hasText: WATCH_RESULT })).toContainText(verdict![1]);
 
     // The participant is shown this exact note, so the facilitator debriefs
@@ -258,11 +261,11 @@ test.describe('Facilitator run links', () => {
   });
 
   test('the watch pane invents no verdict for a scenario with no planted defect', async ({ page }) => {
-    // s5 plants no interception defect, so the grid reports n/a. The state
-    // endpoint nonetheless answers detected:true for such a run (the
-    // participant panel shows its "nothing was planted" copy) — so a pane
-    // that trusted that boolean would read "caught it" directly above a grid
-    // cell saying n/a. The verdict must come from the grid, or not at all.
+    // s5 plants no interception defect, so there is nothing to catch: the
+    // grid reports n/a and the endpoint answers verdict:null. The endpoint's
+    // separate `detected` boolean stays eager (true) for the participant
+    // panel's existing copy — a pane that trusted THAT would read "caught
+    // it" directly above a grid cell saying n/a.
     const seeded = await startRun(page, WATCH_NODEFECT, 's5');
     const submit = await page.request.post('/api/delegate/submit', {
       data: { runId: seeded.runId, answer: MIN_40_WORDS },
@@ -271,8 +274,10 @@ test.describe('Facilitator run links', () => {
 
     const state = (await (await page.request.get(`/api/delegate/run/${seeded.runId}/state`)).json()) as {
       detected?: boolean;
+      verdict?: boolean | null;
     };
-    expect(state.detected).toBe(true); // the endpoint's eager answer, unused here
+    expect(state.detected).toBe(true); // the participant panel's eager answer
+    expect(state.verdict).toBeNull(); // the honest one, which the pane uses
 
     await page.goto('/delegate/facilitator');
     await watchRun(page, WATCH_NODEFECT);
@@ -349,8 +354,16 @@ test.describe('Facilitator run links', () => {
     // The open pane, whatever participant it currently shows.
     const openPane = page.locator('section[aria-label^="Watching run for"]');
     await expect(openPane).toBeVisible();
-    // Advertised only when there is somewhere to step to.
-    await expect(openPane).toHaveAttribute('aria-keyshortcuts', 'ArrowLeft ArrowRight');
+    // Advertised only when there is somewhere to step to, and it must
+    // advertise the full transport set — a missing key here would mean a
+    // binding the pane claims but does not honour. Retried: the pane mounts
+    // before the first grid poll fills the room, so the attribute only
+    // appears once the sweep can actually go anywhere.
+    await expect(openPane).toHaveAttribute('aria-keyshortcuts', /ArrowLeft/);
+    const shortcuts = (await openPane.getAttribute('aria-keyshortcuts')) ?? '';
+    for (const key of ['ArrowLeft', 'ArrowRight', 'Home', 'End']) {
+      expect(shortcuts, `aria-keyshortcuts is missing ${key}`).toContain(key);
+    }
     const position = async (): Promise<[number, number]> => {
       const digits = (await openPane.getByText(/^\d+ of \d+$/).innerText()).match(/\d+/g) ?? [];
       return [Number(digits[0]), Number(digits[1])];
@@ -394,6 +407,51 @@ test.describe('Facilitator run links', () => {
     await page.keyboard.press('ArrowRight');
     await expect.poll(position).toEqual([(at % total) + 1, total]);
     expect(watching()).not.toBe(a.runId);
+  });
+
+  test('Home and End jump the sweep to its first and last visible participant', async ({ page }) => {
+    // The store accumulates, so the ends of the room are NOT this test's
+    // rows: read the first and last displayed row and assert the pane lands
+    // on those participants by name, which is what "the ends" means.
+    const seeded = await startRun(page, `E2E ${STAMP} Edge`, 's1');
+    await startRun(page, `E2E ${STAMP} EdgeB`, 's2');
+    await page.goto(`/delegate/facilitator?watch=${seeded.runId}`);
+
+    const firstRow = page.locator('tbody tr').first();
+    const lastRow = page.locator('tbody tr').last();
+    await expect(firstRow).toBeVisible({ timeout: 15_000 });
+    const firstName = await firstRow.locator('td').first().innerText();
+    const lastName = await lastRow.locator('td').first().innerText();
+    const total = await page.locator('tbody tr').count();
+    expect(total).toBeGreaterThan(1);
+    // Sweeping is only mounted for a room with more than one row; the
+    // deep-linked run is one of them, so the indicator is meaningful.
+    const pane = page.locator('section[aria-label^="Watching run for"]');
+    const indicator = () => pane.getByText(/^\d+ of \d+$/);
+    await expect(indicator()).toBeVisible();
+
+    // End: the LAST participant in the displayed order, counted as such.
+    await page.keyboard.press('End');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${lastName}`, { timeout: 10_000 });
+    await expect(indicator()).toHaveText(`${total} of ${total}`);
+
+    // Home: the first, from anywhere in the room.
+    await page.keyboard.press('Home');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${firstName}`, { timeout: 10_000 });
+    await expect(indicator()).toHaveText(`1 of ${total}`);
+
+    // Home/End are keys a text field owns too: the caret must still reach
+    // the end of the palette search, with no sweep behind it.
+    const before = new URL(page.url()).searchParams.get('watch');
+    await page.keyboard.press('Control+KeyK');
+    const search = page.getByPlaceholder('Type a command or search…');
+    await expect(search).toBeFocused();
+    await search.fill('delegate');
+    await search.press('End');
+    await page.waitForTimeout(400);
+    expect(new URL(page.url()).searchParams.get('watch')).toBe(before);
+    await expect(search).toHaveValue('delegate');
+    await page.keyboard.press('Escape');
   });
 
   test('a copied submitted-run link restores read-only in a fresh context', async ({ page, browser }) => {

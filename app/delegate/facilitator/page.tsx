@@ -258,20 +258,18 @@ const WATCH_POLL_MS = 3000;
  * as it grows, with each turn's tool calls collapsed exactly like the
  * live chat. Once the run is in, it also shows the post-submit outcome: the
  * debrief note the endpoint already serves (the same text the participant
- * reads) and the grid's own detection verdict — never a score, which stays
+ * reads) and the detection verdict — never a score, which stays
  * with the group debrief. Everything is rebuilt from the event log, so the
  * mirror is the same data the participant's own restored screen shows.
  */
 function WatchPane({
   runId,
-  detected,
   onClose,
   onStep,
   position,
   canStep,
 }: {
   runId: string;
-  detected?: boolean;
   onClose: () => void;
   onStep: (delta: number) => void;
   position: { index: number; total: number } | null;
@@ -282,12 +280,14 @@ function WatchPane({
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [submittedAt, setSubmittedAt] = useState<string | null>(null);
   const [messages, setMessages] = useState<WatchMessage[]>([]);
-  // The debrief note comes from the state endpoint (the same text the
-  // participant reads). The VERDICT deliberately does not: the endpoint
-  // reports "detected" for a run whose scenario planted no defect at all
-  // (s5/s6 have no interception score), while the grid refuses to invent a
-  // verdict there. The pane takes the grid's verdict as a prop so the two
-  // can never contradict each other on one screen.
+  // Both post-submit fields come from this poll, so the result block and
+  // its verdict always arrive together. `verdict` is the grid's rule
+  // (null when the scenario planted no interception defect at all) rather
+  // than the endpoint's eager `detected` boolean: a scenario with nothing
+  // to find must not report a catch. Taking it from the grid's own row
+  // instead would tie the pane to the slower 4s room poll, leaving the
+  // block on screen for seconds with a note and no verdict.
+  const [verdict, setVerdict] = useState<boolean | null>(null);
   const [debriefNote, setDebriefNote] = useState("");
   const [missing, setMissing] = useState(false);
 
@@ -311,6 +311,7 @@ function WatchPane({
           scenarioId: string;
           startedAt: string;
           submittedAt?: string | null;
+          verdict?: boolean | null;
           debriefNote?: string;
           messages: WatchMessage[];
         };
@@ -319,6 +320,7 @@ function WatchPane({
         setScenario(SCENARIO_FOCUS_NAMES[data.scenarioId as ScenarioFocusId] ?? data.scenarioId);
         setStartedAt(new Date(data.startedAt).getTime());
         setSubmittedAt(data.submittedAt ?? null);
+        setVerdict(data.verdict ?? null);
         setDebriefNote(data.debriefNote ?? "");
         setMessages(data.messages ?? []);
       } catch {
@@ -354,7 +356,7 @@ function WatchPane({
       aria-label={`Watching run for ${label}`}
       // Announced only when stepping is possible, so the shortcut is never
       // advertised on a room with nothing to sweep.
-      aria-keyshortcuts={canStep ? "ArrowLeft ArrowRight" : undefined}
+      aria-keyshortcuts={canStep ? "ArrowLeft ArrowRight Home End" : undefined}
     >
       <div className="flex items-center gap-3 border-b border-gray-200 bg-gray-50 px-3 py-2">
         <span className="text-[13px] font-medium text-black">{label || "…"}</span>
@@ -369,7 +371,7 @@ function WatchPane({
           {/* Sweep controls: cycle through the currently visible
               participants without re-clicking rows. */}
           {position !== null && (
-            <span className="mr-1 text-xs tabular-nums text-gray-500">
+            <span className="mr-1 text-xs tabular-nums text-gray-500" title="Home and End jump to the first and last participant">
               {position.index + 1} of {position.total}
             </span>
           )}
@@ -447,17 +449,18 @@ function WatchPane({
         Post-submit result: the pane answers the question a facilitator
         actually asks here — did this one get it, and what will the room be
         told — while the score itself stays for the group debrief, exactly
-        as the participant's own post-submit panel holds it back. No
-        verdict line at all when the scenario planted no defect to detect;
-        the grid's own n/a carries that, and a bare "n/a" in a mirror of a
-        finished run would only read as a gap.
+        as the participant's own post-submit panel holds it back.        No
+        verdict line at all when the scenario planted no defect to detect
+        (the endpoint's null verdict): a scenario with nothing to find must
+        not report a catch, and a bare "n/a" in a mirror of a finished run
+        would only read as a gap.
       */}
       {submittedAt && (
         <section aria-label="Submitted result" className="border-t border-gray-200 bg-gray-50 px-3 py-2">
-          {detected !== undefined && (
+          {verdict !== null && (
             <p className="text-[13px] text-gray-600">
-              <span className="font-medium text-black">Detection: {detectionLabel(detected)}</span>
-              {detected
+              <span className="font-medium text-black">Detection: {detectionLabel(verdict)}</span>
+              {verdict
                 ? " — the participant was told their answer named the defect."
                 : " — the participant was told the verdict waits for the group debrief."}
             </p>
@@ -649,17 +652,37 @@ function FacilitatorGrid() {
     [sweepList, watchId, setWatchId],
   );
 
+  /**
+   * Home/End jump to the ends of the same displayed sweep — the other two
+   * transport keys, and the fast path to a known participant when the room
+   * is long. Unlike a step, an edge jump needs no direction: it is simply
+   * the first or last visible row, whether or not the watched run is still
+   * in the visible set.
+   */
+  const jumpWatch = useCallback(
+    (edge: "first" | "last") => {
+      if (sweepList.length === 0) return;
+      void setWatchId(edge === "first" ? sweepList[0] : sweepList[sweepList.length - 1]);
+    },
+    [sweepList, setWatchId],
+  );
+
   // ── Sweep by keyboard ──
-  // Left/Right step the watched room, so a facilitator moving down the
-  // roster never has to reach for the pane's buttons. Mounted only while
-  // the pane is open and there is somewhere to step to; the shared helper
-  // keeps the keys away from text fields, open modals, and modified
-  // presses (see components/delegate/shortcuts.ts for the policy).
+  // Left/Right step the watched room, Home/End jump to its ends, so a
+  // facilitator moving down the roster never has to reach for the pane's
+  // buttons. Mounted only while the pane is open and there is somewhere
+  // to step to; the shared helper keeps the keys away from text fields,
+  // open modals, and modified presses (see components/delegate/shortcuts.ts
+  // for the policy). Home/End would otherwise scroll the page, so while a
+  // run is being watched they belong to the sweep — the one place these
+  // keys stop meaning "scroll to the top/bottom".
   const canSweepKeys = watchId !== null && sweepList.length > 1;
   useKeyboardShortcuts(
     {
       ArrowLeft: () => stepWatch(-1),
       ArrowRight: () => stepWatch(1),
+      Home: () => jumpWatch("first"),
+      End: () => jumpWatch("last"),
     },
     canSweepKeys,
   );
@@ -769,7 +792,6 @@ function FacilitatorGrid() {
         <WatchPane
           key={watchId}
           runId={watchId}
-          detected={rows.find((r) => r.runId === watchId)?.detected}
           onClose={() => void setWatchId(null)}
           onStep={stepWatch}
           position={sweepList.length > 0 ? { index: sweepIndex, total: sweepList.length } : null}
