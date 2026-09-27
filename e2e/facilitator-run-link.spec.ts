@@ -511,6 +511,56 @@ test.describe('Facilitator run links', () => {
     await expect(pane.getByText(/^\d+ of \d+$/)).toHaveText(`${total} of ${total}`);
   });
 
+  test('the saved-views popover shields the room from j and k', async ({ page }) => {
+    // A popover is the overlay the sweep must not fire through: it is open
+    // on top of the grid, portaled onto the end of <body> rather than
+    // nested under its trigger, and taking focus. The policy-level proof
+    // of the role-less variant lives in delegate-shortcuts.spec.ts; this
+    // is the behaviour, on the panel the console actually ships. Two
+    // stamped rows so the sweep has somewhere to go once it is let loose.
+    await startRun(page, `E2E ${STAMP} PopA`, 's1');
+    await startRun(page, `E2E ${STAMP} PopB`, 's2');
+
+    await page.goto('/delegate/facilitator');
+    const pane = page.locator('section[aria-label^="Watching run for"]');
+    const rows = page.locator('tbody tr');
+    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+    // Nothing is watched yet, so any pane at all means a key leaked through.
+    await expect(pane).toHaveCount(0);
+
+    // exact: the store's accumulated ViewS5-style names contain "views"
+    // case-insensitively, and getByRole's default match is a substring.
+    await page.getByRole('button', { name: 'Views', exact: true }).click();
+    const panel = page.locator('[data-radix-popper-content-wrapper] [data-state="open"]');
+    await expect(panel).toBeVisible();
+    // What the policy actually matches on, read off the live app rather
+    // than assumed. Radix 1.1.23 stamps role="dialog" on popover content
+    // whatever its modality, so the saved-views panel is a dialog by the
+    // time it reaches the DOM and the dialog clause already covers it; the
+    // popper wrapper is the second clause behind it, for a panel that
+    // claims no role. Pinned here so the transcribed fixtures in
+    // delegate-shortcuts.spec.ts cannot drift from the app silently.
+    await expect(panel).toHaveAttribute('role', 'dialog');
+    await expect(panel).toHaveAttribute('data-state', 'open');
+
+    // Focus is inside the panel (Radix moves it on open), so these land on
+    // the panel's own buttons — no field swallows them, and the room must
+    // not step behind it.
+    await page.keyboard.press('j');
+    await page.keyboard.press('k');
+    await page.waitForTimeout(400);
+    await expect(pane).toHaveCount(0);
+    expect(new URL(page.url()).searchParams.get('watch')).toBeNull();
+
+    // Positive control: closing the panel hands the keys straight back, so
+    // the guard above is not simply "ignore the keys while a panel exists".
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+    await page.keyboard.press('j');
+    const firstName = await rows.nth(0).locator('td').first().innerText();
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${firstName}`, { timeout: 10_000 });
+  });
+
   test('a copied submitted-run link restores read-only in a fresh context', async ({ page, browser }) => {
     const seeded = await startRun(page, SUBMITTED, 's5');
     const submit = await page.request.post('/api/delegate/submit', {
