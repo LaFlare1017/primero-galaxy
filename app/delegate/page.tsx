@@ -5,6 +5,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 
 import { AgentStatusOrb, ComposerBeam, DecisionBeam } from "@/components/ui/AgentEffects";
 import { MessageBody } from "@/components/ui/MessageBody";
+import { useElapsedClock } from "@/components/delegate/useElapsedClock";
 import { cn } from "@/lib/utils";
 
 /**
@@ -299,18 +300,7 @@ function DelegateWorkspace() {
     };
   }, [restoreCandidate]);
   // Preview clock: ticks for a live run, frozen at submittedAt once in.
-  const [previewElapsed, setPreviewElapsed] = useState(0);
-  useEffect(() => {
-    if (!preview) return;
-    const compute = () =>
-      setPreviewElapsed(
-        Math.max(0, Math.round(((preview.submittedAt ? new Date(preview.submittedAt).getTime() : Date.now()) - preview.startedAt) / 1000)),
-      );
-    compute();
-    if (preview.submittedAt) return;
-    const t = setInterval(compute, 1000);
-    return () => clearInterval(t);
-  }, [preview]);
+  const previewElapsed = useElapsedClock(preview?.startedAt ?? null, preview?.submittedAt ?? null);
   const previewMin = String(Math.floor(previewElapsed / 60)).padStart(2, "0");
   const previewSec = String(previewElapsed % 60).padStart(2, "0");
 

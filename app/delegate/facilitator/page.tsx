@@ -15,6 +15,7 @@ import { AgentStatusOrb } from "@/components/ui/AgentEffects";
 import { MessageBody } from "@/components/ui/MessageBody";
 import { FacilitatorSavedViews } from "@/components/delegate/SavedViews";
 import type { FacilitatorViewState } from "@/components/delegate/saved-views";
+import { useElapsedClock } from "@/components/delegate/useElapsedClock";
 import {
   Table,
   TableBody,
@@ -269,7 +270,6 @@ function WatchPane({
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [submittedAt, setSubmittedAt] = useState<string | null>(null);
   const [messages, setMessages] = useState<WatchMessage[]>([]);
-  const [elapsed, setElapsed] = useState(0);
   const [missing, setMissing] = useState(false);
 
   // One poller: the run-state endpoint doubles as the live tick, so a
@@ -313,20 +313,7 @@ function WatchPane({
   }, [runId]);
 
   // Elapsed clock, frozen at the submitted time once the run is in.
-  useEffect(() => {
-    if (startedAt === null) return;
-    const compute = () =>
-      setElapsed(
-        Math.max(
-          0,
-          Math.round(((submittedAt ? new Date(submittedAt).getTime() : Date.now()) - startedAt) / 1000),
-        ),
-      );
-    compute();
-    if (submittedAt) return;
-    const t = setInterval(compute, 1000);
-    return () => clearInterval(t);
-  }, [startedAt, submittedAt]);
+  const elapsed = useElapsedClock(startedAt, submittedAt);
 
   const mm = String(Math.floor(elapsed / 60)).padStart(2, "0");
   const ss = String(elapsed % 60).padStart(2, "0");
