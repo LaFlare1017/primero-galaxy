@@ -16,6 +16,7 @@ import { MessageBody } from "@/components/ui/MessageBody";
 import { FacilitatorSavedViews } from "@/components/delegate/SavedViews";
 import type { FacilitatorViewState } from "@/components/delegate/saved-views";
 import { useElapsedClock } from "@/components/delegate/useElapsedClock";
+import { useKeySequence } from "@/components/delegate/useKeySequence";
 import { useKeyboardShortcuts } from "@/components/delegate/useKeyboardShortcuts";
 import {
   Table,
@@ -691,18 +692,22 @@ function FacilitatorGrid() {
   }, [openTarget, watchId, setWatchId]);
 
   /**
-   * Home/End jump to the ends of the same displayed sweep — the other two
-   * transport keys, and the fast path to a known participant when the room
-   * is long. Unlike a step, an edge jump needs no direction: it is simply
-   * the first or last visible row, whether or not the watched run is still
-   * in the visible set.
+   * A jump to one end of the same displayed sweep, where a step needs no
+   * direction: the first or last visible row, whether or not the cursor is
+   * still in the visible set. Two outcomes, exactly as the walk has — the
+   * cursor while the pane is closed, the watch pointer while it is open —
+   * so jumping around a long room never opens a mirror nobody asked for.
+   * Home/End and the g-pairs below are the same function: one rule, two
+   * sets of keys.
    */
-  const jumpWatch = useCallback(
+  const jumpSweep = useCallback(
     (edge: "first" | "last") => {
       if (sweepList.length === 0) return;
-      void setWatchId(edge === "first" ? sweepList[0] : sweepList[sweepList.length - 1]);
+      const target = edge === "first" ? sweepList[0] : sweepList[sweepList.length - 1];
+      if (watchId !== null) void setWatchId(target);
+      else setCursorId(target);
     },
-    [sweepList, setWatchId],
+    [sweepList, watchId, setWatchId],
   );
 
   // ── Row walk: j/k, then Enter or w to watch ──
@@ -726,6 +731,20 @@ function FacilitatorGrid() {
   useKeyboardShortcuts({ w: openCursor }, canOpenCursor);
   useKeyboardShortcuts({ Enter: openCursor }, canOpenCursor && !gridFocused);
 
+  // ── Chained jump: g then i / g then n ──
+  // The ends of the room without spending Home and End on it: those are
+  // the pane's transport while a run is watched, and the grid can do
+  // better with a chord borrowed from GitHub and Gmail — g i is the near
+  // end, g n the far one, and g on its own does nothing. An unbound second
+  // key falls through, so g j still walks (see useKeySequence).
+  useKeySequence(
+    {
+      "g i": () => jumpSweep("first"),
+      "g n": () => jumpSweep("last"),
+    },
+    sweepList.length > 0,
+  );
+
   // ── Sweep by keyboard ──
   // Left/Right step the watched room, Home/End jump to its ends, so a
   // facilitator moving down the roster never has to reach for the pane's
@@ -740,8 +759,8 @@ function FacilitatorGrid() {
     {
       ArrowLeft: () => stepSweep(-1),
       ArrowRight: () => stepSweep(1),
-      Home: () => jumpWatch("first"),
-      End: () => jumpWatch("last"),
+      Home: () => jumpSweep("first"),
+      End: () => jumpSweep("last"),
     },
     canSweepKeys,
   );
@@ -911,9 +930,9 @@ function FacilitatorGrid() {
             </span>
             <span
               className="text-xs text-gray-500"
-              title="j and k walk the visible rows, wrapping at the ends; Enter or w opens the watch pane on the row you stopped on"
+              title="j and k walk the visible rows, wrapping at the ends; Enter or w opens the watch pane on the row you stopped on; g then i or g then n jumps to the first or last visible row"
             >
-              j/k to walk, Enter/w to watch
+              j/k to walk, Enter/w to watch, g i/g n to jump
             </span>
           </div>
 

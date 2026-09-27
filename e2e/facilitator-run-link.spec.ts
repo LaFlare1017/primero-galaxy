@@ -578,6 +578,84 @@ test.describe('Facilitator run links', () => {
     await expect(pane).toHaveAttribute('aria-label', `Watching run for ${coldFirst.trim()}`, { timeout: 10_000 });
   });
 
+  test('g then i and g then n jump the walk to the ends of the room', async ({ page }) => {
+    // The chained jump (GitHub and Gmail bind `g` then a destination the
+    // same way): a chord is the only way to reach the ends of a long room
+    // without spending Home and End, which belong to the open pane.
+    await startRun(page, `E2E ${STAMP} JumpA`, 's1');
+    await startRun(page, `E2E ${STAMP} JumpB`, 's2');
+
+    await page.goto('/delegate/facilitator');
+    const pane = page.locator('section[aria-label^="Watching run for"]');
+    const rows = page.locator('tbody tr');
+    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+    // CSS locator, not getByRole: the palette aria-hides the grid, and the
+    // chord is checked while it is open.
+    const cursored = page.locator('tbody tr[aria-current="true"]');
+    expect(await rows.count()).toBeGreaterThan(1);
+
+    // g on its own is a prefix, not a command: nothing moves, nothing opens.
+    await page.keyboard.press('g');
+    await expect(cursored).toHaveCount(0);
+    await expect(pane).toHaveCount(0);
+
+    // An unbound second key falls through instead of being swallowed, so
+    // g j is not a chord: the walk happens exactly as a bare j would, and
+    // the still-armed g cannot eat the j on its way past.
+    await page.keyboard.press('j');
+    await expect(rows.first()).toHaveAttribute('aria-current', 'true');
+    await expect(pane).toHaveCount(0);
+
+    // The pair itself: g n is the far end of the displayed room, g i the
+    // near one. A jump moves the cursor and never opens the mirror.
+    await page.keyboard.press('g');
+    await page.keyboard.press('n');
+    await expect(rows.last()).toHaveAttribute('aria-current', 'true');
+    await expect(pane).toHaveCount(0);
+    await page.keyboard.press('g');
+    await page.keyboard.press('i');
+    await expect(rows.first()).toHaveAttribute('aria-current', 'true');
+
+    // A forgotten prefix lapses, so a stray i a moment later cannot fire
+    // a chord the facilitator has stopped thinking about.
+    await page.keyboard.press('j');
+    await expect(rows.nth(1)).toHaveAttribute('aria-current', 'true');
+    await page.keyboard.press('g');
+    await page.waitForTimeout(2200);
+    await page.keyboard.press('i');
+    await page.waitForTimeout(300);
+    await expect(rows.nth(1)).toHaveAttribute('aria-current', 'true');
+    await expect(pane).toHaveCount(0);
+
+    // With the pane open the chord moves the watch, like every other key
+    // on this surface. Names read fresh: the store keeps accumulating, so
+    // the ends of the room are not necessarily where they were above.
+    const firstName = (await rows.first().locator('td').first().innerText()).trim();
+    const lastName = (await rows.last().locator('td').first().innerText()).trim();
+    await page.keyboard.press('w');
+    await expect(pane).toBeVisible({ timeout: 10_000 });
+    await page.keyboard.press('g');
+    await page.keyboard.press('n');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${lastName}`, { timeout: 10_000 });
+    await page.keyboard.press('g');
+    await page.keyboard.press('i');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${firstName}`, { timeout: 10_000 });
+
+    // And the chord is inert where every shortcut is: the letters type into
+    // the palette search and the watch does not move behind the dialog.
+    const watchBefore = new URL(page.url()).searchParams.get('watch');
+    await page.keyboard.press('Control+KeyK');
+    const search = page.getByPlaceholder('Type a command or search…');
+    await expect(search).toBeFocused();
+    await search.fill('jack');
+    await search.press('g');
+    await search.press('n');
+    await expect(search).toHaveValue('jackgn');
+    await page.waitForTimeout(400);
+    expect(new URL(page.url()).searchParams.get('watch')).toBe(watchBefore);
+    await page.keyboard.press('Escape');
+  });
+
   test('the saved-views popover shields the room from j, k, and w', async ({ page }) => {
     // A popover is the overlay the sweep must not fire through: it is open
     // on top of the grid, portaled onto the end of <body> rather than
