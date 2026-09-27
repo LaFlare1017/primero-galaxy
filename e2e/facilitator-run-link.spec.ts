@@ -292,6 +292,66 @@ test.describe('Facilitator run links', () => {
     await expect(page.getByRole('row').filter({ hasText: WATCH_NODEFECT })).toContainText('n/a');
   });
 
+  test('a shared ?watch= link whose row the status filter hides says so, and offers to show it', async ({ page }) => {
+    // The awkward case in the state-sharing story: a colleague hands over a
+    // link to one participant, and the console it lands on is already
+    // filtered to a different status. The run is real and the mirror is
+    // live, but the grid has no row for them — so the cursor points at
+    // nothing visible. The console has to say that rather than silently
+    // clearing the filter or, worse, quietly watching someone else.
+    const watched = await startRun(page, `E2E ${STAMP} FilteredWatch`, 's1');
+    const hider = await startRun(page, `E2E ${STAMP} FilteredHider`, 's2');
+    // One submitted row, so ?status=submitted leaves the grid non-empty:
+    // an empty grid would prove the note but not that the console knows
+    // WHICH row is missing.
+    const submit = await page.request.post('/api/delegate/submit', {
+      data: { runId: hider.runId, answer: MIN_40_WORDS },
+    });
+    expect(submit.ok()).toBeTruthy();
+
+    await page.goto(`/delegate/facilitator?status=submitted&watch=${watched.runId}`);
+    const pane = page.getByRole('region', { name: `Watching run for E2E ${STAMP} FilteredWatch` });
+    await expect(pane).toBeVisible({ timeout: 15_000 });
+    const rows = page.locator('tbody tr');
+    const cursored = page.locator('tbody tr[aria-current="true"]');
+    const watchedRow = rows.filter({ hasText: `E2E ${STAMP} FilteredWatch` });
+    // The room is real — the store keeps every run any spec has ever
+    // submitted, so ?status=submitted leaves plenty of rows — and the
+    // watched run is not one of them. That is the whole problem: a live
+    // mirror for a participant the grid is not showing.
+    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+    await expect(watchedRow).toHaveCount(0);
+    // With no row, the cursor has nothing to point at.
+    await expect(cursored).toHaveCount(0);
+
+    // The pane says so, names who it is, and offers the one action that
+    // fixes it. It is wired as the pane's description rather than a
+    // floating toast, so it is part of the mirror rather than something
+    // that scrolls away above it.
+    const note = pane.locator('#watch-hidden-by-facet');
+    await expect(note).toBeVisible();
+    await expect(note).toContainText(`E2E ${STAMP} FilteredWatch`);
+    await expect(note).toContainText('the status filter is hiding them');
+    await expect(pane).toHaveAttribute('aria-describedby', 'watch-hidden-by-facet');
+    // The mirror itself is untouched: a filter says nothing about whether a
+    // run is real, and the link is what the colleague actually shared.
+    await expect(pane.getByText('has no row in this view')).toBeVisible();
+
+    // The offer is the reconciliation: lifting the filter brings the row
+    // back, and with it the cursor — the same cursor that was invisible a
+    // moment ago, now marked on the row it always meant.
+    await note.getByRole('button', { name: 'Show in the grid' }).click();
+    await expect(note).toHaveCount(0);
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('status'))
+      .toBe(null);
+    const revealed = page.locator('tbody tr').filter({ hasText: `E2E ${STAMP} FilteredWatch` });
+    await expect(revealed).toHaveCount(1);
+    await expect(revealed).toHaveAttribute('aria-current', 'true');
+    // The pane never moved: the same run, now with a row behind it.
+    await expect(pane).toBeVisible();
+  });
+
   test('the watch pane sweeps the visible participants with prev/next', async ({ page }) => {
     // Three sessions with labels that sort as a CONTIGUOUS block: the
     // stamp leads ("E2E <stamp> SweepA/B/C"), so this execution's trio is

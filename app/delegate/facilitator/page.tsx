@@ -271,6 +271,9 @@ interface WatchMessage {
 
 const WATCH_POLL_MS = 3000;
 
+/** Id of the pane's "no row in this view" note, wired via aria-describedby. */
+const HIDDEN_BY_FACET_ID = "watch-hidden-by-facet";
+
 /**
  * Live mirror of a participant's run (the audit's end-to-end sharing,
  * taken to the console itself): polls GET /api/delegate/run/[runId]/state
@@ -287,14 +290,20 @@ function WatchPane({
   runId,
   onClose,
   onStep,
+  onReveal,
   position,
   canStep,
+  hiddenByFacet,
 }: {
   runId: string;
   onClose: () => void;
   onStep: (delta: number) => void;
+  /** Lift the status filter so this run's row exists in the grid again. */
+  onReveal: () => void;
   position: { index: number; total: number } | null;
   canStep: boolean;
+  /** The grid is filtered so this run has no row, though the run is fine. */
+  hiddenByFacet: boolean;
 }) {
   const [label, setLabel] = useState("");
   const [scenario, setScenario] = useState("");
@@ -375,6 +384,11 @@ function WatchPane({
     <section
       className="mb-4 rounded-md border border-gray-200"
       aria-label={`Watching run for ${label}`}
+      // The hidden-row note is part of the pane's description, not a
+      // floating notice: a shared link can open a mirror for a participant
+      // the current filter has removed from the room, and without this the
+      // console shows a run with no row behind it and says nothing.
+      aria-describedby={hiddenByFacet ? HIDDEN_BY_FACET_ID : undefined}
       // Announced only when stepping is possible, so the shortcut is never
       // advertised on a room with nothing to sweep.
       aria-keyshortcuts={canStep ? "ArrowLeft ArrowRight Home End" : undefined}
@@ -426,6 +440,24 @@ function WatchPane({
           </button>
         </div>
       </div>
+      {hiddenByFacet && (
+        <div
+          id={HIDDEN_BY_FACET_ID}
+          className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 px-3 py-2 text-[13px] text-gray-600"
+        >
+          <span>
+            <span className="font-medium text-black">{label}</span> has no row in this view — the
+            status filter is hiding them. The mirror below is still live.
+          </span>
+          <button
+            type="button"
+            onClick={onReveal}
+            className="rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-600 hover:border-gray-500 hover:text-black"
+          >
+            Show in the grid
+          </button>
+        </div>
+      )}
       <div className="max-h-72 space-y-2 overflow-y-auto p-3">
         {messages.length === 0 ? (
           <p className="text-xs text-gray-500">No messages yet — the participant has not prompted the agent.</p>
@@ -759,6 +791,25 @@ function FacilitatorGrid() {
     [walkedRunId, visibleRows],
   );
   /**
+   * A shared `?watch=` link can name a run the current status facets have
+   * removed from the room — the link is the whole point of the feature, so
+   * the pane opens regardless, but the grid behind it has no row for this
+   * participant, and the cursor is pointing at something nobody can see.
+   *
+   * Two things are deliberately NOT done about it. The filter is not
+   * cleared on arrival, because a console that silently rewrites the view
+   * someone shared is worse than one that says what it is showing. And the
+   * cursor is not moved onto a row that happens to be visible, because
+   * then Enter and g w would act on a participant nobody picked. Instead
+   * the pane says so and offers the one action that fixes it, and the
+   * cursor becomes visible the moment the filter is lifted.
+   *
+   * Only a status facet can hide a row — ?scenario= dims rather than
+   * filters, and sort only reorders — so the gate is exactly that param
+   * being set and the watch being absent from the swept list.
+   */
+  const hiddenByFacet = watchId !== null && statuses !== null && !sweepList.includes(watchId);
+  /**
    * One sweep with two outcomes. Stepping moves the cursor; when the pane
    * is open the cursor IS the watched run, so the walk keeps sweeping the
    * pane exactly as it did before the cursor existed. With the pane closed
@@ -1044,8 +1095,10 @@ function FacilitatorGrid() {
             announce("Watch pane closed");
           }}
           onStep={stepSweep}
+          onReveal={() => void setStatuses(null)}
           position={sweepList.length > 0 ? { index: sweepIndex, total: sweepList.length } : null}
           canStep={sweepList.length > 1}
+          hiddenByFacet={hiddenByFacet}
         />
       )}
 
