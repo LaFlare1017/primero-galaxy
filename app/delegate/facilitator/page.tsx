@@ -9,7 +9,7 @@ import {
   parseAsStringLiteral,
   useQueryState,
 } from "nuqs";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { AgentStatusOrb } from "@/components/ui/AgentEffects";
 import { MessageBody } from "@/components/ui/MessageBody";
@@ -17,8 +17,13 @@ import { FacilitatorSavedViews } from "@/components/delegate/SavedViews";
 import type { FacilitatorViewState } from "@/components/delegate/saved-views";
 import { useElapsedClock } from "@/components/delegate/useElapsedClock";
 import { useKeySequence } from "@/components/delegate/useKeySequence";
-import { useKeyboardShortcuts, type ShortcutHandlers } from "@/components/delegate/useKeyboardShortcuts";
-import { ShortcutLegend } from "@/components/delegate/ShortcutLegend";
+import { useKeyboardShortcuts } from "@/components/delegate/useKeyboardShortcuts";
+import {
+  ShortcutLegend,
+  type ShortcutChord,
+  type ShortcutGates,
+  type ShortcutGate,
+} from "@/components/delegate/ShortcutLegend";
 import { KeyCap } from "@/components/ui/KeyCap";
 import {
   Table,
@@ -172,6 +177,19 @@ function detectionLabel(detected: boolean | undefined): string {
  * submitted run restores read-only. The ids are opaque capability tokens,
  * so the label stays out of the URL (audit §5).
  */
+/**
+ * A destination of the `g` namespace: the sheet's own chord descriptor plus
+ * the thing it does. The two live together in one object on purpose — the
+ * words a facilitator reads in the sheet and the code that runs are the
+ * same entry, so they cannot describe different destinations.
+ */
+type NamespaceChord = ShortcutChord & { run: () => void };
+
+/** The key still owed after a prefix: "g i" armed on "g" is waiting for "i". */
+function nextKeyOf(keys: string): string {
+  return keys.split(" ").slice(1).join(" ");
+}
+
 function runLink(row: Row): string | null {
   if (!row.runId) return null;
   const url = new URL("/delegate", window.location.origin);
@@ -582,15 +600,47 @@ function FacilitatorGrid() {
   // has no `?` key to press, and a keyboard-only affordance nobody can find
   // is not an affordance.
   const [legendOpen, setLegendOpen] = useState(false);
-
-  const copyRunLink = useCallback((row: Row) => {
-    const link = runLink(row);
-    if (!link) return;
-    void navigator.clipboard.writeText(link).then(() => {
-      setCopiedRunId(row.runId ?? null);
-      window.setTimeout(() => setCopiedRunId(null), 1500);
-    });
+  // Controlled so the `g v` chord can open the views panel: the popover
+  // owns its own state for every other caller, but the keyboard has to
+  // reach the panel from somewhere that is not its own trigger button.
+  const [viewsOpen, setViewsOpen] = useState(false);
+  // What the console just DID, in words, for a moment. The walk region
+  // describes where the cursor is; this one reports the consequences of an
+  // action — a link copied, a pane opened, a pane closed. None of those
+  // move focus, and the pane in particular is a region nobody is told
+  // about: without this, every chord except the walk would be silent.
+  const [actionNote, setActionNote] = useState<string | null>(null);
+  const actionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const announce = useCallback((note: string) => {
+    setActionNote(note);
+    if (actionTimer.current !== null) clearTimeout(actionTimer.current);
+    // Cleared so the SAME note twice in a row is spoken twice: a live
+    // region only announces a change, and copying the same row again is a
+    // change in nothing at all.
+    actionTimer.current = setTimeout(() => setActionNote(null), 3000);
   }, []);
+
+  const copyRunLink = useCallback(
+    (row: Row) => {
+      const link = runLink(row);
+      if (!link) return;
+      void navigator.clipboard
+        .writeText(link)
+        .then(() => {
+          setCopiedRunId(row.runId ?? null);
+          window.setTimeout(() => setCopiedRunId(null), 1500);
+          announce(`Run link copied for ${row.participant}`);
+        })
+        .catch(() => {
+          // Announced rather than swallowed: a copy that silently does
+          // nothing is indistinguishable from a broken key, and the row
+          // button's Copied flash is the only other confirmation — which
+          // nobody sees if the row is scrolled out of sight.
+          announce("Could not copy the run link");
+        });
+    },
+    [announce],
+  );
 
   // Imported shared view: acknowledge the ?view= name once with a toast,
   // then drop the param (replaceState via nuqs) so a refresh doesn't
@@ -732,19 +782,29 @@ function FacilitatorGrid() {
   );
 
   /**
-   * Enter / w: open the watch pane on the row the walk stopped on. Falls
-   * back to the first visible row when the cursor has not moved (or has
-   * fallen out of the current facets), so the key does something from a
-   * cold console instead of waiting to be taught, and is unbound when the
-   * target is already what is watched — there is nothing to open.
+   * The row a cursor ACTION applies to — watching it, copying its link.
+   * Falls back to the first visible row when the cursor has not moved (or
+   * has fallen out of the current facets), so the keys do something from a
+   * cold console instead of waiting to be taught, and the row is resolved
+   * to data once here so every action acts on the same thing.
    */
-  const openTarget =
+  const cursorTarget =
     cursorRunId !== null && sweepList.includes(cursorRunId) ? cursorRunId : (sweepList[0] ?? null);
-  const canOpenCursor = openTarget !== null && openTarget !== watchId;
+  const cursorRow = useMemo(
+    () => (cursorTarget === null ? null : (visibleRows.find((r) => r.runId === cursorTarget) ?? null)),
+    [cursorTarget, visibleRows],
+  );
+  /**
+   * Enter / w / g w: open the watch pane on the row the walk stopped on.
+   * Unbound when the target is already what is watched — there is nothing
+   * to open — and silent otherwise, which is why it says what it did.
+   */
+  const canOpenCursor = cursorTarget !== null && cursorTarget !== watchId;
   const openCursor = useCallback(() => {
-    if (openTarget === null || openTarget === watchId) return;
-    void setWatchId(openTarget);
-  }, [openTarget, watchId, setWatchId]);
+    if (cursorTarget === null || cursorTarget === watchId) return;
+    void setWatchId(cursorTarget);
+    if (cursorRow !== null) announce(`Watching ${cursorRow.participant}`);
+  }, [cursorTarget, cursorRow, watchId, setWatchId, announce]);
 
   /**
    * A jump to one end of the same displayed sweep, where a step needs no
@@ -782,6 +842,12 @@ function FacilitatorGrid() {
   // cannot describe a key the page has stopped listening for.
   const canWalk = sweepList.length > 0;
   const canCommit = canOpenCursor;
+  // The pane transport: a run is watched and there is somewhere to step to.
+  const canSweep = watchId !== null && sweepList.length > 1;
+  // g l copies the cursor row's link, so it needs a row — not a link
+  // string, which cannot be tested here anyway: runLink reads
+  // window.location, and this component is prerendered.
+  const canLink = cursorRow !== null;
   useKeyboardShortcuts(
     {
       j: () => stepSweep(1),
@@ -799,33 +865,51 @@ function FacilitatorGrid() {
   // ours to act on), so the room underneath goes quiet on its own.
   useKeyboardShortcuts({ "?": () => setLegendOpen(true) });
 
-  // ── Chained jump: g then i / g then n ──
-  // The ends of the room without spending Home and End on it: those are
-  // the pane's transport while a run is watched, and the grid can do
-  // better with a chord borrowed from GitHub and Gmail — g i is the near
-  // end, g n the far one, and g on its own does nothing. An unbound second
-  // key falls through, so g j still walks (see useKeySequence).
+  // ── The g namespace ──
+  // `g` is not a command, it is a prefix that opens a menu of
+  // destinations, the way GitHub and Gmail bind it. Every destination is
+  // something this console already does: the namespace buys reach without
+  // spending more single keys, which is the whole argument for chords on a
+  // surface that already has j/k/w/Enter to teach. Single-key shortcuts
+  // stay single — `w` still watches the cursor row and `g w` is that same
+  // action inside the namespace, so learning either one teaches the
+  // behaviour.
   //
-  // The map is memoised rather than inline for the one reason that matters
-  // here: the armed-chord hint below reads its list of completing keys off
-  // THIS object, so the chip can only ever name keys the hook actually
-  // dispatches. One list of chords, read twice.
-  const jumpSequences = useMemo<ShortcutHandlers>(
-    () => ({
-      "g i": () => jumpSweep("first"),
-      "g n": () => jumpSweep("last"),
-    }),
-    [jumpSweep],
+  // ONE list, read four times: the hook dispatches from it, the
+  // armed-chord chip offers from it, the sheet documents it, and the
+  // `aria-keyshortcuts` question was answered once and for all by not
+  // hand-writing it here. The sheet is handed these same objects rather
+  // than a retyped copy, because a legend that lists chords the page
+  // cannot perform is exactly the lie this design exists to prevent.
+  const gates: ShortcutGates = { walk: canWalk, commit: canCommit, sweep: canSweep, link: canLink };
+  const chordIsLive = (gate: ShortcutGate) => gate === "always" || gates[gate];
+  const namespace: NamespaceChord[] = [
+    { keys: "g i", label: "jump to the first row", group: "walk", gate: "walk", run: () => jumpSweep("first") },
+    { keys: "g n", label: "jump to the last row", group: "walk", gate: "walk", run: () => jumpSweep("last") },
+    { keys: "g w", label: "watch the cursor row", group: "watch", gate: "commit", run: openCursor },
+    {
+      keys: "g l",
+      label: "copy the cursor row's run link",
+      group: "row",
+      gate: "link",
+      run: () => {
+        if (cursorRow !== null) copyRunLink(cursorRow);
+      },
+    },
+    { keys: "g v", label: "open the saved views", group: "anywhere", gate: "always", run: () => setViewsOpen(true) },
+  ];
+  // What the chip may offer is what the hook can actually run: a chord
+  // whose gate is shut is not in the map at all, so `g` never hints at a
+  // destination that would do nothing. The sheet still shows it, dimmed —
+  // the sheet documents the vocabulary, the chip offers the menu.
+  const liveChords = namespace.filter((chord) => chordIsLive(chord.gate));
+  const armedChord = useKeySequence(
+    Object.fromEntries(liveChords.map((chord) => [chord.keys, chord.run])),
+    liveChords.length > 0,
   );
-  const armedChord = useKeySequence(jumpSequences, canWalk);
-  // The second keys the armed prefix is waiting for, derived from the same
-  // map: every sequence that starts with the prefix, minus the prefix.
-  const armedChordNextKeys =
-    armedChord === null
-      ? []
-      : Object.keys(jumpSequences)
-          .filter((seq) => seq.startsWith(`${armedChord} `))
-          .map((seq) => seq.split(" ")[1]);
+  // The destinations the armed prefix is waiting for, from the same list.
+  const armedChordDestinations =
+    armedChord === null ? [] : liveChords.filter((chord) => chord.keys.startsWith(`${armedChord} `));
 
   // ── Sweep by keyboard ──
   // Left/Right step the watched room, Home/End jump to its ends, so a
@@ -836,7 +920,6 @@ function FacilitatorGrid() {
   // for the policy). Home/End would otherwise scroll the page, so while a
   // run is being watched they belong to the sweep — the one place these
   // keys stop meaning "scroll to the top/bottom".
-  const canSweep = watchId !== null && sweepList.length > 1;
   useKeyboardShortcuts(
     {
       ArrowLeft: () => stepSweep(-1),
@@ -956,7 +1039,10 @@ function FacilitatorGrid() {
         <WatchPane
           key={watchId}
           runId={watchId}
-          onClose={() => void setWatchId(null)}
+          onClose={() => {
+            void setWatchId(null);
+            announce("Watch pane closed");
+          }}
           onStep={stepSweep}
           position={sweepList.length > 0 ? { index: sweepIndex, total: sweepList.length } : null}
           canStep={sweepList.length > 1}
@@ -1010,7 +1096,12 @@ function FacilitatorGrid() {
             {/* Named status/sort combinations (Circle views pattern),
                 stored in localStorage, applied through the same URL
                 pipeline as the chips and deep links. */}
-            <FacilitatorSavedViews viewState={viewState} onApply={applyViewState} />
+            <FacilitatorSavedViews
+              viewState={viewState}
+              onApply={applyViewState}
+              open={viewsOpen}
+              onOpenChange={setViewsOpen}
+            />
             <span className="ml-auto text-xs tabular-nums text-gray-500">
               {visibleRows.length} of {rows.length} participants
             </span>
@@ -1020,9 +1111,9 @@ function FacilitatorGrid() {
               aria-haspopup="dialog"
               aria-keyshortcuts="?"
               className="text-xs text-gray-500 underline-offset-2 hover:text-black hover:underline"
-              title="j and k walk the visible rows, wrapping at the ends; Enter or w opens the watch pane on the row you stopped on; g then i or g then n jumps to the first or last visible row. Press ? for the full sheet."
+              title="j and k walk the visible rows, wrapping at the ends; Enter or w opens the watch pane on the row you stopped on; g then i or n jumps to the first or last row, g then w watches the cursor row, g then l copies its run link, g then v opens the saved views. Press ? for the full sheet."
             >
-              j/k to walk, Enter/w to watch, g i/g n to jump
+              j/k to walk, Enter/w to watch, g then i n w l v, ? for all
             </button>
             {/* The walk, out loud. A separate live region from the chord
                 chip below rather than a second fact inside it: each region
@@ -1030,9 +1121,20 @@ function FacilitatorGrid() {
                 one would make every step repeat the chip and every chord
                 repeat the last row walked. sr-only because the ring
                 already says this to the eye, and mounted empty from the
-                start so the very first walk has a region to speak into. */}
-            <span role="status" className="sr-only">
+                start so the very first walk has a region to speak into.
+                Named, because this page now carries three live regions and
+                two of them are invisible: a name is the only thing that
+                tells them apart in the accessibility tree. */}
+            <span role="status" className="sr-only" aria-label="Cursor row">
               {walkedRow && `${walkedRow.participant}, ${walkedRow.status}`}
+            </span>
+            {/* What the console just did, for as long as it lasts. Separate
+                from the walk region above because a status region re-reads
+                its whole text on every change: sharing one would make every
+                step repeat the last action and every action repeat the
+                row. */}
+            <span role="status" className="sr-only" aria-label="Console action">
+              {actionNote}
             </span>
             {/* Armed-chord affordance. A prefix key does nothing on
                 purpose, which leaves it invisible: nothing moves, nothing
@@ -1049,12 +1151,23 @@ function FacilitatorGrid() {
                 <span className="ml-2 inline-block rounded border border-black bg-gray-50 px-1.5 py-0.5 align-middle text-[11px] font-medium text-black">
                   <KeyCap>{armedChord}</KeyCap>
                   {' then '}
-                  {armedChordNextKeys.map((key, index) => (
-                    <span key={key}>
-                      {index > 0 ? ' or ' : ''}
-                      <KeyCap>{key}</KeyCap>
+                  {armedChordDestinations.map((chord, index) => (
+                    <span key={chord.keys}>
+                      {index > 0 ? " " : ""}
+                      <KeyCap>{nextKeyOf(chord.keys)}</KeyCap>
                     </span>
                   ))}
+                  {/* The caps are the eye's short answer; this is the one a
+                      screen reader gets, because a bare "i n w l v" is a
+                      menu nobody can read. Read from the same list, so the
+                      two never describe different destinations. */}
+                  <span className="sr-only">
+                    {armedChordDestinations.length === 0
+                      ? ""
+                      : `, then ${armedChordDestinations
+                          .map((chord) => `${nextKeyOf(chord.keys)} to ${chord.label}`)
+                          .join(", ")}`}
+                  </span>
                 </span>
               )}
             </span>
@@ -1137,7 +1250,8 @@ function FacilitatorGrid() {
       <ShortcutLegend
         open={legendOpen}
         onOpenChange={setLegendOpen}
-        bound={{ walk: canWalk, commit: canCommit, sweep: canSweep }}
+        bound={gates}
+        chords={namespace}
       />
     </div>
   );

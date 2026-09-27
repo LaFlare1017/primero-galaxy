@@ -84,6 +84,15 @@ interface SavedViewsPopoverProps<V extends SavedViewLike> {
   heading?: string;
   /** Monochrome chrome for Delegate (weight/border, never color accents). */
   tone?: 'default' | 'mono';
+  /**
+   * Controlled open state, for a surface that opens the panel from
+   * something other than its own trigger — the console's `g v` chord. Leave
+   * it undefined and the popover owns the state exactly as before, which
+   * is how FinBench still uses it.
+   */
+  open?: boolean;
+  /** Notified of every open/close, including the ones the trigger makes. */
+  onOpenChange?: (open: boolean) => void;
 }
 
 /**
@@ -98,9 +107,22 @@ export function SavedViewsPopover<V extends SavedViewLike>({
   store,
   heading,
   tone = 'default',
+  open: openProp,
+  onOpenChange,
 }: SavedViewsPopoverProps<V>) {
   const [views, setViews] = useState<V[]>([]);
-  const [open, setOpen] = useState(false);
+  // Controlled only when a surface passes `open`; otherwise the popover
+  // owns it, which is the behaviour every existing caller expects.
+  const [openFallback, setOpenFallback] = useState(false);
+  const controlled = openProp !== undefined;
+  const open = controlled ? openProp : openFallback;
+  const setOpen = useCallback(
+    (value: boolean) => {
+      if (!controlled) setOpenFallback(value);
+      onOpenChange?.(value);
+    },
+    [controlled, onOpenChange],
+  );
   const [mode, setMode] = useState<'list' | 'save' | 'edit'>('list');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');

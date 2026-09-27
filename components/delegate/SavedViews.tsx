@@ -27,10 +27,15 @@ import {
 export function FacilitatorSavedViews({
   viewState,
   onApply,
+  open,
+  onOpenChange,
 }: {
   viewState: FacilitatorViewState;
   /** Applies a view through the URL (nuqs setStatuses/setSortKey/setSortDir). */
   onApply: (view: FacilitatorViewState) => void;
+  /** Optional controlled open state, so the console can open the panel from a chord. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const store = useMemo<SavedViewsStore<FacilitatorSavedView>>(
     () => ({
@@ -66,7 +71,7 @@ export function FacilitatorSavedViews({
     [viewState, onApply],
   );
 
-  return <SavedViewsPopover store={store} tone="mono" />;
+  return <SavedViewsPopover store={store} tone="mono" open={open} onOpenChange={onOpenChange} />;
 }
 
 /** Null-aware state equality: null means "param absent" for each part. */

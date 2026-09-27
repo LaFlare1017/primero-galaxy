@@ -674,10 +674,10 @@ test.describe('Facilitator run links', () => {
     const pane = page.locator('section[aria-label^="Watching run for"]');
     const rows = page.locator('tbody tr');
     await expect(rows.first()).toBeVisible({ timeout: 15_000 });
-    // The screen-reader-only live region, by CSS: the toolbar row carries
-    // two status regions on purpose (the walk and the armed-chord chip, so
-    // neither re-reads the other), and the sr-only one is this.
-    const spoken = page.locator('[role="status"].sr-only');
+    // The screen-reader-only live region for the walk. Named, because the
+    // console carries three live regions on purpose (the walk, the last
+    // action, and the armed-chord chip, so none of them re-reads another).
+    const spoken = page.getByRole('status', { name: 'Cursor row' });
     await expect(spoken).toHaveCount(1);
 
     // Quiet on arrival. Nothing has been walked to, so there is nothing to
@@ -784,11 +784,16 @@ test.describe('Facilitator run links', () => {
     // Every binding the console ships, spelled the way it is typed: single
     // keys, alternatives with or, and the chords as a real two-key
     // sequence with the word between them (flex gaps alone would read as
-    // "gi" to a screen reader).
+    // "gi" to a screen reader). The chords are NOT written into the sheet:
+    // they arrive from the page that binds them, so this is the same list
+    // the hook dispatches from.
     await expect(entry('Walk down one row')).toHaveText('j Walk down one row, wrapping at the ends');
     await expect(entry('Walk up one row')).toHaveText('k Walk up one row, wrapping at the ends');
-    await expect(entry('Jump to the first visible row')).toHaveText('g then i Jump to the first visible row');
-    await expect(entry('Jump to the last visible row')).toHaveText('g then n Jump to the last visible row');
+    await expect(entry('jump to the first row')).toHaveText('g then i jump to the first row');
+    await expect(entry('jump to the last row')).toHaveText('g then n jump to the last row');
+    await expect(entry('watch the cursor row')).toHaveText('g then w watch the cursor row');
+    await expect(entry('copy the cursor row')).toContainText('g then l copy the cursor row');
+    await expect(entry('open the saved views')).toHaveText('g then v open the saved views');
     await expect(entry('Open the watch pane')).toHaveText(
       'Enter or w Open the watch pane on the row the walk stopped on',
     );
@@ -796,7 +801,7 @@ test.describe('Facilitator run links', () => {
       '⌘K Open the command palette (Ctrl+K on PC keyboards)',
     );
     await expect(entry('Open this sheet')).toHaveText('? Open this sheet');
-    await expect(entry('Close this sheet')).toHaveText('Esc Close this sheet');
+    await expect(entry('Close this sheet')).toHaveText('Esc Close this sheet, or the views panel');
 
     // The dead ones, and only the dead ones. Nothing is watched yet, so the
     // pane transport is unbound and says so — in words, not just in gray,
@@ -843,7 +848,10 @@ test.describe('Facilitator run links', () => {
     );
     await expect(entry('Jump the watched room')).toHaveText('Home or End Jump the watched room to its ends');
     await expect(entry('Open the watch pane')).toContainText('(not available right now)');
-    await expect(sheet.getByText('(not available right now)')).toHaveCount(1);
+    // The chord for the same action greys out with it: g w watches the
+    // cursor row, and the cursor row is what is already being watched.
+    await expect(entry('watch the cursor row')).toContainText('(not available right now)');
+    await expect(sheet.getByText('(not available right now)')).toHaveCount(2);
 
     // A mouse user has no ? key, so the toolbar legend is a real button —
     // and because it is one, Enter on it must open the sheet rather than
@@ -902,14 +910,22 @@ test.describe('Facilitator run links', () => {
     // "gone now" cannot quietly become "gone eventually".
     await expect(chip).toHaveCount(0, { timeout: PROMPT_MS });
 
-    // g arms the chord and acts on nothing — but says so, naming both the
-    // key that was pressed and every key that completes it. The text is
-    // read off the same map the hook dispatches from, so it cannot name a
-    // key that is not bound.
+    // g arms the namespace and acts on nothing — but says so, naming the
+    // key that was pressed and every destination it opens. The text is
+    // read off the same list the hook dispatches from, so it cannot name a
+    // key that is not bound. All five are live on a cold console: rows to
+    // walk, a row to commit, a row to copy, and a views panel that is
+    // always there.
     await page.keyboard.press('g');
     await expect(chip).toBeVisible();
-    await expect(chip).toHaveText('g then i or n');
-    await expect(chip.locator('kbd')).toHaveText(['g', 'i', 'n']);
+    await expect(chip.locator('kbd')).toHaveText(['g', 'i', 'n', 'w', 'l', 'v']);
+    // The caps are the eye's short answer; the sentence underneath them is
+    // what a screen reader gets, because "i n w l v" is a menu nobody can
+    // read. It names what each destination DOES, from the same list.
+    await expect(chip).toContainText(
+      'then i to jump to the first row, n to jump to the last row, w to watch the cursor row',
+    );
+    await expect(chip).toContainText('v to open the saved views');
     // Announced, not just drawn: the live region is the only way a screen
     // reader learns a chord is half-typed.
     await expect(chip).toHaveAttribute('role', 'status');
@@ -962,8 +978,86 @@ test.describe('Facilitator run links', () => {
     // dead hint.
     await expect(search).toHaveCount(0);
     await page.keyboard.press('g');
-    await expect(chip).toHaveText('g then i or n');
+    // Back on the grid the affordance returns with the keyboard: the
+    // silence inside was the policy, not a dead hint. All five destinations
+    // are on offer here — nothing is watched, so g w still has a row to
+    // watch, and the chip offers exactly what the hook can run.
+    await expect(chip.locator('kbd')).toHaveText(['g', 'i', 'n', 'w', 'l', 'v']);
     await page.keyboard.press('Escape');
+  });
+
+  test('the g namespace reaches the watch, the link, and the views panel', async ({ page }) => {
+    // `g` stopped being a shortcut and became a namespace. The claim under
+    // test is not that these keys exist, it is that a destination acts on
+    // the CURSOR — the row the walk stopped on — rather than on whatever
+    // row happens to be convenient, and that each one says what it did.
+    await startRun(page, `E2E ${STAMP} GSpaceA`, 's1');
+    await startRun(page, `E2E ${STAMP} GSpaceB`, 's2');
+
+    await page.goto('/delegate/facilitator');
+    const pane = page.locator('section[aria-label^="Watching run for"]');
+    const rows = page.locator('tbody tr');
+    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+    const cursored = page.locator('tbody tr[aria-current="true"]');
+    const chip = page.locator('[role="status"]').filter({ has: page.locator('kbd') });
+    // The transient region: what the console just did, as opposed to where
+    // the cursor is. Nothing here moves focus, so without it every chord
+    // except the walk would be silent.
+    const actions = page.getByRole('status', { name: 'Console action' });
+    const lastName = (await rows.last().locator('td').first().innerText()).trim();
+
+    // g l copies the cursor row's run link. Walk to the far end first, so
+    // the clipboard has to hold THAT row's run: an implementation that
+    // quietly grabbed the first visible row would pass a lazier test.
+    await page.keyboard.press('g');
+    await page.keyboard.press('n');
+    await expect(cursored).toHaveCount(1);
+    await expect(rows.last()).toHaveAttribute('aria-current', 'true');
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.keyboard.press('g');
+    await page.keyboard.press('l');
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()), { timeout: 5_000 })
+      .toContain('/delegate?run=');
+    // Confirmed in words, because the row's own Copied flash is the only
+    // other feedback and nobody sees it when the row is scrolled away.
+    await expect(actions).toHaveText(`Run link copied for ${lastName}`);
+
+    // g w watches the same row — the identical action to w, reached from
+    // the namespace instead of the bare key.
+    await page.keyboard.press('g');
+    await page.keyboard.press('w');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${lastName}`, { timeout: 10_000 });
+    await expect(actions).toHaveText(`Watching ${lastName}`);
+
+    // g v opens the views panel from something that is not its trigger,
+    // which is the only reason that popover is controlled at all.
+    await page.getByRole('button', { name: 'Close watch pane' }).click();
+    await expect(pane).toHaveCount(0);
+    await expect(actions).toHaveText('Watch pane closed');
+    await page.keyboard.press('g');
+    await page.keyboard.press('v');
+    const views = page.getByRole('dialog');
+    await expect(views).toBeVisible();
+    const cursorBefore = (await cursored.locator('td').first().innerText()).trim();
+    expect(cursorBefore, 'the walk left a cursor to check').toBe(lastName);
+
+    // The namespace is a keyboard layer like any other, so the open panel
+    // shields it: nothing arms behind the overlay, and no destination moves
+    // the cursor underneath it.
+    await page.keyboard.press('g');
+    await page.waitForTimeout(300);
+    await expect(chip).toHaveCount(0);
+    await expect(cursored.locator('td').first()).toHaveText(cursorBefore);
+    await expect(pane).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(views).toHaveCount(0);
+
+    // And the namespace works again once the panel is gone — a chord that
+    // died with an overlay would be a bug of its own.
+    await page.keyboard.press('g');
+    await page.keyboard.press('i');
+    await expect(rows.first()).toHaveAttribute('aria-current', 'true');
   });
 
   test('the saved-views popover shields the room from j, k, and w', async ({ page }) => {

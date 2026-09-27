@@ -23,6 +23,11 @@ import { cn } from '@/lib/utils';
  * the moment this opens and comes back when it closes. There is nothing to
  * suspend here, which is the reason this is a dialog and not a panel.
  *
+ * The chained keys are NOT written here: they arrive as `chords` from the
+ * surface that binds them. A sheet that retyped them would be a second
+ * source of truth for the same keyboard, which is the drift this whole
+ * component is an attempt to avoid.
+ *
  * `?` opens it and Escape closes it (the dialog primitive's own
  * dismissal). `?` deliberately does NOT toggle: while the sheet is open the
  * policy has already stopped `?` from reaching the page, and it would be
@@ -30,15 +35,38 @@ import { cn } from '@/lib/utils';
  * rest of the console obeys.
  */
 export interface ShortcutGates {
-  /** j/k and the g-pairs: there is something on screen to walk. */
+  /** j/k and the jump chords: there is something on screen to walk. */
   walk: boolean;
-  /** Enter/w: there is a row to commit, and it is not what is already watched. */
+  /** Enter/w and the watch chord: there is a row to commit, and it is not what is already watched. */
   commit: boolean;
   /** The pane transport: a run is watched and the room has more than one participant. */
   sweep: boolean;
+  /** The copy-link chord: the cursor has landed on a row with a run to share. */
+  link: boolean;
 }
 
-type Gate = keyof ShortcutGates | 'always';
+/** Whether a shortcut is bound right now, or never gated at all. */
+export type ShortcutGate = keyof ShortcutGates | 'always';
+
+/** The sections of the sheet, in the order a facilitator meets them. */
+export type ShortcutGroupId = 'walk' | 'watch' | 'row' | 'anywhere';
+
+/**
+ * One destination of a chained shortcut, passed in by the surface that
+ * owns the bindings. The sheet documents every chord, including the ones
+ * that are dead right now, so the descriptor has to come from the same
+ * list the hook dispatches from rather than being retyped here — a legend
+ * that lists chords the page cannot perform is the exact failure this
+ * component exists to prevent.
+ */
+export interface ShortcutChord {
+  /** The full chord, space separated: "g i". */
+  keys: string;
+  label: string;
+  /** Which section this belongs to. Typed, so a chord cannot name a section that does not exist. */
+  group: ShortcutGroupId;
+  gate: ShortcutGate;
+}
 
 interface ShortcutEntry {
   /**
@@ -49,30 +77,31 @@ interface ShortcutEntry {
   keys: string[];
   label: string;
   /** The gate that decides whether this shortcut is bound at all. */
-  gate: Gate;
+  gate: ShortcutGate;
 }
 
 interface ShortcutGroup {
+  id: ShortcutGroupId;
   title: string;
   entries: ShortcutEntry[];
 }
 
 /**
- * The console's shortcut vocabulary, in one list. Order is the order a
- * facilitator meets them: walk the room, commit one row, sweep the watched
- * room, then the keys that are not about the room at all.
+ * The console's SINGLE-KEY vocabulary, in one list. The chained ones are
+ * NOT here: they are passed in, because the surface that binds them is the
+ * only place that knows what they do.
  */
 const LEGEND: ShortcutGroup[] = [
   {
+    id: 'walk',
     title: 'Walk the room',
     entries: [
       { keys: ['j'], label: 'Walk down one row, wrapping at the ends', gate: 'walk' },
       { keys: ['k'], label: 'Walk up one row, wrapping at the ends', gate: 'walk' },
-      { keys: ['g i'], label: 'Jump to the first visible row', gate: 'walk' },
-      { keys: ['g n'], label: 'Jump to the last visible row', gate: 'walk' },
     ],
   },
   {
+    id: 'watch',
     title: 'Watch a run',
     entries: [
       {
@@ -89,11 +118,17 @@ const LEGEND: ShortcutGroup[] = [
     ],
   },
   {
+    id: 'row',
+    title: 'The cursor row',
+    entries: [],
+  },
+  {
+    id: 'anywhere',
     title: 'Anywhere on this page',
     entries: [
       { keys: ['⌘K'], label: 'Open the command palette (Ctrl+K on PC keyboards)', gate: 'always' },
       { keys: ['?'], label: 'Open this sheet', gate: 'always' },
-      { keys: ['Esc'], label: 'Close this sheet', gate: 'always' },
+      { keys: ['Esc'], label: 'Close this sheet, or the views panel', gate: 'always' },
     ],
   },
 ];
@@ -127,10 +162,13 @@ export function ShortcutLegend({
   open,
   onOpenChange,
   bound,
+  chords,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   bound: ShortcutGates;
+  /** The surface's chained shortcuts, merged into the section each one belongs to. */
+  chords: ShortcutChord[];
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -142,40 +180,53 @@ export function ShortcutLegend({
           </DialogDescription>
         </div>
         <div className="max-h-[70vh] overflow-y-auto px-4 py-3">
-          {LEGEND.map((group) => (
-            <div key={group.title} className="mb-3 last:mb-0">
-              <h3 className="mb-1.5 text-[11px] uppercase tracking-wide text-gray-500">{group.title}</h3>
-              <ul className="space-y-1.5">
-                {group.entries.map((entry) => {
-                  const live = entry.gate === 'always' || bound[entry.gate];
-                  return (
-                    <li
-                      key={entry.label}
-                      className={cn(
-                        'flex items-baseline gap-3 text-[13px]',
-                        live ? 'text-gray-700' : 'text-gray-400',
-                      )}
-                    >
-                      <span className="inline-flex shrink-0 items-center">
-                        <KeyList keys={entry.keys} />
-                        {/* The gap-3 above is what the eye sees; this is
-                            what the text says. Whitespace-only, so it adds
-                            no flex item and no layout. */}
-                        {' '}
-                      </span>
-                      <span>
-                        {entry.label}
-                        {/* The dimming is a color, so it is restated in
-                            words: an entry that cannot be pressed has to
-                            say so rather than look like a rendering bug. */}
-                        {live ? null : <span className="sr-only"> (not available right now)</span>}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
+          {LEGEND.map((group) => {
+            // Single keys first, then the chords that belong to this
+            // section — so `g i` sits with j and k, and `g v` with the
+            // keys that work anywhere, rather than in a chord annex that
+            // nobody would think to read.
+            const entries: ShortcutEntry[] = [
+              ...group.entries,
+              ...chords
+                .filter((chord) => chord.group === group.id)
+                .map((chord) => ({ keys: [chord.keys], label: chord.label, gate: chord.gate })),
+            ];
+            if (entries.length === 0) return null;
+            return (
+              <div key={group.id} className="mb-3 last:mb-0">
+                <h3 className="mb-1.5 text-[11px] uppercase tracking-wide text-gray-500">{group.title}</h3>
+                <ul className="space-y-1.5">
+                  {entries.map((entry) => {
+                    const live = entry.gate === 'always' || bound[entry.gate];
+                    return (
+                      <li
+                        key={entry.label}
+                        className={cn(
+                          'flex items-baseline gap-3 text-[13px]',
+                          live ? 'text-gray-700' : 'text-gray-400',
+                        )}
+                      >
+                        <span className="inline-flex shrink-0 items-center">
+                          <KeyList keys={entry.keys} />
+                          {/* The gap-3 above is what the eye sees; this is
+                              what the text says. Whitespace-only, so it adds
+                              no flex item and no layout. */}
+                          {' '}
+                        </span>
+                        <span>
+                          {entry.label}
+                          {/* The dimming is a color, so it is restated in
+                              words: an entry that cannot be pressed has to
+                              say so rather than look like a rendering bug. */}
+                          {live ? null : <span className="sr-only"> (not available right now)</span>}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })}
         </div>
       </DialogContent>
     </Dialog>
