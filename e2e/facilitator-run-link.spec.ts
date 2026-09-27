@@ -521,7 +521,12 @@ test.describe('Facilitator run links', () => {
     await expect(rows.nth(1)).toHaveAttribute('aria-current', 'true');
 
     // Enter commits it too, and from a cold console it has a target: the
-    // first visible row, the same rule j enters on.
+    // first visible row, the same rule j enters on. This runs right after
+    // the pane's Close button was CLICKED, which is deliberate: the click
+    // focused a control of this console, and unmounting the pane then
+    // dropped focus to <body> without a blur event. If the console's Enter
+    // yield trusted onFocus/onBlur alone, the key would be dead here — a
+    // stale flag, not a race.
     await page.keyboard.press('j');
     await expect(rows.nth(2)).toHaveAttribute('aria-current', 'true');
     await page.keyboard.press('Enter');
@@ -735,6 +740,131 @@ test.describe('Facilitator run links', () => {
     // is the assertion that keeps it two columns wide.
     await page.waitForTimeout(5_000);
     await expect(spoken).toHaveText(`${secondName}, ${secondStatus}`);
+  });
+
+  test('the shortcut sheet lists every key, dims the dead ones, and quiets the room while it is open', async ({ page }) => {
+    // The sheet has to be true, not decorative. A legend that lists keys
+    // which are not bound in the current state is worse than none, because
+    // it teaches a facilitator to press things that do nothing — so the
+    // dimming is derived from the same gates that mount the bindings, and
+    // the test reads the sheet as the surface it documents.
+    await startRun(page, `E2E ${STAMP} LegendA`, 's1');
+    await startRun(page, `E2E ${STAMP} LegendB`, 's2');
+
+    await page.goto('/delegate/facilitator');
+    const pane = page.locator('section[aria-label^="Watching run for"]');
+    const rows = page.locator('tbody tr');
+    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+    const cursored = page.locator('tbody tr[aria-current="true"]');
+    const chip = page.locator('[role="status"]').filter({ has: page.locator('kbd') });
+    const sheet = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
+    // A list item by its text, not by accessible name: `listitem` is not a
+    // name-from-content role, so getByRole({ name }) can never match one —
+    // the snapshot prints the content under `listitem:` and looks like it
+    // should work, which is exactly the trap.
+    const entry = (label: string) => sheet.locator('li', { hasText: label });
+
+    // Nothing on arrival: a console that opened its own modal would put the
+    // grid behind a focus trap before anyone had asked for one.
+    await expect(sheet).toHaveCount(0);
+
+    // ? opens it. Everything after this point uses CSS locators for the
+    // page behind, because the dialog aria-hides it, exactly as the palette
+    // does.
+    await page.keyboard.press('?');
+    await expect(sheet).toBeVisible();
+    // Modality, measured the way this codebase measures it: Radix 1.1.23
+    // does NOT stamp aria-modal (the same finding the overlay clause in
+    // shortcuts.ts records for the popover), it moves focus in and hides
+    // the rest of the page from the accessibility tree. Both halves are
+    // asserted rather than an attribute that is not there.
+    await expect(sheet.locator(':focus')).toHaveCount(1);
+    await expect(page.getByRole('table', { name: 'Participants' })).toHaveCount(0);
+
+    // Every binding the console ships, spelled the way it is typed: single
+    // keys, alternatives with or, and the chords as a real two-key
+    // sequence with the word between them (flex gaps alone would read as
+    // "gi" to a screen reader).
+    await expect(entry('Walk down one row')).toHaveText('j Walk down one row, wrapping at the ends');
+    await expect(entry('Walk up one row')).toHaveText('k Walk up one row, wrapping at the ends');
+    await expect(entry('Jump to the first visible row')).toHaveText('g then i Jump to the first visible row');
+    await expect(entry('Jump to the last visible row')).toHaveText('g then n Jump to the last visible row');
+    await expect(entry('Open the watch pane')).toHaveText(
+      'Enter or w Open the watch pane on the row the walk stopped on',
+    );
+    await expect(entry('Open the command palette')).toHaveText(
+      '⌘K Open the command palette (Ctrl+K on PC keyboards)',
+    );
+    await expect(entry('Open this sheet')).toHaveText('? Open this sheet');
+    await expect(entry('Close this sheet')).toHaveText('Esc Close this sheet');
+
+    // The dead ones, and only the dead ones. Nothing is watched yet, so the
+    // pane transport is unbound and says so — in words, not just in gray,
+    // because a dimmed row with no explanation reads as a rendering bug.
+    await expect(entry('Step the watched room')).toHaveText(
+      '← or → Step the watched room back and forward (not available right now)',
+    );
+    await expect(entry('Jump the watched room')).toHaveText(
+      'Home or End Jump the watched room to its ends (not available right now)',
+    );
+    await expect(sheet.getByText('(not available right now)')).toHaveCount(2);
+
+    // While the sheet is open the room underneath is inert, and it costs
+    // nothing: a dialog is an overlay, and the shared shortcut policy
+    // already refuses every key whose target is inside one. The walk, the
+    // commit and the chord all go quiet — and nothing arms behind the modal,
+    // so the chord chip never appears either.
+    await page.keyboard.press('j');
+    await page.keyboard.press('k');
+    await page.keyboard.press('w');
+    await page.keyboard.press('g');
+    await page.waitForTimeout(300);
+    await expect(sheet).toBeVisible();
+    await expect(cursored).toHaveCount(0);
+    await expect(pane).toHaveCount(0);
+    await expect(chip).toHaveCount(0);
+
+    // Escape closes it (the dialog primitive owns that dismissal) and the
+    // keys come straight back — nothing needed suspending to get here.
+    await page.keyboard.press('Escape');
+    await expect(sheet).toHaveCount(0);
+    await page.keyboard.press('j');
+    await expect(rows.first()).toHaveAttribute('aria-current', 'true');
+
+    // The gates are read live, not baked in: open a run and the transport
+    // becomes available while the commit goes away, because the row the
+    // walk stopped on is what is already being watched.
+    await page.keyboard.press('w');
+    await expect(pane).toBeVisible({ timeout: 10_000 });
+    await page.keyboard.press('?');
+    await expect(sheet).toBeVisible();
+    await expect(entry('Step the watched room')).toHaveText(
+      '← or → Step the watched room back and forward',
+    );
+    await expect(entry('Jump the watched room')).toHaveText('Home or End Jump the watched room to its ends');
+    await expect(entry('Open the watch pane')).toContainText('(not available right now)');
+    await expect(sheet.getByText('(not available right now)')).toHaveCount(1);
+
+    // A mouse user has no ? key, so the toolbar legend is a real button —
+    // and because it is one, Enter on it must open the sheet rather than
+    // the watch pane. The console's Enter yields to whatever control of its
+    // own holds the keyboard, and that includes the ones BESIDE the grid:
+    // the facet chips, the sort buttons and this legend all sit outside the
+    // table, and none of them should have to be reached with the mouse
+    // because a global keybinding ate their activation.
+    await page.keyboard.press('Escape');
+    await expect(sheet).toHaveCount(0);
+    // Close the pane first, so Enter is pressed while the commit key is
+    // actually live — with a run already watched there is nothing for it
+    // to commit, and the assertion would pass for the wrong reason.
+    await page.getByRole('button', { name: 'Close watch pane' }).click();
+    await expect(pane).toHaveCount(0);
+    const legend = page.getByRole('button', { name: /j\/k to walk/ });
+    await legend.focus();
+    await expect(legend).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(sheet).toBeVisible();
+    await expect(pane).toHaveCount(0);
   });
 
   test('a half-typed chord shows what completes it, and the console forgets on its own', async ({ page }) => {

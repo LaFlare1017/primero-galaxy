@@ -18,6 +18,8 @@ import type { FacilitatorViewState } from "@/components/delegate/saved-views";
 import { useElapsedClock } from "@/components/delegate/useElapsedClock";
 import { useKeySequence } from "@/components/delegate/useKeySequence";
 import { useKeyboardShortcuts, type ShortcutHandlers } from "@/components/delegate/useKeyboardShortcuts";
+import { ShortcutLegend } from "@/components/delegate/ShortcutLegend";
+import { KeyCap } from "@/components/ui/KeyCap";
 import {
   Table,
   TableBody,
@@ -504,18 +506,6 @@ function WatchCell({ row, active, onToggle }: { row: Row; active: boolean; onTog
   );
 }
 /**
- * One key inside a keyboard chip, in the console's monochrome register:
- * a hairline border, not a filled pill, because the chip that holds it is
- * already the emphasis. <kbd> rather than a span, so the key is still a
- * key for anything that reads the markup.
- */
-function ChordKey({ children }: { children: string }) {
-  return (
-    <kbd className="inline-flex h-4 min-w-4 items-center justify-center rounded border border-gray-400 bg-white px-1 align-middle font-sans text-[10px] leading-none text-black">
-      {children}
-    </kbd>
-  );
-}/**
  * Default export wraps the grid in Suspense: the page is statically
  * prerendered, and useQueryState (useSearchParams) forces a CSR bailout
  * for the prerender pass. The boundary must sit ABOVE the component that
@@ -550,11 +540,33 @@ function FacilitatorGrid() {
     if (watchId !== null) setCursorId(watchId);
   }, [watchId]);
   const cursorRunId = watchId ?? cursorId;
-  // Whether the keyboard is inside one of the grid's own controls. Enter
-  // is the grid's activation key only when it is not: on a focused button
-  // or link, Enter means activate THAT control, and a global binding would
-  // eat it (useKeyboardShortcuts preventDefaults before the handler runs).
-  const [gridFocused, setGridFocused] = useState(false);
+  // Whether the keyboard is inside one of this console's own controls —
+  // tracked on the page root, not on the table, because the facet chips,
+  // the sort buttons and the legend trigger sit beside the grid and are
+  // just as much a control that owns its own Enter. On a focused button or
+  // link, Enter means activate THAT control, and a global binding would eat
+  // it (useKeyboardShortcuts preventDefaults before the handler runs).
+  //
+  // Tracked with onFocus/onBlur and then RECONCILED on every render, because
+  // those two events go stale in one common case: the focused element is
+  // removed. Clicking the watch pane's Close button focuses it, closing the
+  // pane deletes it, and the browser drops focus to <body> WITHOUT firing a
+  // blur — the flag would read "a control has the keyboard" for ever, and
+  // the console's Enter would be dead until something else was clicked. The
+  // reconciliation is the truth check: if nothing is focused, nothing owns
+  // the keyboard.
+  const [ownControlFocused, setOwnControlFocused] = useState(false);
+  // Deliberately runs after EVERY render, so the exhaustive-deps rule is
+  // excluded here rather than obeyed: the thing being watched is the live
+  // document, not a dep list, and the trigger is a re-render of this page.
+  // The chain cannot run away because React bails out of a state update
+  // that changes nothing, and the condition below is false whenever a
+  // control really does hold the keyboard.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const active = document.activeElement;
+    if (active === null || active === document.body) setOwnControlFocused(false);
+  });
   // The run the walk last stopped on — the fact the grid shows as a ring
   // and aria-current, which is silent to a screen reader (aria-current is
   // only read when you navigate to the row yourself, and the walk never
@@ -566,6 +578,10 @@ function FacilitatorGrid() {
   // Row whose run link was just copied: the button flips to "Copied" for
   // a moment (the saved-views Share flash, in grid form).
   const [copiedRunId, setCopiedRunId] = useState<string | null>(null);
+  // The shortcut sheet, and the toolbar legend that opens it: a mouse user
+  // has no `?` key to press, and a keyboard-only affordance nobody can find
+  // is not an affordance.
+  const [legendOpen, setLegendOpen] = useState(false);
 
   const copyRunLink = useCallback((row: Row) => {
     const link = runLink(row);
@@ -759,17 +775,29 @@ function FacilitatorGrid() {
   // open pane, these belong to the grid, which is always on screen. With no
   // cursor yet, j enters at the first row and k at the last, and w opens
   // the first row, so neither key has to be learned before it works.
+  //
+  // The three conditions are named rather than inlined because they are
+  // also what the shortcut sheet dims: one expression decides whether a
+  // key is mounted AND whether the legend calls it available, so the sheet
+  // cannot describe a key the page has stopped listening for.
+  const canWalk = sweepList.length > 0;
+  const canCommit = canOpenCursor;
   useKeyboardShortcuts(
     {
       j: () => stepSweep(1),
       k: () => stepSweep(-1),
     },
-    sweepList.length > 0,
+    canWalk,
   );
   // w has no native meaning on a control, so it is bound either way; Enter
-  // yields to whatever inside the grid holds the keyboard.
-  useKeyboardShortcuts({ w: openCursor }, canOpenCursor);
-  useKeyboardShortcuts({ Enter: openCursor }, canOpenCursor && !gridFocused);
+  // yields to whatever control on this console holds the keyboard.
+  useKeyboardShortcuts({ w: openCursor }, canCommit);
+  useKeyboardShortcuts({ Enter: openCursor }, canCommit && !ownControlFocused);
+  // The sheet itself. Unconditional, because the one thing a person who
+  // does not know the shortcuts need is a way to find them; it inherits the
+  // overlay rule for free while it is open (a role="dialog" target is not
+  // ours to act on), so the room underneath goes quiet on its own.
+  useKeyboardShortcuts({ "?": () => setLegendOpen(true) });
 
   // ── Chained jump: g then i / g then n ──
   // The ends of the room without spending Home and End on it: those are
@@ -789,7 +817,7 @@ function FacilitatorGrid() {
     }),
     [jumpSweep],
   );
-  const armedChord = useKeySequence(jumpSequences, sweepList.length > 0);
+  const armedChord = useKeySequence(jumpSequences, canWalk);
   // The second keys the armed prefix is waiting for, derived from the same
   // map: every sequence that starts with the prefix, minus the prefix.
   const armedChordNextKeys =
@@ -808,7 +836,7 @@ function FacilitatorGrid() {
   // for the policy). Home/End would otherwise scroll the page, so while a
   // run is being watched they belong to the sweep — the one place these
   // keys stop meaning "scroll to the top/bottom".
-  const canSweepKeys = watchId !== null && sweepList.length > 1;
+  const canSweep = watchId !== null && sweepList.length > 1;
   useKeyboardShortcuts(
     {
       ArrowLeft: () => stepSweep(-1),
@@ -816,7 +844,7 @@ function FacilitatorGrid() {
       Home: () => jumpSweep("first"),
       End: () => jumpSweep("last"),
     },
-    canSweepKeys,
+    canSweep,
   );
 
   function toggleStatus(status: string) {
@@ -853,7 +881,11 @@ function FacilitatorGrid() {
   }
 
   return (
-    <div className="min-h-screen bg-white text-black p-6">
+    <div
+      className="min-h-screen bg-white text-black p-6"
+      onFocus={() => setOwnControlFocused(true)}
+      onBlur={() => setOwnControlFocused(false)}
+    >
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-semibold text-black flex items-center gap-2">
           <Icon name="monitor" size={18} />
@@ -982,12 +1014,16 @@ function FacilitatorGrid() {
             <span className="ml-auto text-xs tabular-nums text-gray-500">
               {visibleRows.length} of {rows.length} participants
             </span>
-            <span
-              className="text-xs text-gray-500"
-              title="j and k walk the visible rows, wrapping at the ends; Enter or w opens the watch pane on the row you stopped on; g then i or g then n jumps to the first or last visible row"
+            <button
+              type="button"
+              onClick={() => setLegendOpen(true)}
+              aria-haspopup="dialog"
+              aria-keyshortcuts="?"
+              className="text-xs text-gray-500 underline-offset-2 hover:text-black hover:underline"
+              title="j and k walk the visible rows, wrapping at the ends; Enter or w opens the watch pane on the row you stopped on; g then i or g then n jumps to the first or last visible row. Press ? for the full sheet."
             >
               j/k to walk, Enter/w to watch, g i/g n to jump
-            </span>
+            </button>
             {/* The walk, out loud. A separate live region from the chord
                 chip below rather than a second fact inside it: each region
                 re-reads its own whole text whenever it changes, so sharing
@@ -1011,12 +1047,12 @@ function FacilitatorGrid() {
             <span role="status" className="text-xs">
               {armedChord !== null && (
                 <span className="ml-2 inline-block rounded border border-black bg-gray-50 px-1.5 py-0.5 align-middle text-[11px] font-medium text-black">
-                  <ChordKey>{armedChord}</ChordKey>
+                  <KeyCap>{armedChord}</KeyCap>
                   {' then '}
                   {armedChordNextKeys.map((key, index) => (
                     <span key={key}>
                       {index > 0 ? ' or ' : ''}
-                      <ChordKey>{key}</ChordKey>
+                      <KeyCap>{key}</KeyCap>
                     </span>
                   ))}
                 </span>
@@ -1027,8 +1063,6 @@ function FacilitatorGrid() {
           <Table
             aria-label="Participants"
             aria-keyshortcuts="j k Enter w"
-            onFocus={() => setGridFocused(true)}
-            onBlur={() => setGridFocused(false)}
           >
             <TableHeader>
               <TableRow className="hover:bg-transparent">
@@ -1096,6 +1130,15 @@ function FacilitatorGrid() {
           </Table>
         </>
       )}
+
+      {/* The sheet itself, portaled out by the dialog primitive. `bound` is
+          the three gate expressions that mount the bindings above, so a
+          dimmed entry here is the same condition that took the key away. */}
+      <ShortcutLegend
+        open={legendOpen}
+        onOpenChange={setLegendOpen}
+        bound={{ walk: canWalk, commit: canCommit, sweep: canSweep }}
+      />
     </div>
   );
 }

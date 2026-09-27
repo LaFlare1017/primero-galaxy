@@ -76,6 +76,18 @@ function viewsDialog(page: Page) {
   return page.getByRole('dialog');
 }
 
+/**
+ * The shared-view import toast, and ONLY the toast. The console now mounts
+ * two permanently-present live regions by design — the keyboard walk and
+ * the armed-chord chip, both mounted empty so they can announce a change
+ * later — so a bare getByRole('status') resolves to three elements and no
+ * longer means "the toast" on its own. Filtered by the words the toast
+ * owns.
+ */
+function importToast(page: Page) {
+  return page.getByRole('status').filter({ hasText: 'Opened shared view' });
+}
+
 function statusParam(page: Page) {
   return new URL(page.url()).searchParams.get('status');
 }
@@ -331,7 +343,7 @@ test.describe('Facilitator saved views', () => {
 
     // Import toast names the shared view; the ?view= param is stripped
     // immediately so a refresh never re-toasts.
-    await expect(receiver.getByRole('status')).toContainText('Shared watch');
+    await expect(importToast(receiver)).toContainText('Shared watch');
     await expect
       .poll(() => new URL(receiver.url()).searchParams.get('view'))
       .toBe(null);
@@ -340,9 +352,11 @@ test.describe('Facilitator saved views', () => {
     await expect(rowFor(receiver, WORKING_A)).toBeVisible({ timeout: 10_000 });
     await expect(rowFor(receiver, SUBMITTED_S5)).toHaveCount(0);
 
-    // A refresh keeps the state but never re-toasts.
+    // A refresh keeps the state but never re-toasts. Counted on the toast
+    // rather than on every status region: the console's two keyboard live
+    // regions are still there, empty, by design.
     await receiver.reload();
-    await expect(receiver.getByRole('status')).toHaveCount(0);
+    await expect(importToast(receiver)).toHaveCount(0);
     expect(new URL(receiver.url()).searchParams.get('status')).toBe('working');
     await expect(rowFor(receiver, WORKING_A)).toBeVisible({ timeout: 10_000 });
 
