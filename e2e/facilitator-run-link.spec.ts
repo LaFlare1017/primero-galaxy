@@ -339,6 +339,63 @@ test.describe('Facilitator run links', () => {
     await expect(page.getByRole('region', { name: `Watching run for ${firstName}` })).toBeVisible();
   });
 
+  test('the watch pane sweeps with the arrow keys, and yields them to text fields', async ({ page }) => {
+    // Stamped labels, stamp first, so this execution's pair sits together in
+    // the participant-sorted sweep whatever else the accumulating store holds.
+    const a = await startRun(page, `E2E ${STAMP} KeyA`, 's1');
+    await startRun(page, `E2E ${STAMP} KeyB`, 's2');
+
+    await page.goto(`/delegate/facilitator?watch=${a.runId}`);
+    // The open pane, whatever participant it currently shows.
+    const openPane = page.locator('section[aria-label^="Watching run for"]');
+    await expect(openPane).toBeVisible();
+    // Advertised only when there is somewhere to step to.
+    await expect(openPane).toHaveAttribute('aria-keyshortcuts', 'ArrowLeft ArrowRight');
+    const position = async (): Promise<[number, number]> => {
+      const digits = (await openPane.getByText(/^\d+ of \d+$/).innerText()).match(/\d+/g) ?? [];
+      return [Number(digits[0]), Number(digits[1])];
+    };
+    const watching = () => new URL(page.url()).searchParams.get('watch');
+    const [at, total] = await position();
+    expect(total).toBeGreaterThan(1);
+
+    // Right steps forward through the DISPLAYED room, wrapping at the end.
+    await page.keyboard.press('ArrowRight');
+    await expect.poll(position).toEqual([(at % total) + 1, total]);
+    expect(watching()).not.toBe(a.runId);
+    // Left walks it back to the exact run we started from — order-following
+    // in both directions, not just "something changed".
+    await page.keyboard.press('ArrowLeft');
+    await expect.poll(position).toEqual([at, total]);
+    expect(watching()).toBe(a.runId);
+
+    // A modified press is the browser's own (Cmd+Left is back), not ours.
+    await page.keyboard.press('Control+ArrowRight');
+    await page.waitForTimeout(400);
+    expect(watching()).toBe(a.runId);
+
+    // A focused text field owns its arrow keys: the palette search is the
+    // one text field this surface has, and it is also a modal, so the sweep
+    // must not fire behind it.
+    await page.keyboard.press('Control+KeyK');
+    const search = page.getByPlaceholder('Type a command or search…');
+    await expect(search).toBeFocused();
+    await search.fill('delegate');
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(400);
+    expect(watching()).toBe(a.runId);
+    await expect(search).toHaveValue('delegate');
+    await page.keyboard.press('Escape');
+    await expect(search).toBeHidden();
+
+    // Positive control: focus that is NOT a text field still sweeps, so the
+    // guard above is not just "ignore everything focused".
+    await page.getByRole('button', { name: `Watch E2E ${STAMP} KeyB` }).focus();
+    await page.keyboard.press('ArrowRight');
+    await expect.poll(position).toEqual([(at % total) + 1, total]);
+    expect(watching()).not.toBe(a.runId);
+  });
+
   test('a copied submitted-run link restores read-only in a fresh context', async ({ page, browser }) => {
     const seeded = await startRun(page, SUBMITTED, 's5');
     const submit = await page.request.post('/api/delegate/submit', {

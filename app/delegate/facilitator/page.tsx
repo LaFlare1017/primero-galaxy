@@ -151,6 +151,21 @@ const sortDirParser = parseAsStringLiteral(["asc", "desc"] as const).withDefault
 const viewNameParser = parseAsString;
 
 /**
+ * True when a key event belongs to something that owns its own arrow
+ * keys, so a global shortcut must keep its hands off: a text field or
+ * select (the palette search, a filter box), a content-editable host, or
+ * anything inside an open modal — the command palette is a dialog, and
+ * its own arrow-key navigation outranks a sweep happening behind it.
+ */
+function ownsArrowKeys(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  if (target.isContentEditable) return true;
+  const tag = target.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+  return target.closest('[role="dialog"]') !== null;
+}
+
+/**
  * The facilitator's verdict vocabulary for a run's detection status, shared
  * by the grid's Detection column and the watch pane's submitted result so
  * one run never reads two ways. A live run has no verdict at all ("n/a") —
@@ -348,7 +363,13 @@ function WatchPane({
   }
 
   return (
-    <section className="mb-4 rounded-md border border-gray-200" aria-label={`Watching run for ${label}`}>
+    <section
+      className="mb-4 rounded-md border border-gray-200"
+      aria-label={`Watching run for ${label}`}
+      // Announced only when stepping is possible, so the shortcut is never
+      // advertised on a room with nothing to sweep.
+      aria-keyshortcuts={canStep ? "ArrowLeft ArrowRight" : undefined}
+    >
       <div className="flex items-center gap-3 border-b border-gray-200 bg-gray-50 px-3 py-2">
         <span className="text-[13px] font-medium text-black">{label || "…"}</span>
         <span className="text-[13px] text-gray-500">{scenario}</span>
@@ -371,6 +392,7 @@ function WatchPane({
             onClick={() => onStep(-1)}
             disabled={!canStep}
             aria-label="Watch previous participant"
+            title="Watch previous participant (←)"
             className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-600 hover:border-gray-500 hover:text-black disabled:opacity-40"
           >
             <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
@@ -380,6 +402,7 @@ function WatchPane({
             onClick={() => onStep(1)}
             disabled={!canStep}
             aria-label="Watch next participant"
+            title="Watch next participant (→)"
             className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-600 hover:border-gray-500 hover:text-black disabled:opacity-40"
           >
             <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
@@ -639,6 +662,29 @@ function FacilitatorGrid() {
     },
     [sweepList, watchId, setWatchId],
   );
+
+  // ── Sweep by keyboard ──
+  // Left/Right step the watched room, so a facilitator moving down the
+  // roster never has to reach for the pane's buttons. Mounted only while
+  // the pane is open and there is somewhere to step to, and it yields in
+  // every case where the arrow keys mean something else: a focused text
+  // field or content-editable host, an open modal, or a modified press
+  // (Cmd+Left/Right is the browser's own back/forward gesture).
+  const canSweepKeys = watchId !== null && sweepList.length > 1;
+  useEffect(() => {
+    if (!canSweepKeys) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      if (ownsArrowKeys(event.target)) return;
+      // Swallow the key so it cannot scroll the page (or a transcript)
+      // out from under the pane that just replaced its contents.
+      event.preventDefault();
+      stepWatch(event.key === "ArrowRight" ? 1 : -1);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [canSweepKeys, stepWatch]);
 
   function toggleStatus(status: string) {
     void setStatuses((prev) => {
