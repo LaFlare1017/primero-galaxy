@@ -527,6 +527,20 @@ function FacilitatorGrid() {
   const [viewName, setViewName] = useQueryState("view", viewNameParser);
   const [scenarioFocus, setScenarioFocus] = useQueryState("scenario", scenarioFocusParser);
   const [watchId, setWatchId] = useQueryState("watch", watchParser);
+  // The grid cursor: the row the keyboard walk is sitting on. While the
+  // watch pane is open the ?watch= pointer IS the cursor — one concept, one
+  // source of truth — and the local copy is kept in step so closing the pane
+  // leaves the cursor where the walk left it instead of losing the place.
+  const [cursorId, setCursorId] = useState<string | null>(null);
+  useEffect(() => {
+    if (watchId !== null) setCursorId(watchId);
+  }, [watchId]);
+  const cursorRunId = watchId ?? cursorId;
+  // Whether the keyboard is inside one of the grid's own controls. Enter
+  // is the grid's activation key only when it is not: on a focused button
+  // or link, Enter means activate THAT control, and a global binding would
+  // eat it (useKeyboardShortcuts preventDefaults before the handler runs).
+  const [gridFocused, setGridFocused] = useState(false);
   const statusFilter = useMemo(() => new Set(statuses ?? []), [statuses]);
   const [sharedView, setSharedView] = useState<string | null>(null);
   // Row whose run link was just copied: the button flips to "Copied" for
@@ -639,18 +653,42 @@ function FacilitatorGrid() {
   // run (status comes from runs), so the list is always steppable.
   const sweepList = useMemo(() => visibleRows.map((r) => r.runId).filter((id): id is string => !!id), [visibleRows]);
   const sweepIndex = sweepList.indexOf(watchId ?? "");
-  const stepWatch = useCallback(
+  /**
+   * One sweep with two outcomes. Stepping moves the cursor; when the pane
+   * is open the cursor IS the watched run, so the walk keeps sweeping the
+   * pane exactly as it did before the cursor existed. With the pane closed
+   * the walk stays local and cheap — nothing is watched, and no row is
+   * remounted into a live mirror, until the facilitator commits to one
+   * with Enter or w.
+   */
+  const stepSweep = useCallback(
     (delta: number) => {
       if (sweepList.length === 0) return;
-      const current = sweepList.indexOf(watchId ?? "");
-      // The watched run may not be in the visible set (facets changed or a
+      const current = sweepList.indexOf(cursorRunId ?? "");
+      // The cursor may not be in the visible set (facets changed, or a
       // deep-linked ?watch=): stepping from "not found" enters the sweep
       // at the ends; otherwise wrap around the displayed room.
       const next = current === -1 ? (delta > 0 ? 0 : sweepList.length - 1) : (current + delta + sweepList.length) % sweepList.length;
-      void setWatchId(sweepList[next]);
+      if (watchId !== null) void setWatchId(sweepList[next]);
+      else setCursorId(sweepList[next]);
     },
-    [sweepList, watchId, setWatchId],
+    [sweepList, cursorRunId, watchId, setWatchId],
   );
+
+  /**
+   * Enter / w: open the watch pane on the row the walk stopped on. Falls
+   * back to the first visible row when the cursor has not moved (or has
+   * fallen out of the current facets), so the key does something from a
+   * cold console instead of waiting to be taught, and is unbound when the
+   * target is already what is watched — there is nothing to open.
+   */
+  const openTarget =
+    cursorRunId !== null && sweepList.includes(cursorRunId) ? cursorRunId : (sweepList[0] ?? null);
+  const canOpenCursor = openTarget !== null && openTarget !== watchId;
+  const openCursor = useCallback(() => {
+    if (openTarget === null || openTarget === watchId) return;
+    void setWatchId(openTarget);
+  }, [openTarget, watchId, setWatchId]);
 
   /**
    * Home/End jump to the ends of the same displayed sweep — the other two
@@ -667,22 +705,26 @@ function FacilitatorGrid() {
     [sweepList, setWatchId],
   );
 
-  // ── Row sweep: j/k ──
-  // The grid-level twin of the pane transport: j and k move the watch to
-  // the next and previous row in the displayed order (wrapping, same as
-  // the buttons), and open the pane on the way when it is closed — so a
-  // facilitator can walk the whole room from the keyboard without touching
-  // a row first. A separate hook call because the lifetime differs: the
-  // transport keys belong to an open pane, these belong to the grid, which
-  // is always on screen. With nothing watched, j enters at the first row
-  // and k at the last, exactly as the sweep buttons do.
+  // ── Row walk: j/k, then Enter or w to watch ──
+  // The grid-level twin of the pane transport, split in two so a long room
+  // can be scanned before anything is watched: j and k walk the cursor down
+  // and up the displayed order (wrapping, same as the buttons), and Enter
+  // or w commits the row it stopped on to the watch pane. Separate hook
+  // calls because the lifetimes differ — the transport keys belong to an
+  // open pane, these belong to the grid, which is always on screen. With no
+  // cursor yet, j enters at the first row and k at the last, and w opens
+  // the first row, so neither key has to be learned before it works.
   useKeyboardShortcuts(
     {
-      j: () => stepWatch(1),
-      k: () => stepWatch(-1),
+      j: () => stepSweep(1),
+      k: () => stepSweep(-1),
     },
     sweepList.length > 0,
   );
+  // w has no native meaning on a control, so it is bound either way; Enter
+  // yields to whatever inside the grid holds the keyboard.
+  useKeyboardShortcuts({ w: openCursor }, canOpenCursor);
+  useKeyboardShortcuts({ Enter: openCursor }, canOpenCursor && !gridFocused);
 
   // ── Sweep by keyboard ──
   // Left/Right step the watched room, Home/End jump to its ends, so a
@@ -696,8 +738,8 @@ function FacilitatorGrid() {
   const canSweepKeys = watchId !== null && sweepList.length > 1;
   useKeyboardShortcuts(
     {
-      ArrowLeft: () => stepWatch(-1),
-      ArrowRight: () => stepWatch(1),
+      ArrowLeft: () => stepSweep(-1),
+      ArrowRight: () => stepSweep(1),
       Home: () => jumpWatch("first"),
       End: () => jumpWatch("last"),
     },
@@ -810,7 +852,7 @@ function FacilitatorGrid() {
           key={watchId}
           runId={watchId}
           onClose={() => void setWatchId(null)}
-          onStep={stepWatch}
+          onStep={stepSweep}
           position={sweepList.length > 0 ? { index: sweepIndex, total: sweepList.length } : null}
           canStep={sweepList.length > 1}
         />
@@ -869,15 +911,17 @@ function FacilitatorGrid() {
             </span>
             <span
               className="text-xs text-gray-500"
-              title="j and k watch the next and previous row in the displayed order, wrapping at the ends"
+              title="j and k walk the visible rows, wrapping at the ends; Enter or w opens the watch pane on the row you stopped on"
             >
-              j/k to step
+              j/k to walk, Enter/w to watch
             </span>
           </div>
 
           <Table
             aria-label="Participants"
-            aria-keyshortcuts="j k"
+            aria-keyshortcuts="j k Enter w"
+            onFocus={() => setGridFocused(true)}
+            onBlur={() => setGridFocused(false)}
           >
             <TableHeader>
               <TableRow className="hover:bg-transparent">
@@ -897,9 +941,15 @@ function FacilitatorGrid() {
               {visibleRows.map((r, i) => (
                 <TableRow
                   key={i}
+                  aria-current={r.runId === cursorRunId ? "true" : undefined}
                   className={cn(
                     "border-gray-100 hover:bg-gray-50",
                     scenarioFocus !== null && r.currentScenario === scenarioFocus && "bg-gray-100",
+                    // The cursor ring: which row j/k last moved to, and the
+                    // row Enter or w will open. aria-current carries the same
+                    // fact to assistive tech, since the walk never moves DOM
+                    // focus (the grid keeps its own focusable controls).
+                    r.runId === cursorRunId && "bg-gray-50 ring-1 ring-inset ring-black",
                   )}
                 >
                   <TableCell className="py-2 font-medium text-black">

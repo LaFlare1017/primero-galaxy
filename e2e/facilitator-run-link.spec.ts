@@ -454,64 +454,131 @@ test.describe('Facilitator run links', () => {
     await page.keyboard.press('Escape');
   });
 
-  test('j and k move between grid rows, opening the watch pane on the way', async ({ page }) => {
-    // Two stamped rows so the room has neighbours, though the store holds
-    // many more: the assertions read the real first and second row names.
-    await startRun(page, `E2E ${STAMP} RowB`, 's2');
+  test('j and k walk the grid, and Enter or w watches the row you stopped on', async ({ page }) => {
+    // Five stamped rows so the walk has somewhere to go even on a cold
+    // store; this execution's rows are not necessarily rows 0-4 once the
+    // store has accumulated, so every name is read back off the DOM.
     await startRun(page, `E2E ${STAMP} RowA`, 's1');
+    await startRun(page, `E2E ${STAMP} RowB`, 's2');
+    await startRun(page, `E2E ${STAMP} RowC`, 's3');
+    await startRun(page, `E2E ${STAMP} RowD`, 's4');
+    await startRun(page, `E2E ${STAMP} RowE`, 's5');
 
     await page.goto('/delegate/facilitator');
     const pane = page.locator('section[aria-label^="Watching run for"]');
     // The grid owns these keys, so the table is where they are advertised.
     const table = page.getByRole('table', { name: 'Participants' });
-    await expect(table).toHaveAttribute('aria-keyshortcuts', 'j k');
+    await expect(table).toHaveAttribute('aria-keyshortcuts', 'j k Enter w');
     const rows = page.locator('tbody tr');
     await expect(rows.first()).toBeVisible({ timeout: 15_000 });
     const total = await rows.count();
-    const firstName = await rows.nth(0).locator('td').first().innerText();
-    const secondName = await rows.nth(1).locator('td').first().innerText();
+    expect(total).toBeGreaterThan(4);
+    const nameAt = async (i: number): Promise<string> =>
+      (await rows.nth(i).locator('td').first().innerText()).trim();
+    const [secondName, thirdName] = [await nameAt(1), await nameAt(2)];
+    // The cursor is the row the walk is on, carried by aria-current because
+    // the walk deliberately never moves DOM focus away from the grid's own
+    // controls. Exactly one row carries it. A CSS locator, not getByRole:
+    // the palette aria-hides the grid while it is open, and the cursor is
+    // exactly what has to be checked while that is true.
+    const cursored = page.locator('tbody tr[aria-current="true"]');
 
-    // Nothing is watched yet, and these keys need no pane to work from.
+    // Stage one: the walk is local. j moves the cursor and opens nothing,
+    // which is the whole point of splitting the flow in two.
     await expect(pane).toHaveCount(0);
     await page.keyboard.press('j');
-    // Entering from nothing watched lands on the first row, in order.
-    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${firstName}`, { timeout: 10_000 });
-    await expect(pane.getByText(/^\d+ of \d+$/)).toHaveText(`1 of ${total}`);
+    await expect(cursored).toHaveCount(1);
+    await expect(rows.nth(0)).toHaveAttribute('aria-current', 'true');
+    await expect(pane).toHaveCount(0);
+    expect(new URL(page.url()).searchParams.get('watch')).toBeNull();
 
-    // j walks forward to the next displayed row; k walks back to this one.
+    // j/k walk the displayed order in both directions, wrapping at the ends.
     await page.keyboard.press('j');
+    await expect(rows.nth(1)).toHaveAttribute('aria-current', 'true');
+    await expect(rows.nth(0)).not.toHaveAttribute('aria-current', 'true');
+    await page.keyboard.press('k');
+    await expect(rows.nth(0)).toHaveAttribute('aria-current', 'true');
+
+    // Stage two: w commits the row the walk stopped on. Still no pane before
+    // the commit, and the URL only then carries ?watch=.
+    await page.keyboard.press('j');
+    await expect(rows.nth(1)).toHaveAttribute('aria-current', 'true');
+    await page.keyboard.press('w');
     await expect(pane).toHaveAttribute('aria-label', `Watching run for ${secondName}`, { timeout: 10_000 });
     await expect(pane.getByText(/^\d+ of \d+$/)).toHaveText(`2 of ${total}`);
-    await page.keyboard.press('k');
-    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${firstName}`, { timeout: 10_000 });
-    await expect(pane.getByText(/^\d+ of \d+$/)).toHaveText(`1 of ${total}`);
 
-    // Bare letters are the risk of this shortcut, so the palette gets a
-    // real query: the letters must type into the field as normal AND the
-    // room must not sweep behind the dialog. The guard protects the sweep,
-    // not the keystroke — a focused field still receives its characters.
-    const watching = new URL(page.url()).searchParams.get('watch');
+    // With the pane open the cursor IS the watch pointer, so the walk keeps
+    // sweeping the pane exactly as the arrow keys and the buttons do.
+    await page.keyboard.press('j');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${thirdName}`, { timeout: 10_000 });
+    await page.keyboard.press('k');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${secondName}`, { timeout: 10_000 });
+
+    // Closing the pane does not lose the place: the cursor stays on the row
+    // that was being watched, so the next commit picks up where it left off.
+    await page.getByRole('button', { name: 'Close watch pane' }).click();
+    await expect(pane).toHaveCount(0);
+    await expect(rows.nth(1)).toHaveAttribute('aria-current', 'true');
+
+    // Enter commits it too, and from a cold console it has a target: the
+    // first visible row, the same rule j enters on.
+    await page.keyboard.press('j');
+    await expect(rows.nth(2)).toHaveAttribute('aria-current', 'true');
+    await page.keyboard.press('Enter');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${thirdName}`, { timeout: 10_000 });
+    await expect(pane.getByText(/^\d+ of \d+$/)).toHaveText(`3 of ${total}`);
+
+    // Enter inside the grid belongs to the focused control, not the cursor:
+    // a focused row button must watch THAT row rather than the cursor's.
+    await page.getByRole('button', { name: 'Close watch pane' }).click();
+    await expect(pane).toHaveCount(0);
+    const otherName = await nameAt(4);
+    await rows.nth(4).getByRole('button', { name: `Watch ${otherName}` }).focus();
+    await page.keyboard.press('Enter');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${otherName}`, { timeout: 10_000 });
+    await expect(rows.nth(4)).toHaveAttribute('aria-current', 'true');
+
+    // Bare letters are the risk of the walk, so the palette gets a real
+    // query: the letters must type into the field as normal AND the cursor
+    // must not move behind the dialog. The guard protects the sweep, not
+    // the keystroke — a focused field still receives its characters.
+    const cursorBefore = (await cursored.locator('td').first().innerText()).trim();
+    expect(cursorBefore, 'the walk left a cursor to check').toBe(otherName);
     await page.keyboard.press('Control+KeyK');
     const search = page.getByPlaceholder('Type a command or search…');
     await expect(search).toBeFocused();
     await search.fill('jack');
     await page.keyboard.press('j');
     await page.keyboard.press('k');
-    await expect(search).toHaveValue('jackjk');
+    await page.keyboard.press('w');
+    await expect(search).toHaveValue('jackjkw');
     await page.waitForTimeout(400);
-    expect(new URL(page.url()).searchParams.get('watch')).toBe(watching);
+    await expect(cursored).toHaveCount(1);
+    await expect(cursored.locator('td').first()).toHaveText(cursorBefore);
     await page.keyboard.press('Escape');
 
-    // Closing the pane leaves the keys live: k from nothing watched enters
-    // the sweep at its far end, the same rule the step buttons follow.
+    // A genuinely cold console: reload so there is no cursor and nothing
+    // watched, which is the state neither key needs teaching in. k enters
+    // the walk at the far end and j wraps off it onto the first row —
+    // rows.first()/last() rather than an index, because the store keeps
+    // accumulating while the suite runs.
     await page.getByRole('button', { name: 'Close watch pane' }).click();
     await expect(pane).toHaveCount(0);
+    await page.reload();
+    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+    await expect(cursored).toHaveCount(0);
+    const coldFirst = await rows.first().locator('td').first().innerText();
     await page.keyboard.press('k');
-    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${(await rows.last().locator('td').first().innerText())}`, { timeout: 10_000 });
-    await expect(pane.getByText(/^\d+ of \d+$/)).toHaveText(`${total} of ${total}`);
+    await expect(rows.last()).toHaveAttribute('aria-current', 'true');
+    await page.keyboard.press('j');
+    await expect(rows.first()).toHaveAttribute('aria-current', 'true');
+    // w from a cold console opens the first row rather than doing nothing:
+    // with no cursor to commit, the fallback target is the first visible row.
+    await page.keyboard.press('w');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${coldFirst.trim()}`, { timeout: 10_000 });
   });
 
-  test('the saved-views popover shields the room from j and k', async ({ page }) => {
+  test('the saved-views popover shields the room from j, k, and w', async ({ page }) => {
     // A popover is the overlay the sweep must not fire through: it is open
     // on top of the grid, portaled onto the end of <body> rather than
     // nested under its trigger, and taking focus. The policy-level proof
@@ -544,20 +611,24 @@ test.describe('Facilitator run links', () => {
     await expect(panel).toHaveAttribute('data-state', 'open');
 
     // Focus is inside the panel (Radix moves it on open), so these land on
-    // the panel's own buttons — no field swallows them, and the room must
-    // not step behind it.
+    // the panel's own buttons — no field swallows them, and neither the walk
+    // nor the commit key may act behind it.
     await page.keyboard.press('j');
     await page.keyboard.press('k');
+    await page.keyboard.press('w');
     await page.waitForTimeout(400);
     await expect(pane).toHaveCount(0);
     expect(new URL(page.url()).searchParams.get('watch')).toBeNull();
 
-    // Positive control: closing the panel hands the keys straight back, so
-    // the guard above is not simply "ignore the keys while a panel exists".
+    // Positive control: closing the panel hands the keys straight back —
+    // the walk moves the cursor, then w opens the pane on it — so the guard
+    // above is not simply "ignore the keys while a panel exists".
     await page.keyboard.press('Escape');
     await expect(panel).toHaveCount(0);
     await page.keyboard.press('j');
     const firstName = await rows.nth(0).locator('td').first().innerText();
+    await expect(rows.nth(0)).toHaveAttribute('aria-current', 'true');
+    await page.keyboard.press('w');
     await expect(pane).toHaveAttribute('aria-label', `Watching run for ${firstName}`, { timeout: 10_000 });
   });
 
