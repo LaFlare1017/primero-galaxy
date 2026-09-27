@@ -150,9 +150,15 @@ const sortDirParser = parseAsStringLiteral(["asc", "desc"] as const).withDefault
  */
 const viewNameParser = parseAsString;
 
-function detectionLabel(row: Row): string {
-  if (row.detected === undefined) return "n/a";
-  return row.detected ? "caught it" : "missed";
+/**
+ * The facilitator's verdict vocabulary for a run's detection status, shared
+ * by the grid's Detection column and the watch pane's submitted result so
+ * one run never reads two ways. A live run has no verdict at all ("n/a") —
+ * nothing is inferred ahead of submission.
+ */
+function detectionLabel(detected: boolean | undefined): string {
+  if (detected === undefined) return "n/a";
+  return detected ? "caught it" : "missed";
 }
 
 /**
@@ -249,17 +255,22 @@ const WATCH_POLL_MS = 3000;
  * and renders what the participant sees — status, the elapsed clock
  * derived from run.startedAt (frozen once submitted), and the transcript
  * as it grows, with each turn's tool calls collapsed exactly like the
- * live chat. Everything is rebuilt from the event log, so the mirror is
- * the same data the participant's own restored screen shows.
+ * live chat. Once the run is in, it also shows the post-submit outcome: the
+ * debrief note the endpoint already serves (the same text the participant
+ * reads) and the grid's own detection verdict — never a score, which stays
+ * with the group debrief. Everything is rebuilt from the event log, so the
+ * mirror is the same data the participant's own restored screen shows.
  */
 function WatchPane({
   runId,
+  detected,
   onClose,
   onStep,
   position,
   canStep,
 }: {
   runId: string;
+  detected?: boolean;
   onClose: () => void;
   onStep: (delta: number) => void;
   position: { index: number; total: number } | null;
@@ -270,6 +281,13 @@ function WatchPane({
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [submittedAt, setSubmittedAt] = useState<string | null>(null);
   const [messages, setMessages] = useState<WatchMessage[]>([]);
+  // The debrief note comes from the state endpoint (the same text the
+  // participant reads). The VERDICT deliberately does not: the endpoint
+  // reports "detected" for a run whose scenario planted no defect at all
+  // (s5/s6 have no interception score), while the grid refuses to invent a
+  // verdict there. The pane takes the grid's verdict as a prop so the two
+  // can never contradict each other on one screen.
+  const [debriefNote, setDebriefNote] = useState("");
   const [missing, setMissing] = useState(false);
 
   // One poller: the run-state endpoint doubles as the live tick, so a
@@ -292,6 +310,7 @@ function WatchPane({
           scenarioId: string;
           startedAt: string;
           submittedAt?: string | null;
+          debriefNote?: string;
           messages: WatchMessage[];
         };
         setMissing(false);
@@ -299,6 +318,7 @@ function WatchPane({
         setScenario(SCENARIO_FOCUS_NAMES[data.scenarioId as ScenarioFocusId] ?? data.scenarioId);
         setStartedAt(new Date(data.startedAt).getTime());
         setSubmittedAt(data.submittedAt ?? null);
+        setDebriefNote(data.debriefNote ?? "");
         setMessages(data.messages ?? []);
       } catch {
         // keep last good mirror
@@ -414,6 +434,35 @@ function WatchPane({
           </div>
         )}
       </div>
+      {/*
+        Post-submit result: the pane answers the question a facilitator
+        actually asks here — did this one get it, and what will the room be
+        told — while the score itself stays for the group debrief, exactly
+        as the participant's own post-submit panel holds it back. No
+        verdict line at all when the scenario planted no defect to detect;
+        the grid's own n/a carries that, and a bare "n/a" in a mirror of a
+        finished run would only read as a gap.
+      */}
+      {submittedAt && (
+        <section aria-label="Submitted result" className="border-t border-gray-200 bg-gray-50 px-3 py-2">
+          {detected !== undefined && (
+            <p className="text-[13px] text-gray-600">
+              <span className="font-medium text-black">Detection: {detectionLabel(detected)}</span>
+              {detected
+                ? " — the participant was told their answer named the defect."
+                : " — the participant was told the verdict waits for the group debrief."}
+            </p>
+          )}
+          {debriefNote && (
+            <p className="mt-1.5 max-h-24 overflow-y-auto whitespace-pre-wrap text-xs text-gray-600">
+              {debriefNote}
+            </p>
+          )}
+          <p className="mt-1.5 text-[11px] text-gray-400">
+            Scores are revealed together in the facilitator-led debrief, not shown here.
+          </p>
+        </section>
+      )}
     </section>
   );
 }
@@ -557,7 +606,7 @@ function FacilitatorGrid() {
         case "elapsedSeconds":
           return (a.elapsedSeconds - b.elapsedSeconds) * dir;
         case "detected":
-          return ((DETECTION_RANK[detectionLabel(a)] ?? 0) - (DETECTION_RANK[detectionLabel(b)] ?? 0)) * dir;
+          return ((DETECTION_RANK[detectionLabel(a.detected)] ?? 0) - (DETECTION_RANK[detectionLabel(b.detected)] ?? 0)) * dir;
         case "currentScenario":
           return (
             (SCENARIO_NAMES[a.currentScenario] ?? a.currentScenario).localeCompare(
@@ -696,6 +745,7 @@ function FacilitatorGrid() {
         <WatchPane
           key={watchId}
           runId={watchId}
+          detected={rows.find((r) => r.runId === watchId)?.detected}
           onClose={() => void setWatchId(null)}
           onStep={stepWatch}
           position={sweepList.length > 0 ? { index: sweepIndex, total: sweepList.length } : null}
@@ -796,7 +846,7 @@ function FacilitatorGrid() {
                       <span className={r.status === "submitted" ? "text-black font-medium" : "text-gray-500"}>{r.status}</span>
                     </span>
                   </TableCell>
-                  <TableCell className="py-2">{detectionLabel(r)}</TableCell>
+                  <TableCell className="py-2">{detectionLabel(r.detected)}</TableCell>
                   <TableCell className="py-2 text-black">{r.flaggedBehavior ?? ""}</TableCell>
                   <TableCell className="py-2">
                     <div className="flex items-center gap-1.5">

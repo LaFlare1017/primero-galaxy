@@ -29,6 +29,8 @@ const SUBMITTED = `E2E LinkSub ${STAMP}`;
 // across tests in this file, and a shared label would match two rows.
 const WATCH_LIVE = `E2E LinkWatch ${STAMP}`;
 const WATCH_SUB = `E2E LinkWatchS ${STAMP}`;
+const WATCH_RESULT = `E2E LinkWatchR ${STAMP}`;
+const WATCH_NODEFECT = `E2E LinkWatchN ${STAMP}`;
 
 const MIN_40_WORDS =
   'WHAT I CONCLUDED: The revenue recognition defect was identified and the ' +
@@ -205,6 +207,84 @@ test.describe('Facilitator run links', () => {
     await expect
       .poll(() => new URL(page.url()).searchParams.get('watch'))
       .toBe(null);
+  });
+
+  test('the watch pane shows the submitted result and holds back the score', async ({ page }) => {
+    const seeded = await startRun(page, WATCH_RESULT, 's1');
+
+    await page.goto('/delegate/facilitator');
+    await watchRun(page, WATCH_RESULT);
+    const pane = page.getByRole('region', { name: `Watching run for ${WATCH_RESULT}` });
+    // A working run has no result to show: the block must not appear early.
+    await expect(pane.getByRole('region', { name: 'Submitted result' })).toHaveCount(0);
+
+    const submit = await page.request.post('/api/delegate/submit', {
+      data: { runId: seeded.runId, answer: MIN_40_WORDS },
+    });
+    expect(submit.ok()).toBeTruthy();
+
+    // The poll that freezes the clock also brings the post-submit fields the
+    // state endpoint already serves — no reload, no extra request.
+    const result = pane.getByRole('region', { name: 'Submitted result' });
+    await expect(result).toBeVisible({ timeout: 15_000 });
+
+    // The verdict is the grid's own, neither invented nor softened, and the
+    // Detection cell behind the pane agrees with it.
+    const state = (await (await page.request.get(`/api/delegate/run/${seeded.runId}/state`)).json()) as {
+      detected?: boolean;
+      debriefNote?: string;
+    };
+    expect(typeof state.detected).toBe('boolean');
+    expect(state.debriefNote ?? '').not.toBe('');
+
+    // innerText collapses the note's newlines, so compare on flattened text.
+    const flat = (s: string) => s.replace(/\s+/g, ' ').trim();
+    const flatNote = flat(state.debriefNote as string);
+    const shown = flat(await result.innerText());
+    const verdict = /Detection: (caught it|missed)/.exec(shown);
+    expect(verdict).not.toBeNull();
+    await expect(page.getByRole('row').filter({ hasText: WATCH_RESULT })).toContainText(verdict![1]);
+
+    // The participant is shown this exact note, so the facilitator debriefs
+    // from the same words the room is reading.
+    expect(shown).toContain(flatNote.slice(0, 60));
+
+    // Scores stay debrief-only: the same notice the participant's own
+    // post-submit panel carries, and no grade anywhere else in the block.
+    // (The note itself is prose — it quotes bank dates like 3/12 — so the
+    // numeric check runs on the block with the note removed.)
+    await expect(result.getByText('Scores are revealed together')).toBeVisible();
+    expect(shown.replace(flatNote, '')).not.toMatch(/\b\d+(\.\d+)?\s*(?:\/|out of)\s*\d+\b/i);
+  });
+
+  test('the watch pane invents no verdict for a scenario with no planted defect', async ({ page }) => {
+    // s5 plants no interception defect, so the grid reports n/a. The state
+    // endpoint nonetheless answers detected:true for such a run (the
+    // participant panel shows its "nothing was planted" copy) — so a pane
+    // that trusted that boolean would read "caught it" directly above a grid
+    // cell saying n/a. The verdict must come from the grid, or not at all.
+    const seeded = await startRun(page, WATCH_NODEFECT, 's5');
+    const submit = await page.request.post('/api/delegate/submit', {
+      data: { runId: seeded.runId, answer: MIN_40_WORDS },
+    });
+    expect(submit.ok()).toBeTruthy();
+
+    const state = (await (await page.request.get(`/api/delegate/run/${seeded.runId}/state`)).json()) as {
+      detected?: boolean;
+    };
+    expect(state.detected).toBe(true); // the endpoint's eager answer, unused here
+
+    await page.goto('/delegate/facilitator');
+    await watchRun(page, WATCH_NODEFECT);
+    const pane = page.getByRole('region', { name: `Watching run for ${WATCH_NODEFECT}` });
+    const result = pane.getByRole('region', { name: 'Submitted result' });
+    await expect(result).toBeVisible({ timeout: 15_000 });
+
+    // The result is still there — the note and the debrief-only notice —
+    // just with no verdict claim to make.
+    await expect(result.getByText('Scores are revealed together')).toBeVisible();
+    await expect(result).not.toContainText('Detection:');
+    await expect(page.getByRole('row').filter({ hasText: WATCH_NODEFECT })).toContainText('n/a');
   });
 
   test('the watch pane sweeps the visible participants with prev/next', async ({ page }) => {
