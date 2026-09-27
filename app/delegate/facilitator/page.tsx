@@ -667,6 +667,23 @@ function FacilitatorGrid() {
     [sweepList, setWatchId],
   );
 
+  // ── Row sweep: j/k ──
+  // The grid-level twin of the pane transport: j and k move the watch to
+  // the next and previous row in the displayed order (wrapping, same as
+  // the buttons), and open the pane on the way when it is closed — so a
+  // facilitator can walk the whole room from the keyboard without touching
+  // a row first. A separate hook call because the lifetime differs: the
+  // transport keys belong to an open pane, these belong to the grid, which
+  // is always on screen. With nothing watched, j enters at the first row
+  // and k at the last, exactly as the sweep buttons do.
+  useKeyboardShortcuts(
+    {
+      j: () => stepWatch(1),
+      k: () => stepWatch(-1),
+    },
+    sweepList.length > 0,
+  );
+
   // ── Sweep by keyboard ──
   // Left/Right step the watched room, Home/End jump to its ends, so a
   // facilitator moving down the roster never has to reach for the pane's
@@ -850,9 +867,18 @@ function FacilitatorGrid() {
             <span className="ml-auto text-xs tabular-nums text-gray-500">
               {visibleRows.length} of {rows.length} participants
             </span>
+            <span
+              className="text-xs text-gray-500"
+              title="j and k watch the next and previous row in the displayed order, wrapping at the ends"
+            >
+              j/k to step
+            </span>
           </div>
 
-          <Table>
+          <Table
+            aria-label="Participants"
+            aria-keyshortcuts="j k"
+          >
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="text-[11px] uppercase">{sortButton("participant", "Participant")}</TableHead>

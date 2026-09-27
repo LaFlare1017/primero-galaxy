@@ -454,6 +454,63 @@ test.describe('Facilitator run links', () => {
     await page.keyboard.press('Escape');
   });
 
+  test('j and k move between grid rows, opening the watch pane on the way', async ({ page }) => {
+    // Two stamped rows so the room has neighbours, though the store holds
+    // many more: the assertions read the real first and second row names.
+    await startRun(page, `E2E ${STAMP} RowB`, 's2');
+    await startRun(page, `E2E ${STAMP} RowA`, 's1');
+
+    await page.goto('/delegate/facilitator');
+    const pane = page.locator('section[aria-label^="Watching run for"]');
+    // The grid owns these keys, so the table is where they are advertised.
+    const table = page.getByRole('table', { name: 'Participants' });
+    await expect(table).toHaveAttribute('aria-keyshortcuts', 'j k');
+    const rows = page.locator('tbody tr');
+    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+    const total = await rows.count();
+    const firstName = await rows.nth(0).locator('td').first().innerText();
+    const secondName = await rows.nth(1).locator('td').first().innerText();
+
+    // Nothing is watched yet, and these keys need no pane to work from.
+    await expect(pane).toHaveCount(0);
+    await page.keyboard.press('j');
+    // Entering from nothing watched lands on the first row, in order.
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${firstName}`, { timeout: 10_000 });
+    await expect(pane.getByText(/^\d+ of \d+$/)).toHaveText(`1 of ${total}`);
+
+    // j walks forward to the next displayed row; k walks back to this one.
+    await page.keyboard.press('j');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${secondName}`, { timeout: 10_000 });
+    await expect(pane.getByText(/^\d+ of \d+$/)).toHaveText(`2 of ${total}`);
+    await page.keyboard.press('k');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${firstName}`, { timeout: 10_000 });
+    await expect(pane.getByText(/^\d+ of \d+$/)).toHaveText(`1 of ${total}`);
+
+    // Bare letters are the risk of this shortcut, so the palette gets a
+    // real query: the letters must type into the field as normal AND the
+    // room must not sweep behind the dialog. The guard protects the sweep,
+    // not the keystroke — a focused field still receives its characters.
+    const watching = new URL(page.url()).searchParams.get('watch');
+    await page.keyboard.press('Control+KeyK');
+    const search = page.getByPlaceholder('Type a command or search…');
+    await expect(search).toBeFocused();
+    await search.fill('jack');
+    await page.keyboard.press('j');
+    await page.keyboard.press('k');
+    await expect(search).toHaveValue('jackjk');
+    await page.waitForTimeout(400);
+    expect(new URL(page.url()).searchParams.get('watch')).toBe(watching);
+    await page.keyboard.press('Escape');
+
+    // Closing the pane leaves the keys live: k from nothing watched enters
+    // the sweep at its far end, the same rule the step buttons follow.
+    await page.getByRole('button', { name: 'Close watch pane' }).click();
+    await expect(pane).toHaveCount(0);
+    await page.keyboard.press('k');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${(await rows.last().locator('td').first().innerText())}`, { timeout: 10_000 });
+    await expect(pane.getByText(/^\d+ of \d+$/)).toHaveText(`${total} of ${total}`);
+  });
+
   test('a copied submitted-run link restores read-only in a fresh context', async ({ page, browser }) => {
     const seeded = await startRun(page, SUBMITTED, 's5');
     const submit = await page.request.post('/api/delegate/submit', {
