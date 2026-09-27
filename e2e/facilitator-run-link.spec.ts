@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 
 /**
  * End-to-end proof of the facilitator grid's copy-run-link action (the
@@ -654,6 +654,87 @@ test.describe('Facilitator run links', () => {
     await page.waitForTimeout(400);
     expect(new URL(page.url()).searchParams.get('watch')).toBe(watchBefore);
     await page.keyboard.press('Escape');
+  });
+
+  test('the walk says the row it stopped on, and says nothing until it moves', async ({ page }) => {
+    // The walk is the one part of this console that is completely silent
+    // to a screen reader: it moves a ring and an aria-current, and neither
+    // is announced — aria-current is only read when you navigate to the row
+    // yourself, and the walk deliberately never moves DOM focus away from
+    // the grid controls. So the walk has to speak for itself.
+    await startRun(page, `E2E ${STAMP} VoiceA`, 's1');
+    await startRun(page, `E2E ${STAMP} VoiceB`, 's2');
+
+    await page.goto('/delegate/facilitator');
+    const pane = page.locator('section[aria-label^="Watching run for"]');
+    const rows = page.locator('tbody tr');
+    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+    // The screen-reader-only live region, by CSS: the toolbar row carries
+    // two status regions on purpose (the walk and the armed-chord chip, so
+    // neither re-reads the other), and the sr-only one is this.
+    const spoken = page.locator('[role="status"].sr-only');
+    await expect(spoken).toHaveCount(1);
+
+    // Quiet on arrival. Nothing has been walked to, so there is nothing to
+    // say — a live region that greets a cold console with "the first
+    // participant" is a console talking over itself.
+    expect(((await spoken.textContent()) ?? '').trim()).toBe('');
+
+    // Participant and status are the two columns that decide pacing, and
+    // they are what the announcement is built from. Read off the row: the
+    // status cell wraps its word in a span behind a decorative orb, so the
+    // word itself is the inner span, not the cell.
+    const cellText = async (row: Locator, column: number): Promise<string> => {
+      const cell = row.locator('td').nth(column);
+      const word = cell.locator('span').last();
+      const target = (await word.count()) > 0 ? word : cell;
+      return (await target.innerText()).trim();
+    };
+    const firstName = await cellText(rows.first(), 0);
+    const firstStatus = await cellText(rows.first(), 3);
+    const lastName = await cellText(rows.last(), 0);
+    const lastStatus = await cellText(rows.last(), 3);
+    const secondName = await cellText(rows.nth(1), 0);
+    const secondStatus = await cellText(rows.nth(1), 3);
+
+    // j enters the walk at the first visible row and says who it is and
+    // what state they are in.
+    await page.keyboard.press('j');
+    await expect(spoken).toHaveText(`${firstName}, ${firstStatus}`);
+    await expect(rows.first()).toHaveAttribute('aria-current', 'true');
+
+    // k walks back and the words follow the cursor rather than latching:
+    // from the first row it wraps onto the last, and says so.
+    await page.keyboard.press('k');
+    await expect(spoken).toHaveText(`${lastName}, ${lastStatus}`);
+    await expect(rows.last()).toHaveAttribute('aria-current', 'true');
+
+    // A jump announces too: the chord crosses a long room in two
+    // keystrokes, and the ear should arrive with the ring.
+    await page.keyboard.press('g');
+    await page.keyboard.press('i');
+    await expect(spoken).toHaveText(`${firstName}, ${firstStatus}`);
+    await page.keyboard.press('g');
+    await page.keyboard.press('n');
+    await expect(spoken).toHaveText(`${lastName}, ${lastStatus}`);
+
+    // And so does the open pane's own transport: one walk, one voice, so
+    // arrow-sweeping the watched room announces the row it lands on. Open
+    // on the first row again, then step to the second.
+    await page.keyboard.press('g');
+    await page.keyboard.press('i');
+    await page.keyboard.press('w');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${firstName}`, { timeout: 10_000 });
+    await page.keyboard.press('ArrowRight');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${secondName}`, { timeout: 10_000 });
+    await expect(spoken).toHaveText(`${secondName}, ${secondStatus}`);
+
+    // The elapsed clock stays out of it. The grid repolls every 4s and
+    // every row's clock moves every second, so an announcement built from
+    // the whole row would re-speak on every tick and become noise — this
+    // is the assertion that keeps it two columns wide.
+    await page.waitForTimeout(5_000);
+    await expect(spoken).toHaveText(`${secondName}, ${secondStatus}`);
   });
 
   test('a half-typed chord shows what completes it, and the console forgets on its own', async ({ page }) => {

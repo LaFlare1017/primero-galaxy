@@ -555,6 +555,12 @@ function FacilitatorGrid() {
   // or link, Enter means activate THAT control, and a global binding would
   // eat it (useKeyboardShortcuts preventDefaults before the handler runs).
   const [gridFocused, setGridFocused] = useState(false);
+  // The run the walk last stopped on — the fact the grid shows as a ring
+  // and aria-current, which is silent to a screen reader (aria-current is
+  // only read when you navigate to the row yourself, and the walk never
+  // moves DOM focus). Held as an id, not as a string, because the words
+  // are derived from the row below and must stay true as the row changes.
+  const [walkedRunId, setWalkedRunId] = useState<string | null>(null);
   const statusFilter = useMemo(() => new Set(statuses ?? []), [statuses]);
   const [sharedView, setSharedView] = useState<string | null>(null);
   // Row whose run link was just copied: the button flips to "Copied" for
@@ -668,6 +674,25 @@ function FacilitatorGrid() {
   const sweepList = useMemo(() => visibleRows.map((r) => r.runId).filter((id): id is string => !!id), [visibleRows]);
   const sweepIndex = sweepList.indexOf(watchId ?? "");
   /**
+   * What the walk says out loud: the row it stopped on, in the words the
+   * grid prints — participant, then status, and deliberately nothing else.
+   * The elapsed clock is left out on purpose, since it changes every
+   * second and a live region that rewrites every second is one nobody can
+   * listen to; a poll that changes nothing else rewrites the same string,
+   * and a live region only speaks when its text actually changes.
+   *
+   * Derived from the row rather than frozen at the moment of the move, so
+   * a run that submits while the cursor sits on it is announced as well —
+   * the one update worth interrupting for, on a console whose whole job
+   * is pacing a room. Undefined until the first walk: arriving via a shared
+   * ?watch= link opens the pane without walking anywhere, and announcing
+   * that would be announcing the URL back at itself.
+   */
+  const walkedRow = useMemo(
+    () => (walkedRunId === null ? undefined : visibleRows.find((r) => r.runId === walkedRunId)),
+    [walkedRunId, visibleRows],
+  );
+  /**
    * One sweep with two outcomes. Stepping moves the cursor; when the pane
    * is open the cursor IS the watched run, so the walk keeps sweeping the
    * pane exactly as it did before the cursor existed. With the pane closed
@@ -683,6 +708,7 @@ function FacilitatorGrid() {
       // deep-linked ?watch=): stepping from "not found" enters the sweep
       // at the ends; otherwise wrap around the displayed room.
       const next = current === -1 ? (delta > 0 ? 0 : sweepList.length - 1) : (current + delta + sweepList.length) % sweepList.length;
+      setWalkedRunId(sweepList[next]);
       if (watchId !== null) void setWatchId(sweepList[next]);
       else setCursorId(sweepList[next]);
     },
@@ -717,6 +743,7 @@ function FacilitatorGrid() {
     (edge: "first" | "last") => {
       if (sweepList.length === 0) return;
       const target = edge === "first" ? sweepList[0] : sweepList[sweepList.length - 1];
+      setWalkedRunId(target);
       if (watchId !== null) void setWatchId(target);
       else setCursorId(target);
     },
@@ -960,6 +987,16 @@ function FacilitatorGrid() {
               title="j and k walk the visible rows, wrapping at the ends; Enter or w opens the watch pane on the row you stopped on; g then i or g then n jumps to the first or last visible row"
             >
               j/k to walk, Enter/w to watch, g i/g n to jump
+            </span>
+            {/* The walk, out loud. A separate live region from the chord
+                chip below rather than a second fact inside it: each region
+                re-reads its own whole text whenever it changes, so sharing
+                one would make every step repeat the chip and every chord
+                repeat the last row walked. sr-only because the ring
+                already says this to the eye, and mounted empty from the
+                start so the very first walk has a region to speak into. */}
+            <span role="status" className="sr-only">
+              {walkedRow && `${walkedRow.participant}, ${walkedRow.status}`}
             </span>
             {/* Armed-chord affordance. A prefix key does nothing on
                 purpose, which leaves it invisible: nothing moves, nothing
