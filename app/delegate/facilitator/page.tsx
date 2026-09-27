@@ -16,6 +16,7 @@ import { MessageBody } from "@/components/ui/MessageBody";
 import { FacilitatorSavedViews } from "@/components/delegate/SavedViews";
 import type { FacilitatorViewState } from "@/components/delegate/saved-views";
 import { useElapsedClock } from "@/components/delegate/useElapsedClock";
+import { useKeyboardShortcuts } from "@/components/delegate/useKeyboardShortcuts";
 import {
   Table,
   TableBody,
@@ -149,21 +150,6 @@ const sortDirParser = parseAsStringLiteral(["asc", "desc"] as const).withDefault
  * stripped from the URL immediately so a refresh never re-toasts.
  */
 const viewNameParser = parseAsString;
-
-/**
- * True when a key event belongs to something that owns its own arrow
- * keys, so a global shortcut must keep its hands off: a text field or
- * select (the palette search, a filter box), a content-editable host, or
- * anything inside an open modal — the command palette is a dialog, and
- * its own arrow-key navigation outranks a sweep happening behind it.
- */
-function ownsArrowKeys(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  if (target.isContentEditable) return true;
-  const tag = target.tagName;
-  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
-  return target.closest('[role="dialog"]') !== null;
-}
 
 /**
  * The facilitator's verdict vocabulary for a run's detection status, shared
@@ -666,25 +652,17 @@ function FacilitatorGrid() {
   // ── Sweep by keyboard ──
   // Left/Right step the watched room, so a facilitator moving down the
   // roster never has to reach for the pane's buttons. Mounted only while
-  // the pane is open and there is somewhere to step to, and it yields in
-  // every case where the arrow keys mean something else: a focused text
-  // field or content-editable host, an open modal, or a modified press
-  // (Cmd+Left/Right is the browser's own back/forward gesture).
+  // the pane is open and there is somewhere to step to; the shared helper
+  // keeps the keys away from text fields, open modals, and modified
+  // presses (see components/delegate/shortcuts.ts for the policy).
   const canSweepKeys = watchId !== null && sweepList.length > 1;
-  useEffect(() => {
-    if (!canSweepKeys) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
-      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-      if (ownsArrowKeys(event.target)) return;
-      // Swallow the key so it cannot scroll the page (or a transcript)
-      // out from under the pane that just replaced its contents.
-      event.preventDefault();
-      stepWatch(event.key === "ArrowRight" ? 1 : -1);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [canSweepKeys, stepWatch]);
+  useKeyboardShortcuts(
+    {
+      ArrowLeft: () => stepWatch(-1),
+      ArrowRight: () => stepWatch(1),
+    },
+    canSweepKeys,
+  );
 
   function toggleStatus(status: string) {
     void setStatuses((prev) => {
