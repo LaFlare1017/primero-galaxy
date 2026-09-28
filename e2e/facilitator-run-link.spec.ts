@@ -495,6 +495,12 @@ test.describe('Facilitator run links', () => {
       const digits = (await openPane.getByText(/^\d+ of \d+$/).innerText()).match(/\d+/g) ?? [];
       return [Number(digits[0]), Number(digits[1])];
     };
+    // The watch pointer is read through the URL, and nuqs writes that with
+    // history.replaceState — so it trails the DOM by a tick. Every read of
+    // it below is POLLED rather than taken the instant a keypress returns:
+    // the claim is which run is watched, not how fast the address bar
+    // agreed, and an unpolled read after two quick presses reads the
+    // previous run and blames the wrong key.
     const watching = () => new URL(page.url()).searchParams.get('watch');
     const [at, total] = await position();
     expect(total).toBeGreaterThan(1);
@@ -502,17 +508,17 @@ test.describe('Facilitator run links', () => {
     // Right steps forward through the DISPLAYED room, wrapping at the end.
     await page.keyboard.press('ArrowRight');
     await expect.poll(position).toEqual([(at % total) + 1, total]);
-    expect(watching()).not.toBe(a.runId);
+    await expect.poll(watching).not.toBe(a.runId);
     // Left walks it back to the exact run we started from — order-following
     // in both directions, not just "something changed".
     await page.keyboard.press('ArrowLeft');
     await expect.poll(position).toEqual([at, total]);
-    expect(watching()).toBe(a.runId);
+    await expect.poll(watching).toBe(a.runId);
 
     // A modified press is the browser's own (Cmd+Left is back), not ours.
     await page.keyboard.press('Control+ArrowRight');
     await page.waitForTimeout(400);
-    expect(watching()).toBe(a.runId);
+    await expect.poll(watching).toBe(a.runId);
 
     // A focused text field owns its arrow keys: the palette search is the
     // one text field this surface has, and it is also a modal, so the sweep
@@ -523,7 +529,7 @@ test.describe('Facilitator run links', () => {
     await search.fill('delegate');
     await page.keyboard.press('ArrowRight');
     await page.waitForTimeout(400);
-    expect(watching()).toBe(a.runId);
+    await expect.poll(watching).toBe(a.runId);
     await expect(search).toHaveValue('delegate');
     await page.keyboard.press('Escape');
     await expect(search).toBeHidden();
@@ -533,7 +539,7 @@ test.describe('Facilitator run links', () => {
     await page.getByRole('button', { name: `Watch E2E ${STAMP} KeyB` }).focus();
     await page.keyboard.press('ArrowRight');
     await expect.poll(position).toEqual([(at % total) + 1, total]);
-    expect(watching()).not.toBe(a.runId);
+    await expect.poll(watching).not.toBe(a.runId);
   });
 
   test('Home and End jump the sweep to its first and last visible participant', async ({ page }) => {
@@ -775,6 +781,11 @@ test.describe('Facilitator run links', () => {
 
     // And the chord is inert where every shortcut is: the letters type into
     // the palette search and the watch does not move behind the dialog.
+    // Settled before it is captured, then polled where it is asserted: the
+    // URL is written through history.replaceState and trails the DOM, so an
+    // immediate read here would capture the run the chord was about to
+    // leave and the assertion below would pass while the watch moved.
+    await page.waitForTimeout(400);
     const watchBefore = new URL(page.url()).searchParams.get('watch');
     await page.keyboard.press('Control+KeyK');
     const search = page.getByPlaceholder('Type a command or search…');
@@ -784,7 +795,7 @@ test.describe('Facilitator run links', () => {
     await search.press('n');
     await expect(search).toHaveValue('jackgn');
     await page.waitForTimeout(400);
-    expect(new URL(page.url()).searchParams.get('watch')).toBe(watchBefore);
+    await expect.poll(() => new URL(page.url()).searchParams.get('watch')).toBe(watchBefore);
     await page.keyboard.press('Escape');
   });
 
@@ -1023,6 +1034,9 @@ test.describe('Facilitator run links', () => {
     // the 1500ms prefix window, so a chip that only disappears when the
     // lapse timer fires is a failure, not a pass.
     const PROMPT_MS = 500;
+    // Long enough to watch the prefix window (1500ms in the hook) lapse,
+    // which is what a fresh arm needs to be a fresh arm.
+    const PREFIX_MS = 2_500;
     // The affordance half of the chord. A prefix key does nothing on
     // purpose, so without this the press is invisible: nothing moves and
     // nothing opens, and a facilitator cannot tell a chord they have not
@@ -1077,11 +1091,15 @@ test.describe('Facilitator run links', () => {
     await expect(pane).toHaveCount(0);
 
     // Resolving the chord takes the chip down with it — armed again first,
-    // because the prefix lapses after 1500ms and the assertions above are
-    // not free on a room this long: the store accumulates, and a grid of
-    // thousands of rows makes each of them a re-render. Re-arming keeps the
-    // test about RESOLUTION rather than about whether three assertions fit
-    // inside a timer.
+    // and the re-arm has to wait for an empty state: pressing g while g is
+    // still armed is not a fresh arm but an unbound second key (g g), which
+    // disarms the prefix and leaves the n below orphaned. So this waits the
+    // prefix's window out rather than assuming the assertions above took
+    // longer than it lasts, which is a thing that used to be true of a room
+    // of thousands of rows and is not true of a room of tens. Waiting is
+    // the deterministic form of the same intent: the test is about
+    // RESOLUTION, not about whether three assertions fit inside a timer.
+    await expect(chip).toHaveCount(0, { timeout: PREFIX_MS });
     await page.keyboard.press('g');
     await page.keyboard.press('n');
     await expect(chip).toHaveCount(0, { timeout: PROMPT_MS });

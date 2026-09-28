@@ -252,6 +252,15 @@ test.describe('Delegate keyboard-shortcut policy', () => {
     // listener, which runs before the window listener the policy is
     // consulted from. The control at the end is the other reading of the
     // same attribute: closed, and holding no focus, must stay inert.
+    //
+    // Ownership is scoped to THAT key, and the measurement that says so is
+    // the `flippedOtherKey` verdict below. Closing the saved-views panel
+    // leaves focus on the panel's own button for a beat while it unmounts —
+    // mounted, data-state="closed", still focused — so a clause that
+    // claimed every key aimed at a closed layer kept the console deaf to
+    // the next `j`: the walk only came back once focus was moved by hand.
+    // The screen reader of the failure is a walk that does not move, so the
+    // policy has to be the thing that is true.
     await page.goto('about:blank');
     await page.evaluate((html) => {
       document.body.innerHTML = html;
@@ -262,7 +271,13 @@ test.describe('Delegate keyboard-shortcut policy', () => {
       const guards = (
         window as unknown as { __guards: { shortcutAllowed: (event: KeyboardEvent) => boolean } }
       ).__guards;
-      type Verdicts = { open: boolean; flipped: boolean; removed: boolean; closedAndIdle: boolean };
+      type Verdicts = {
+        open: boolean;
+        flipped: boolean;
+        flippedOtherKey: boolean;
+        removed: boolean;
+        closedAndIdle: boolean;
+      };
       // The app's own shape, and the CONTENT element — the one that carries
       // role and data-state. Returning the wrapper would mutate the wrong
       // node and the test would pass for the wrong reason.
@@ -274,7 +289,7 @@ test.describe('Delegate keyboard-shortcut policy', () => {
         document.body.append(host);
         return host.firstElementChild?.firstElementChild as HTMLElement;
       };
-      const press = (mutate: (layer: HTMLElement) => void): boolean => {
+      const press = (mutate: (layer: HTMLElement) => void, key = 'Escape'): boolean => {
         const layer = freshLayer();
         const button = layer.querySelector('button') as HTMLElement;
         button.focus();
@@ -285,7 +300,7 @@ test.describe('Delegate keyboard-shortcut policy', () => {
           seen.allowed = guards.shortcutAllowed(event);
         };
         window.addEventListener('keydown', listener);
-        button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        button.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
         window.removeEventListener('keydown', listener);
         return seen.allowed;
       };
@@ -294,6 +309,9 @@ test.describe('Delegate keyboard-shortcut policy', () => {
         open: press(() => {}),
         // Dismissed: data-state flipped, node still mounted, still focused.
         flipped: press((layer) => layer.setAttribute('data-state', 'closed')),
+        // The same layer, the same focus, a key that did not close it: a
+        // closed overlay is what the page is showing, so the page gets it.
+        flippedOtherKey: press((layer) => layer.setAttribute('data-state', 'closed'), 'j'),
         // Removed outright by the same key — the remaining shape, where
         // there is no mounted-closed state left to catch it. Closed FIRST,
         // as Radix does before unmounting: an orphan that still carries
@@ -326,6 +344,10 @@ test.describe('Delegate keyboard-shortcut policy', () => {
 
     expect(verdicts.open, 'a button inside an open layer is owned').toBe(false);
     expect(verdicts.flipped, 'a layer that closed itself on this key is still owned').toBe(false);
+    expect(
+      verdicts.flippedOtherKey,
+      'a closed layer owns only the key that dismissed it',
+    ).toBe(true);
     expect(verdicts.removed, 'a layer that removed itself on this key is still owned').toBe(false);
     expect(verdicts.closedAndIdle, 'a closed layer holding no focus is inert').toBe(true);
   });

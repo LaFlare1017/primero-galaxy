@@ -44,8 +44,25 @@ export default defineConfig({
   },
   webServer: {
     command:
-      'NEXT_E2E_DIST_DIR=.next-e2e npm run build && NEXT_E2E_DIST_DIR=.next-e2e npm run start -- -p 3100',
+      'rm -rf .next-e2e/delegate-data && NEXT_E2E_DIST_DIR=.next-e2e npm run build && NEXT_E2E_DIST_DIR=.next-e2e npm run start -- -p 3100',
     url: 'http://localhost:3100',
+    // The suite owns its own workshop store. The delegate API reads these
+    // JSON files fresh on every request and its data dir is overridable
+    // (delegate/src/paths.ts exists for exactly this), so the server is
+    // pointed at a scratch dir under the ignored .next-e2e/ — cleared here —
+    // and a run starts with an empty room holding only the rows the run
+    // itself seeded. That is what lets the console cap what it renders (see
+    // GRID_WINDOW in app/delegate/facilitator/page.tsx) without ever hiding
+    // a spec's own row. Before this, the suite wrote into delegate/data/,
+    // the store a facilitator opens in dev: 2651 accumulated runs, most of
+    // them seeded by e2e, sitting past the grid's first page — real
+    // participants the console no longer renders, and specs looking for a
+    // row they had just created.
+    //
+    // reuseExistingServer serves the store of the server you started, not
+    // the suite's. A workshop-sized one will hide seeded rows behind the
+    // window: run the suite's own server (or alpha:reset) for a clean room.
+    env: { DELEGATE_DATA_DIR: '.next-e2e/delegate-data' },
     reuseExistingServer: !process.env.CI,
     timeout: 300_000,
   },

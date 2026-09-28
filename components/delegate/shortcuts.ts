@@ -57,6 +57,26 @@ const OVERLAY_SELECTOR = [
 ].join(', ');
 
 /**
+ * The key an overlay dismisses itself with — the ONLY key a layer that has
+ * already closed may still claim, and the reason `owningLayer` needs the key
+ * at all.
+ *
+ * A layer closes on Escape (that is what Radix's dialogs, popovers, menus
+ * and selects all install), so a layer that is mid-dismissal is only ever
+ * mid-dismissal for Escape. Every other key aimed at a closed layer belongs
+ * to the page, which is showing exactly that: a closed layer. Measured on
+ * the running console — closing the saved-views panel leaves focus on the
+ * panel's own button for a beat while it unmounts, with the layer still
+ * mounted and `data-state="closed"`; a clause that claimed every key aimed
+ * at it left the console deaf to the very next `j`, with the walk coming
+ * back the moment focus was moved by hand. Press Enter to activate a
+ * control inside a layer and the key is owned by the open OVERLAY_SELECTOR
+ * clause instead, since the layer is still open at dispatch time — only the
+ * dismissal key has to be reasoned about after the fact.
+ */
+const OVERLAY_DISMISS_KEY = "Escape";
+
+/**
  * The layer that owns this keystroke, or null.
  *
  * Two questions, because "is a layer open?" and "did this key just belong to
@@ -76,21 +96,24 @@ const OVERLAY_SELECTOR = [
  * AND the watch pane behind it, then the shortcut sheet AND the pane.
  * Measured identically on the popover, the sheet and the command palette.
  *
- * Focus is what separates the two meanings of `data-state="closed"`. A
- * genuinely closed layer is inert and holds no focus, so the key it "lost"
- * long ago cannot be aimed at it; a layer dismissing itself still holds the
- * very element the key was aimed at. So the rule is: the layer that holds
- * the focused element owns the key, and nothing else does. The one clause
- * below for a layer that has already been REMOVED outright covers the
- * remaining shape of the same problem.
+ * Focus is what separates the two meanings of `data-state="closed"` for
+ * that key. A genuinely closed layer is inert and holds no focus, so the key
+ * it "lost" long ago cannot be aimed at it; a layer dismissing itself still
+ * holds the very element the key was aimed at. So the rule is: the layer
+ * holding the focused element owns THE DISMISSAL KEY, and nothing else does
+ * — focus alone would keep a closed layer claiming every keystroke until the
+ * facilitator happened to click somewhere else, which is the deaf console
+ * described on OVERLAY_DISMISS_KEY. The other clause below covers the
+ * remaining shape of the same problem: a layer that has already been
+ * REMOVED outright, torn off the page by that key.
  */
-function owningLayer(target: HTMLElement): Element | null {
+function owningLayer(target: HTMLElement, key: string): Element | null {
   if (target.closest(OVERLAY_SELECTOR) !== null) return target;
   const layer = target.closest(LAYER_SELECTOR);
   if (layer === null) return null;
   const focused = target.ownerDocument.activeElement;
   // Closing: closed by its own key, still focused, still mounted.
-  if (focused !== null && layer.contains(focused)) return layer;
+  if (key === OVERLAY_DISMISS_KEY && focused !== null && layer.contains(focused)) return layer;
   // Removed outright by that key (no exit animation, so no mounted-closed
   // state to catch it): the target has been torn off the page, and a key
   // aimed at something that has just been removed belongs to whatever
@@ -110,8 +133,11 @@ function owningLayer(target: HTMLElement): Element | null {
  * still open, and the rule has to be right before the panel grows a field
  * that swallows letters.
  *
- * Key-agnostic on purpose: it answers "who owns this keystroke?", not
- * "which key is it?". The key match belongs to the caller's binding.
+ * Key-agnostic for everything the PAGE controls: it answers "who owns this
+ * keystroke?", not "which key is it?", and the key match belongs to the
+ * caller's binding. The one key that has to be named is the overlay's own
+ * dismissal key, which is the only one a layer that has already closed may
+ * still claim (OVERLAY_DISMISS_KEY).
  *
  * ONE TIMING FACT, measured on the running app and worth stating plainly,
  * because it decides how a binding for a key an overlay also handles has
@@ -125,12 +151,12 @@ function owningLayer(target: HTMLElement): Element | null {
  * e2e/facilitator-run-link.spec.ts and the predicate's own cases are in
  * e2e/delegate-shortcuts.spec.ts.
  */
-export function ownsArrowKeys(target: EventTarget | null): boolean {
+export function ownsArrowKeys(target: EventTarget | null, key: string): boolean {
   if (!(target instanceof HTMLElement)) return false;
   if (target.isContentEditable) return true;
   const tag = target.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
-  return owningLayer(target) !== null;
+  return owningLayer(target, key) !== null;
 }
 
 /**
@@ -148,5 +174,5 @@ export function ownsArrowKeys(target: EventTarget | null): boolean {
  */
 export function shortcutAllowed(event: KeyboardEvent): boolean {
   if (event.metaKey || event.ctrlKey || event.altKey) return false;
-  return !ownsArrowKeys(event.target);
+  return !ownsArrowKeys(event.target, event.key);
 }

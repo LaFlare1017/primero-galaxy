@@ -155,6 +155,31 @@ const sortKeyParser = parseAsStringEnum<SortKey>(SORT_KEY_VALUES).withDefault("p
 const sortDirParser = parseAsStringLiteral(["asc", "desc"] as const).withDefault("asc");
 
 /**
+ * How much of the room the grid renders at once.
+ *
+ * The grid mounts a row per session, re-renders every one of them on each
+ * 4s poll, and an accessibility scan walks every element again — so the DOM
+ * is the console's cost, and it grows with the store rather than with the
+ * room. A workshop room is tens of participants, so this is roughly ten
+ * times the largest real one: the ceiling guards against a store that has
+ * accumulated every run a suite or a demo ever started, not against a room
+ * a facilitator is pacing.
+ *
+ * It bounds the DOM without bounding the room. The window is one page,
+ * aligned to the row the cursor is on, and it follows that row: the walk
+ * still sweeps every participant (j and k step, Home/End and g then i or n
+ * jump, and the window moves underneath them), a shared ?watch= link always
+ * has its row rendered, and the counts above the grid still count the room
+ * rather than the page. Page-aligned rather than centred so the window
+ * changes when the cursor crosses a page boundary and not on every step —
+ * a step inside the page redraws the ring, not the room.
+ */
+const GRID_WINDOW = 200;
+
+/** Id of the note that names the page, wired as the grid's own description. */
+const GRID_WINDOW_NOTE_ID = "grid-window-note";
+
+/**
  * Name of an imported shared view. Carries no state of its own — the view's
  * state rides the normal ?status=/?sort=/?dir= params — it only names the
  * snapshot for the receiver ("Opened shared view 'Working watch'") and is
@@ -975,6 +1000,24 @@ function FacilitatorGrid() {
     [cursorTarget, visibleRows],
   );
   /**
+   * The page of the room the grid renders (GRID_WINDOW). The anchor is the
+   * row the cursor is on — the same row Enter, `g w` and the pane's arrows
+   * act on — so the participant the facilitator is working with is always
+   * rendered, however far down a long room they sit. That is the whole of
+   * the reconciliation: the ceiling can hide a row from the eye, never from
+   * the walk, and never the one being watched.
+   *
+   * A room that fits is rendered whole, so the ceiling says nothing until
+   * it has something to hide. `cursorIndex` falls back to the top page both
+   * on a cold console (no cursor yet) and when the cursor is on the first
+   * page — two different reasons for the same page, which is why it is one
+   * expression and not two branches.
+   */
+  const cursorIndex = cursorTarget === null ? -1 : visibleRows.findIndex((r) => r.runId === cursorTarget);
+  const windowStart = cursorIndex > 0 ? Math.floor(cursorIndex / GRID_WINDOW) * GRID_WINDOW : 0;
+  const windowed = visibleRows.length > GRID_WINDOW;
+  const renderedRows = windowed ? visibleRows.slice(windowStart, windowStart + GRID_WINDOW) : visibleRows;
+  /**
    * Enter / w / g w: open the watch pane on the row the walk stopped on.
    * Silent unless the target is something other than what is already
    * watched — there is nothing to open, which is the `commit` gate — and it
@@ -1410,8 +1453,28 @@ function FacilitatorGrid() {
             </span>
           </div>
 
+          {/* The grid renders a page of the room, so it says so. A
+              facilitator who cannot find someone on screen has to know
+              whether that participant is absent or merely unpaged, and the
+              note is part of the grid (its description) rather than a note
+              floating above it. Silent while the room fits, because there
+              is nothing to explain, and the range is the page's rather than
+              the room's when the window has moved. */}
+          {windowed && (
+            <p id={GRID_WINDOW_NOTE_ID} className="mt-3 mb-1 text-xs text-gray-500">
+              {windowStart === 0
+                ? `Showing the first ${GRID_WINDOW} of ${visibleRows.length} participants`
+                : `Showing participants ${windowStart + 1}–${windowStart + renderedRows.length} of ${visibleRows.length} participants`}
+              {". j and k walk the whole room."}
+            </p>
+          )}
           <Table
             aria-label="Participants"
+            // The page note is part of what the grid is showing, so it is
+            // the grid's description — the same wiring the pane's hidden-row
+            // note uses. Absent when the room fits, so the attribute never
+            // points at a note that is not there.
+            aria-describedby={windowed ? GRID_WINDOW_NOTE_ID : undefined}
             // Written from the rows that bind them, so the grid cannot
             // advertise a key the page has stopped listening for (and
             // omits the attribute entirely on an empty room, where it would
@@ -1432,9 +1495,12 @@ function FacilitatorGrid() {
                 </TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>                {visibleRows.map((r, i) => (
+            <TableBody>                {renderedRows.map((r, i) => (
                 <TableRow
-                  key={i}
+                  // Keyed by run rather than by index: moving the page must
+                  // reconcile the rows that changed instead of remounting a
+                  // whole page of identical ones.
+                  key={r.runId ?? i}
                   aria-current={r.runId === cursorRunId ? "true" : undefined}
                   className={cn(
                     "border-gray-100 hover:bg-gray-50",
