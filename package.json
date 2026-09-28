@@ -9,6 +9,7 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
+    "doctor": "node scripts/doctor.mjs",
     "hooks:install": "node scripts/hooks-install.mjs",
     "reset:delegate": "npm --prefix delegate run build --silent && node delegate/dist/alpha/reset-cohort.js"
   },

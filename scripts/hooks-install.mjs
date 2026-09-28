@@ -14,6 +14,11 @@
  * run sits in the directory it is about to shadow, names the files, and takes
  * `--force` for the case where shadowing is understood and intended.
  *
+ * The config write itself goes through `claimConfig` (scripts/local-config.mjs),
+ * so a `core.hooksPath` that already holds somebody else's value — possibly one
+ * from the global config, where it governs every repository on the machine — is
+ * reported rather than replaced.
+ *
  * The refusal is narrow on purpose. A `*.sample` file is `git init`'s template
  * rather than anybody's hook, and a stray file whose name is not a hook at all
  * is nothing to warn about — a check that cries wolf gets turned off, which is
@@ -30,10 +35,11 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { claimConfig, proveItCanClaim } from './local-config.mjs';
+import { isMain } from './is-main.mjs';
 
 /** The tracked directory this installs, as written into the repo's config. */
-const HOOKS_PATH = '.githooks';
+export const HOOKS_PATH = '.githooks';
 
 /** Every name `git hook run` will accept — anything else is not a hook. */
 const HOOK_NAMES = new Set([
@@ -99,6 +105,84 @@ export function shadowed(dir) {
     .sort();
 }
 
+/** The one mode that says git will run a file as a hook. */
+const EXECUTABLE_MODE = '100755';
+
+/**
+ * Whether this filesystem records an executable bit at all. `core.fileMode` is
+ * false on Windows, where a hook's bit is neither stored nor consulted, so a
+ * missing one there is not a fault on this machine — though the *recorded* mode
+ * still is, because it is what every other machine checks out.
+ */
+function bitMatters(root) {
+  // `--default` rather than a tolerant `--get`: an unset key means the
+  // platform's own answer, which is the same answer the caller wants.
+  return git(['config', '--default', 'true', '--get', 'core.fileMode'], { cwd: root }).trim() !== 'false';
+}
+
+/** `ls-files`/`ls-tree` lead with the mode, or print nothing for an absent path. */
+function recordedMode(output) {
+  const first = output.trim().split(/\s+/)[0] ?? '';
+  return /^\d{6}$/.test(first) ? first : null;
+}
+
+/**
+ * Every reason git would not run a tracked hook, each with the command that
+ * fixes it. Only one of the three is visible on the machine doing the looking:
+ *
+ *   the index      what the next commit would carry
+ *   HEAD           what a fresh clone checks out
+ *   the bit here   what git consults in this working tree
+ *
+ * The first two are the ones that travel, and they are the reason this exists at
+ * all: the executable bit is not what git stores, so a hook can be executable
+ * on the machine that made it and dead in every clone. And git's failure is
+ * quiet — a hint on stderr, then the commit proceeds — so a hook that stopped
+ * running looks exactly like a hook that has nothing to say.
+ *
+ * `head: false` drops the middle question, for the one caller that asks these
+ * while a commit is being made (`scripts/doctor.mjs --fast`). There HEAD is the
+ * *previous* commit, and the way to fix a mode it recorded wrong is to make
+ * this commit — so asking it would refuse the commit that repairs it, on behalf
+ * of a checkout that commit is about to leave behind.
+ */
+export function hookProblems(root, path, { head: askHead = true } = {}) {
+  const problems = [];
+  const index = recordedMode(git(['ls-files', '-s', '--', path], { cwd: root }));
+
+  let head = null;
+  if (askHead) {
+    try {
+      head = recordedMode(git(['ls-tree', 'HEAD', '--', path], { cwd: root }));
+    } catch {
+      // An unborn HEAD has no recorded mode to be wrong about.
+      head = null;
+    }
+  }
+
+  if (index === null) {
+    problems.push({ detail: `${path} is not tracked, so a clone gets no hook at all`, fix: `git add ${path}` });
+  } else if (index !== EXECUTABLE_MODE) {
+    problems.push({
+      detail: `${path} is recorded in the index as ${index}, so the next commit would ship a hook git skips`,
+      fix: `git update-index --chmod=+x ${path}`,
+    });
+  }
+  if (head !== null && head !== EXECUTABLE_MODE) {
+    problems.push({
+      detail: `${path} is recorded in HEAD as ${head}, so a clone checks out a hook git ignores`,
+      fix: `git update-index --chmod=+x ${path}   # then commit the mode change`,
+    });
+  }
+  if (existsSync(join(root, path)) && bitMatters(root) && (statSync(join(root, path)).mode & 0o111) === 0) {
+    problems.push({
+      detail: `${path} is not executable on this machine, and git skips a hook without the bit`,
+      fix: `chmod +x ${path}`,
+    });
+  }
+  return problems;
+}
+
 /** Paths read best against the repository, unless they are outside it. */
 function show(path, root) {
   const rel = relative(root, path);
@@ -152,6 +236,27 @@ export function install({ force = false, root = null } = {}) {
     throw new Error(`${show(join(wanted, 'pre-commit'), top)} does not exist — there is nothing to install`);
   }
   proveItCanSee();
+  // And the helper that claims the config key has to be able to *see* a value
+  // already there, or it would report every key as unset and replace it.
+  proveItCanClaim();
+
+  // A hook that cannot run is not a hook, and this is the one moment its owner
+  // is looking: installing would otherwise print a success that nothing will
+  // ever act on. It is asked before the already-installed case too, because
+  // "already installed" is exactly as misleading once the hook has gone dark.
+  const dead = hookProblems(top, `${HOOKS_PATH}/pre-commit`);
+  if (dead.length > 0 && !force) {
+    console.error(`✗ Refusing to install: ${HOOKS_PATH}/pre-commit would not run.\n`);
+    for (const problem of dead) {
+      console.error(`    ${problem.detail}`);
+      console.error(`      ${problem.fix}\n`);
+    }
+    console.error(
+      'Install it once the hook can run — a hooks directory git consults and skips is a\n' +
+        'success message with nothing behind it.',
+    );
+    return 1;
+  }
 
   const active = activeHooksDir(top);
   if (resolve(active) === resolve(wanted)) {
@@ -179,19 +284,31 @@ export function install({ force = false, root = null } = {}) {
     return 1;
   }
 
-  git(['config', 'core.hooksPath', HOOKS_PATH], { cwd: top });
+  // The write is the one that replaces rather than adds: a `core.hooksPath`
+  // that already holds a value — the user's, another tool's, possibly the
+  // global one that governs every repository on the machine — is theirs, and
+  // claiming it is a decision `--force` has to make explicitly.
+  const claim = claimConfig(top, 'core.hooksPath', HOOKS_PATH, { force, override: 'npm run hooks:install -- --force' });
+  if (claim.status === 'refused') {
+    console.error('✗ Refusing to install:\n');
+    for (const line of claim.lines) console.error(`  ${line}`);
+    console.error('\nNothing was changed. core.hooksPath belongs to whoever set it.');
+    return 1;
+  }
+
   const names = installedHooks(top);
   if (inTheWay.length > 0) {
     console.log(`⚠ Forcing past ${inTheWay.length} hook${inTheWay.length === 1 ? '' : 's'} in ${show(active, top)}.`);
   }
+  for (const problem of dead) console.log(`⚠ Forcing past a hook git would not run: ${problem.detail}`);
   console.log(`✓ core.hooksPath = ${HOOKS_PATH}/ — this clone runs ${names.join(', ') || 'no hooks'} before a commit.`);
-  console.log('  Undo with: git config --unset core.hooksPath');
+  for (const line of claim.lines) console.log(line);
   return 0;
 }
 
 // Only when run as the script: importing this module to exercise `shadowed`
 // should not install anything into whatever repository the caller is in.
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMain(import.meta.url)) {
   const args = process.argv.slice(2);
   const unknown = args.filter((arg) => arg !== '--force');
   try {

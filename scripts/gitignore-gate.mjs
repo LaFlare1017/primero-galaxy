@@ -19,17 +19,39 @@
  * nothing looks exactly like a scan that never ran: an empty tracked-file list,
  * and a fixture that plants a tracked, ignored file and must catch it.
  *
- * Usage:
- *   node scripts/gitignore-gate.mjs
+ * `--fix` narrows the rule: a `!` negation for the tracked path, appended to the
+ * file that holds the rule, and — where the rule excludes a whole directory — the
+ * rule globbed to `dir/*` first, because git never looks inside an excluded
+ * directory, so `/dir/` plus `!/dir/keep` re-includes nothing at all.
  *
- * Exit codes: 0 clean · 1 a tracked path is covered by a rule · 2 the scan
- * itself could not run.
+ * Which shape a rule needs is not reasoned about, it is TRIED. Every candidate is
+ * applied to a scratch repository holding the committed rules and the tracked
+ * path, and only a candidate the gate then reports clean is written. The scratch
+ * copy runs the rules as they are first, and refuses the whole thing if that does
+ * not reproduce the complaint — a fixture that already passed would accept a fix
+ * that does nothing. Then, in the order the reader needs: the diff, the write, and
+ * a read-back of BOTH gates, because the two argue about this one file. Anything
+ * the read-back rejects is undone, so `--fix` ends with the file repaired and
+ * proven or with the file untouched — a half-repair, some rules narrowed and the
+ * gate still failing, is worse than no repair at all. Both halves are themselves
+ * proved on every run by the fixture below, and the other gate is read back only
+ * when its script is in this checkout: a checkout without it is told so, rather
+ * than told a gate passed.
+ *
+ * Usage:
+ *   node scripts/gitignore-gate.mjs [--fix]
+ *
+ * Exit codes: 0 clean, or every covered path was rescued and read back · 1 a
+ * tracked path is covered by a rule, or no shape this gate knows rescues it · 2
+ * the scan itself could not run.
  */
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { dirname, join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { appended, showDiff } from './ignore-file.mjs';
+import { isMain } from './is-main.mjs';
 
 /**
  * Runs git and returns stdout. `allowOne` accepts exit status 1, which is what
@@ -99,7 +121,7 @@ export function scan(root) {
  * result is not checking anything — the same reason the keyboard harness keeps
  * a list of manifests that must be rejected.
  */
-function proveItCanFail() {
+export function proveItCanFail() {
   const dir = mkdtempSync(join(tmpdir(), 'gitignore-gate-'));
   try {
     git(['init', '-q'], { cwd: dir });
@@ -116,31 +138,362 @@ function proveItCanFail() {
   }
 }
 
-function gate() {
-  const root = git(['rev-parse', '--show-toplevel']).trim();
-  proveItCanFail();
+/** The note the negations carry, so the reader knows who wrote them and why. */
+const FIX_NOTE = [
+  '# re-inclusions for tracked paths a rule above was covering, written by',
+  '# `scripts/gitignore-gate.mjs --fix`. A negation is the repair that leaves the rule',
+  '# doing its job, and a rule excluding a whole directory is globbed to `dir/*` first,',
+  '# since git never looks inside an excluded directory: `/dir/` plus `!/dir/keep`',
+  '# re-includes nothing at all. `scripts/untracked-gate.mjs` is read back after this',
+  '# write, because narrowing a rule here must not expose an artifact it was ignoring.',
+];
 
-  const { tracked, hits } = scan(root);
-  if (hits.length > 0) {
-    for (const hit of hits) {
-      console.error(`✗ ${hit.path}  (covered by ${hit.source}:${hit.line}  "${hit.pattern}")`);
+/**
+ * Every `.gitignore` this repo commits, with the bytes the working tree has.
+ *
+ * `path` is absolute, for reading and writing; `name` is the repo-relative one,
+ * which is the only form `scan` ever reports (`check-ignore` prints a source
+ * relative to the directory it ran in) and the form this module reasons in —
+ * keying a candidate by one and looking it up by the other is how a plan ends up
+ * with no files in it and a fix that quietly writes nothing.
+ */
+function ignoreFiles(root) {
+  return git(['ls-files', '-z'], { cwd: root })
+    .split('\0')
+    .filter((path) => path === '.gitignore' || path.endsWith('/.gitignore'))
+    .map((name) => ({ name, path: join(root, name), contents: readFileSync(join(root, name), 'utf8') }));
+}
+
+/**
+ * Puts a candidate into a scratch repository and asks the gate which paths it
+ * still covers. This is the whole mechanism, not a nicety: git's re-inclusion
+ * rules have edges nobody predicts — a negation under an excluded directory is
+ * not reached, and which of two shapes reaches is a question only git answers.
+ */
+function stillCovered(files, paths) {
+  const dir = mkdtempSync(join(tmpdir(), 'gitignore-gate-try-'));
+  try {
+    git(['init', '-q'], { cwd: dir });
+    for (const file of files) {
+      const at = join(dir, file.name);
+      mkdirSync(dirname(at), { recursive: true });
+      writeFileSync(at, file.contents);
     }
-    console.error(
-      `\nGitignore gate failed: ${hits.length} tracked ${hits.length === 1 ? 'path is' : 'paths are'} covered by a committed .gitignore rule.\n` +
-        'Either stop tracking the path, or narrow the rule — a `!` negation for the path that belongs in the repo.',
-    );
-    process.exit(1);
+    for (const path of paths) {
+      mkdirSync(dirname(join(dir, path)), { recursive: true });
+      writeFileSync(join(dir, path), 'tracked\n');
+    }
+    // `-f`: these are exactly the paths the rules cover, and git would otherwise
+    // refuse to stage them — which is also the order the real thing happens in.
+    git(['add', '-f', '--', ...files.map((file) => file.name), ...paths], { cwd: dir });
+    return new Set(scan(dir).hits.map((hit) => hit.path));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+/** The negation, anchored from the file that holds the rule, the way this repo writes. */
+function rescued(source, path, directory = false) {
+  return `/${relative(dirname(source), path)}${directory ? '/' : ''}`;
+}
+
+/**
+ * Whether this shape globs the rule itself, rather than only appending a
+ * negation. Only a rule that ends in a slash excludes the directory itself, and
+ * that is the exclusion a negation cannot reach past — so a rule naming a file,
+ * or a pattern without the slash, is left exactly as the reader wrote it.
+ */
+function narrows(pattern, shape) {
+  return shape !== 'append' && pattern.endsWith('/');
+}
+
+/**
+ * The ignore files as they would be with every covered path rescued its way.
+ * `proved` is what earlier attempts have already been shown to clear; the rest
+ * take `fallback`, and the caller only keeps a plan the gate then reports clean.
+ */
+function planned(files, hits, proved, fallback) {
+  const byFile = new Map();
+  for (const hit of hits) byFile.set(hit.source, [...(byFile.get(hit.source) ?? []), hit]);
+
+  return files.map((file) => {
+    const forFile = byFile.get(file.name);
+    if (forFile === undefined) return file;
+
+    const lines = file.contents.split('\n');
+    const block = [];
+    for (const hit of forFile) {
+      const shape = proved.get(hit.path) ?? fallback;
+      if (narrows(hit.pattern, shape)) {
+        const current = lines[hit.line - 1];
+        if (current === undefined || current.trim() !== hit.pattern) {
+          throw new Error(
+            `${file.name}:${hit.line} does not read "${hit.pattern}" — refusing to rewrite a line this gate did not read`,
+          );
+        }
+        // `dir/` excludes the directory itself, which is what puts everything
+        // under it out of reach; `dir/*` excludes the contents and leaves the
+        // directory visitable, which is the only form a negation can reach into.
+        lines[hit.line - 1] = `${hit.pattern.replace(/\/$/, '')}/*`;
+      }
+      // The nearest directory, for a path that sits deeper than the rule does:
+      // re-including one file there would not be reached either.
+      block.push(`!${shape === 'parent' ? rescued(file.name, dirname(hit.path), true) : rescued(file.name, hit.path)}`);
+    }
+
+    const note = file.contents.includes(FIX_NOTE[0]) ? [] : FIX_NOTE;
+    return { name: file.name, path: file.path, contents: appended(lines.join('\n'), [...note, ...block]) };
+  });
+}
+
+/** The other gate, run the way a person runs it: its exit code is the answer. */
+function otherGate(root) {
+  const script = join(root, 'scripts', 'untracked-gate.mjs');
+  if (!existsSync(script)) return { status: null, detail: 'scripts/untracked-gate.mjs is not in this checkout' };
+  const result = spawnSync(process.execPath, [script], { cwd: root, encoding: 'utf8' });
+  if (result.error) return { status: null, detail: `could not run it: ${result.error.message}` };
+  const output = `${result.stdout ?? ''}${result.stderr ?? ''}`.trim();
+  // A gate that exits 0 in silence is a gate that did not run — the shape this
+  // guard exists to catch, and the reason it is not read as a pass.
+  if (result.status === 0 && output === '') {
+    return { status: null, detail: 'it exited 0 without printing anything, which is what never having run looks like' };
+  }
+  const first = output.split('\n').find((line) => line.trim() !== '');
+  return { status: result.status, detail: first?.trim() ?? `exit ${result.status}` };
+}
+
+/**
+ * Rescues every covered path, or writes nothing and says why. Returns the exit
+ * code: 0 only when both gates have been read back clean. `log`/`warn` exist so
+ * the fixture below can run the whole thing — the plan, the write, the read-back
+ * and the undo — without printing over the run it is part of.
+ */
+function fix(root, hits, { log = console.log, warn = console.error } = {}) {
+  const files = ignoreFiles(root);
+  const original = new Map(files.map((file) => [file.path, file.contents]));
+  const paths = hits.map((hit) => hit.path);
+
+  // The control comes first. A scratch repository that already reported nothing
+  // would accept every candidate — including the one that writes nothing.
+  const reproduced = stillCovered(files, paths);
+  const missed = paths.filter((path) => !reproduced.has(path));
+  if (missed.length > 0) {
+    warn(`✗ the scratch repository did not reproduce the complaint for ${missed.join(', ')}, so nothing it says about a candidate could be trusted`);
+    return 2;
   }
 
-  console.log(`✓ ${tracked} tracked files, none covered by a committed .gitignore rule`);
-  console.log('Gitignore gate passed.');
+  const proved = new Map();
+  let plan = null;
+  for (const attempt of ['append', 'glob', 'parent']) {
+    plan = planned(files, hits, proved, attempt);
+    const left = stillCovered(plan, paths);
+    // First shape that worked, and only that one: recording a later attempt over
+    // an earlier answer would leave this map describing something the accepted
+    // plan does not do, and the report is read as a description of the write.
+    for (const hit of hits) if (!left.has(hit.path) && !proved.has(hit.path)) proved.set(hit.path, attempt);
+    if (paths.every((path) => !left.has(path))) break;
+    plan = null;
+  }
+  if (plan === null) {
+    warn(`✗ no shape this gate knows rescues ${paths.join(', ')}`);
+    warn(
+      `  (under ${hits.map((hit) => `${hit.source}:${hit.line} "${hit.pattern}"`).join(', ')})\n\n` +
+        'Narrowing the rule itself is the fix here — `git check-ignore -v <path>` names the one that is winning.',
+    );
+    return 1;
+  }
+
+  const changed = plan.filter((file) => file.contents !== original.get(file.path));
+  log('');
+  for (const hit of hits) {
+    const shape = proved.get(hit.path);
+    const rewrite = narrows(hit.pattern, shape) ? `narrow "${hit.pattern}" to "${hit.pattern.replace(/\/$/, '')}/*", then ` : '';
+    const negation = shape === 'parent' ? rescued(hit.source, dirname(hit.path), true) : rescued(hit.source, hit.path);
+    log(`  ${hit.path}  was covered by  ${hit.source}:${hit.line}  "${hit.pattern}"`);
+    log(`    → ${rewrite}append  !${negation}`);
+  }
+  log(`\n${changed.length} ignore ${changed.length === 1 ? 'file' : 'files'} would change:`);
+  for (const file of changed) {
+    const name = relative(root, file.path);
+    log(`\n${name}`);
+    log(showDiff(file.path, file.contents, name));
+  }
+
+  for (const file of changed) writeFileSync(file.path, file.contents);
+
+  // Read both gates back. Narrowing a rule changes what git ignores, which is the
+  // one thing the other gate exists to have an opinion about.
+  const left = scan(root);
+  const other = otherGate(root);
+  // A missing or unstartable sibling gate is not a failure of the write — there
+  // is simply nothing there to read back — so it is reported, not refused.
+  const refused = left.hits.length > 0
+    ? `the write left ${left.hits.length} tracked ${left.hits.length === 1 ? 'path' : 'paths'} covered: ${left.hits.map((hit) => `${hit.path} (${hit.source}:${hit.line} "${hit.pattern}")`).join(', ')}`
+    : other.status === 0 || other.status === null
+      ? null
+      : `scripts/untracked-gate.mjs no longer passes: ${other.detail}`;
+
+  if (refused !== null) {
+    for (const file of changed) writeFileSync(file.path, original.get(file.path));
+    for (const file of changed) {
+      if (readFileSync(file.path, 'utf8') !== original.get(file.path)) {
+        throw new Error(`${relative(root, file.path)} was not restored to the bytes it started with — check it before committing`);
+      }
+    }
+    warn(`✗ ${refused}`);
+    warn(`\nNothing was kept: ${changed.map((file) => relative(root, file.path)).join(', ')} is back to the bytes it started with.`);
+    return 1;
+  }
+
+  log(`\n✓ wrote ${changed.map((file) => relative(root, file.path)).join(', ')}`);
+  log(`✓ ${left.tracked} tracked files, none covered by a committed rule`);
+  if (other.status === null) log(`▸ scripts/untracked-gate.mjs was not read back: ${other.detail}`);
+  else log('✓ scripts/untracked-gate.mjs still passes');
+  return 0;
+}
+
+/**
+ * The gate's other fixture, for the half that writes.
+ *
+ * Both shapes a real repair takes are planted here, because the one this repo
+ * actually needed is the one that is easy to get wrong: a file rule rescued by a
+ * bare negation, and a rule excluding a whole directory, which a negation alone
+ * cannot rescue — git never looks inside an excluded directory, so `dir/` has to
+ * be globbed to `dir/*` first, and only then does `!/dir/keep.md` reach.
+ *
+ * Then the repair that must be refused: a tracked path deep enough that the
+ * negation git needs is its parent directory, in a parent that also holds an
+ * artifact the untracked gate has an opinion about. That write has to be undone
+ * byte for byte, because a `--fix` that leaves a half-repair behind is worse
+ * than one that does nothing.
+ */
+export function proveItCanFix() {
+  const quiet = { log: () => {}, warn: () => {} };
+  const commit = (cwd, message) =>
+    git(['-c', 'user.name=fixture', '-c', 'user.email=fixture@example.com', 'commit', '-q', '-m', message], { cwd });
+  const plant = (dir) => {
+    git(['init', '-q'], { cwd: dir });
+    writeFileSync(join(dir, '.gitignore'), '# fixture\n');
+    // The other gate reads this one's writes back, so the fixture has to have it
+    // — and every script rather than the ones this fixture happens to know it
+    // imports, because the gate it spawns imports its own way in and a hand-kept
+    // list of those imports is a list that goes stale without saying so.
+    const here = dirname(fileURLToPath(import.meta.url));
+    mkdirSync(join(dir, 'scripts'), { recursive: true });
+    for (const entry of readdirSync(here, { withFileTypes: true })) {
+      if (entry.isFile() && entry.name.endsWith('.mjs')) {
+        copyFileSync(join(here, entry.name), join(dir, 'scripts', entry.name));
+      }
+    }
+  };
+
+  const dir = mkdtempSync(join(tmpdir(), 'gitignore-gate-fix-'));
+  try {
+    plant(dir);
+    writeFileSync(join(dir, 'notes.txt'), 'notes\n');
+    mkdirSync(join(dir, 'logs'), { recursive: true });
+    writeFileSync(join(dir, 'logs', 'keep.md'), 'keep\n');
+    // Tracked while it was still trackable: `git add` refuses a path its own
+    // .gitignore already covers, which is also the order this really happens in.
+    git(['add', '--', '.gitignore', 'notes.txt', 'logs/keep.md'], { cwd: dir });
+    commit(dir, 'base');
+    writeFileSync(join(dir, '.gitignore'), '# fixture\nnotes.txt\n/logs/\n');
+    git(['add', '--', '.gitignore'], { cwd: dir });
+    commit(dir, 'rules');
+
+    const { hits } = scan(dir);
+    if (hits.length !== 2) {
+      throw new Error(`the fix fixture planted two covered paths and the scan reported ${hits.length}`);
+    }
+    // The report is read as a description of the write, so the fixture reads it.
+    const said = [];
+    if (fix(dir, hits, { log: (line) => said.push(line), warn: (line) => said.push(line) }) !== 0) {
+      throw new Error('the fix fixture held two covered paths and --fix did not rescue them');
+    }
+    const after = scan(dir);
+    if (after.hits.length > 0) {
+      throw new Error(`the fix left ${after.hits.map((hit) => hit.path).join(', ')} covered`);
+    }
+    const written = readFileSync(join(dir, '.gitignore'), 'utf8');
+    if (!written.includes('!/notes.txt')) throw new Error('a plain file rule was not rescued by a negation');
+    if (written.includes('notes.txt/*')) throw new Error('a rule naming a file was globbed');
+    if (!written.includes('/logs/*')) throw new Error('a rule excluding a directory was not globbed before its negation');
+    if (!said.some((line) => line.includes('narrow "/logs/" to "/logs/*"'))) {
+      throw new Error(`the report did not name the narrowing it wrote:\n${said.join('\n')}`);
+    }
+    if (said.some((line) => line.includes('narrow "notes.txt"'))) {
+      throw new Error(`the report named a narrowing it did not write:\n${said.join('\n')}`);
+    }
+    const notes = written.split('\n').filter((line) => line.trim() === FIX_NOTE[0]).length;
+    if (notes !== 1) throw new Error(`the fix wrote its note ${notes} times`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+
+  const undo = mkdtempSync(join(tmpdir(), 'gitignore-gate-undo-'));
+  try {
+    plant(undo);
+    mkdirSync(join(undo, 'logs', 'keep'), { recursive: true });
+    writeFileSync(join(undo, 'logs', 'keep', 'file.md'), 'keep\n');
+    git(['add', '--', '.gitignore', 'logs/keep/file.md'], { cwd: undo });
+    commit(undo, 'base');
+    writeFileSync(join(undo, '.gitignore'), '# fixture\n/logs/\n');
+    git(['add', '--', '.gitignore'], { cwd: undo });
+    commit(undo, 'rules');
+    // The artifact the other gate has an opinion about, sitting in the very
+    // directory the only workable negation has to re-include.
+    mkdirSync(join(undo, 'logs', 'keep', 'dist'), { recursive: true });
+    writeFileSync(join(undo, 'logs', 'keep', 'dist', 'bundle.js'), 'built\n');
+
+    const before = readFileSync(join(undo, '.gitignore'), 'utf8');
+    const { hits } = scan(undo);
+    if (hits.length !== 1 || hits[0].pattern !== '/logs/') {
+      throw new Error(`the undo fixture planted one covered path under /logs/ and the scan reported ${JSON.stringify(hits)}`);
+    }
+    if (fix(undo, hits, quiet) !== 1) throw new Error('the fix kept a repair that exposes an untracked artifact');
+    if (readFileSync(join(undo, '.gitignore'), 'utf8') !== before) {
+      throw new Error('the refused repair was not rolled back to the bytes it started with');
+    }
+  } finally {
+    rmSync(undo, { recursive: true, force: true });
+  }
+}
+
+function gate({ repair = false } = {}) {
+  const root = git(['rev-parse', '--show-toplevel']).trim();
+  proveItCanFail();
+  proveItCanFix();
+
+  const { tracked, hits } = scan(root);
+  if (hits.length === 0) {
+    console.log(`✓ ${tracked} tracked files, none covered by a committed .gitignore rule`);
+    console.log('Gitignore gate passed.');
+    return 0;
+  }
+
+  for (const hit of hits) {
+    console.error(`✗ ${hit.path}  (covered by ${hit.source}:${hit.line}  "${hit.pattern}")`);
+  }
+  if (repair) return fix(root, hits);
+
+  console.error(
+    `\nGitignore gate failed: ${hits.length} tracked ${hits.length === 1 ? 'path is' : 'paths are'} covered by a committed .gitignore rule.\n` +
+      'Either stop tracking the path, or narrow the rule — a `!` negation for the path that belongs in the repo.\n' +
+      '`node scripts/gitignore-gate.mjs --fix` writes one, showing the diff first and reading both gates back.',
+  );
+  return 1;
 }
 
 // Only when run as the script: importing this module to exercise `scan` should
 // not run a gate over whatever repository the caller happens to be in.
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMain(import.meta.url)) {
+  const args = process.argv.slice(2);
+  const unknown = args.filter((arg) => arg !== '--fix');
   try {
-    gate();
+    if (unknown.length > 0) {
+      throw new Error(`unrecognised argument${unknown.length === 1 ? '' : 's'}: ${unknown.join(' ')} (usage: gitignore-gate.mjs [--fix])`);
+    }
+    process.exit(gate({ repair: args.includes('--fix') }));
   } catch (error) {
     console.error(`✗ ${error.message}`);
     console.error('\nGitignore gate could not run — that is a failure, not a pass.');

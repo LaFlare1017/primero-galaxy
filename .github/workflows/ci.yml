@@ -25,10 +25,22 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
-      # A tracked path that a rule also covers is invisible to `git status` and
-      # to the rule's reader alike; nothing else in this job would notice.
-      - name: Check that no tracked file is gitignored
-        run: node scripts/gitignore-gate.mjs
+      # One entry point for the repo's own checks: the same script a commit runs
+      # (`.githooks/pre-commit` calls it with `--fast`) and a developer runs by
+      # hand. A tracked path that a rule also covers is invisible to `git status`
+      # and to the rule's reader alike, so the gitignore gate and the hook check
+      # reach CI through the modules that own them rather than through steps of
+      # their own. The hook check runs the tracked hook the way a commit does —
+      # twice, the second time against a rule planted in the working .gitignore
+      # that it has to refuse — because a hook that was emptied in a refactor, or
+      # that quietly lost its executable bit, passes a plain run by doing nothing
+      # at all.
+      # `--strict` because the states the local run calls warnings — an
+      # uninstalled hook, a missing .env.local, an unbuilt workspace — are not
+      # choices on a fresh checkout, and the checks that would report them as
+      # such stand down instead.
+      - name: Repo checks
+        run: node scripts/doctor.mjs --strict
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run build

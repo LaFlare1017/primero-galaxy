@@ -58,3 +58,20 @@ delegate/docs/readout-*.md
 # facilitator can time the walk, and which says to delete itself once the real
 # session has run
 delegate/docs/alpha-debrief-REHEARSAL.md
+
+# untracked artifacts that are installed, rendered or checked out rather than
+# written here. Anchored, so a nested workspace of the same name stays trackable
+# elsewhere; a family with a tracked survivor inside it is globbed (`dir/*`) with
+# a negation for that survivor, because a negation inside an ignored directory is
+# never reached. Written by `scripts/untracked-gate.mjs --fix`, and read back by
+# `scripts/gitignore-gate.mjs`, which fails if a line here covers a tracked path.
+# The survivor here is the `libraries-dev` pack and the symlink to it — which is
+# why the symlink's negation has no trailing slash, since git reads one as
+# "directory only" and would go on skipping a symlink. `/circle-master/` holds
+# nothing tracked.
+/.agents/skills/*
+!/.agents/skills/libraries-dev/
+/.claude/skills/*
+!/.claude/skills/libraries-dev
+/circle-master/
+/galaxy-launch-video.mp4
