@@ -2,6 +2,7 @@
 
 import {
   BarChart3,
+  ChevronRight,
   ClipboardList,
   Command as CommandIcon,
   FileText,
@@ -28,12 +29,28 @@ import {
   CommandList,
   CommandSeparator,
 } from '@/components/ui/primitives/command';
+import {
+  PALETTE_SURFACE_ROWS,
+  TOGGLE_PALETTE_KEYS,
+  layerIsLive,
+  liveShortcuts,
+  matchesModifiedKey,
+  paletteGates,
+  type PaletteRoute,
+} from '@/components/ui/commandPaletteKeys';
 import { cn } from '@/lib/utils';
 
 /**
  * ⌘K command palette (Circle-style, cmdk): app navigation, every published
  * FinBench task, and Delegate scenario deep links. Mounted once in the root
  * layout so the shortcut works on every product surface.
+ *
+ * Its keyboard is DECLARED in ./commandPaletteKeys and read from there: the
+ * toggle's chord is matched as the declaration spells it, the two ways back out
+ * of a sub-list are mounted from the same rows that decide what the dialog
+ * advertises in `aria-keyshortcuts`, and e2e/command-palette.spec.ts runs the
+ * shared coherence checks (e2e/keyboard-coherence.ts) over the declaration in
+ * node.
  */
 
 import asc606 from '@/public/finbench/asc606.json';
@@ -55,47 +72,40 @@ const SCENARIOS: { id: string; n: number; title: string }[] = [
   { id: 's6', n: 6, title: 'Post the March accruals' },
 ];
 
-/** Small keyboard hint chips on the right of a command row. */
-function Keys({ keys }: { keys: string[] }) {
-  return (
-    <span className="ml-auto flex items-center gap-1">
-      {keys.map((key, index) => (
-        <kbd
-          key={index}
-          className="inline-flex h-5 min-w-5 items-center justify-center rounded border bg-muted/50 px-1 font-sans text-[11px] text-muted-foreground"
-        >
-          {key}
-        </kbd>
-      ))}
-    </span>
-  );
-}
-
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
-  const [route, setRoute] = useState<'root' | 'tasks' | 'scenarios'>('root');
+  const [route, setRoute] = useState<PaletteRoute>('root');
+  // cmdk owns the query. The palette needs one fact about it and no more —
+  // whether there is one — because that is what decides whether Backspace
+  // deletes a character or leaves the list (`backspace-to-root`).
+  const [inputEmpty, setInputEmpty] = useState(true);
 
   const router = useRouter();
   const pathname = usePathname();
   const isDelegate = pathname?.startsWith('/delegate') ?? false;
 
-  const reset = useCallback(() => setRoute('root'), []);
+  const gates = paletteGates({ open, route, inputEmpty });
+
+  const reset = useCallback(() => {
+    setRoute('root');
+    setInputEmpty(true);
+  }, []);
 
   const close = useCallback(() => {
     setOpen(false);
     reset();
   }, [reset]);
 
-  // ⌘K / Ctrl+K toggles, mirroring Circle's palette binding.
+  // ⌘K / Ctrl+K toggles, mirroring Circle's palette binding. The chord is the
+  // declaration's own spelling rather than a second one typed here.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault();
-        setOpen((value) => {
-          if (value) reset();
-          return !value;
-        });
-      }
+      if (!matchesModifiedKey(TOGGLE_PALETTE_KEYS, event)) return;
+      event.preventDefault();
+      setOpen((value) => {
+        if (value) reset();
+        return !value;
+      });
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
@@ -127,7 +137,32 @@ export function CommandPalette() {
         if (!value) reset();
       }}
     >
-      <DialogContent hideClose className="overflow-hidden p-0 sm:max-w-xl">
+      <DialogContent
+        hideClose
+        className="overflow-hidden p-0 sm:max-w-xl"
+        aria-keyshortcuts={liveShortcuts(PALETTE_SURFACE_ROWS.dialog, gates) || undefined}
+        // Escape belongs to the topmost thing the palette opened, and the
+        // dismissal Radix installs is the layer underneath. Radix listens in
+        // the CAPTURE phase, so the back-out has to be decided HERE — a
+        // handler on the input, whose event bubbles, can never beat it. That
+        // is also the layering the declaration states (`close-palette` lives
+        // under `subroute`), which is what lets the harness prove the two
+        // Escape bindings are never live at once.
+        onEscapeKeyDown={(event) => {
+          if (!layerIsLive('back-to-root', gates)) return;
+          event.preventDefault();
+          reset();
+        }}
+        onKeyDown={(event) => {
+          // Backspace leaves the list only when there is nothing for the caret
+          // to delete — the same gate the dialog advertises, so the key and the
+          // claim about it cannot disagree.
+          if (event.key !== 'Backspace') return;
+          if (!layerIsLive('backspace-to-root', gates)) return;
+          event.preventDefault();
+          reset();
+        }}
+      >
         <DialogTitle className="sr-only">Command menu</DialogTitle>
         <DialogDescription className="sr-only">Type a command or search</DialogDescription>
         <Command
@@ -136,17 +171,13 @@ export function CommandPalette() {
         >
           <CommandInput
             placeholder="Type a command or search…"
-            onKeyDown={(event) => {
-              if (event.key === 'Escape' && route !== 'root') {
-                event.preventDefault();
-                event.stopPropagation();
-                setRoute('root');
-              }
-              if (event.key === 'Backspace' && !event.currentTarget.value && route !== 'root') {
-                setRoute('root');
-              }
-            }}
+            // cmdk keeps the query; this is the only fact the keyboard needs
+            // about it. Setting the same boolean again is a no-op, so only the
+            // two transitions — first character, and back to empty — re-render.
+            onValueChange={(value) => setInputEmpty(value === '')}
           />
+          {/* The toggle, named. The glyph is drawn rather than typed because
+              font coverage for ⌘ is not something to bet a shortcut chip on. */}
           <span className="pointer-events-none absolute right-3 top-3.5 hidden items-center gap-1.5 text-xs text-muted-foreground sm:flex">
             <CommandIcon className="h-3.5 w-3.5" />
             K
@@ -188,7 +219,11 @@ export function CommandPalette() {
                   >
                     <FileText className="text-muted-foreground" />
                     Browse all {TASKS.length} tasks…
-                    <Keys keys={['→']} />
+                    {/* An affordance, not a key claim: nothing binds ArrowRight
+                        here (cmdk selects with the vertical arrows and Enter),
+                        and the harness exists to keep this file from saying
+                        otherwise. */}
+                    <ChevronRight aria-hidden className="ml-auto h-4 w-4 text-muted-foreground" />
                   </CommandItem>
                 </CommandGroup>
                 <CommandGroup heading="Delegate scenarios">
@@ -199,7 +234,7 @@ export function CommandPalette() {
                   >
                     <ClipboardList className="text-muted-foreground" />
                     Pick a scenario…
-                    <Keys keys={['→']} />
+                    <ChevronRight aria-hidden className="ml-auto h-4 w-4 text-muted-foreground" />
                   </CommandItem>
                 </CommandGroup>
               </>
