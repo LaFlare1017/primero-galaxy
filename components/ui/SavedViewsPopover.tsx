@@ -11,6 +11,15 @@ import {
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import {
+  BACK_TO_LIST,
+  CONFIRM_NAME,
+  SAVED_VIEWS_SURFACE_ROWS,
+  layerIsLive,
+  liveShortcuts,
+  rowIsLive,
+  savedViewsGates,
+} from '@/components/ui/savedViewsKeys';
 import { Input } from '@/components/ui/primitives/input';
 import {
   Popover,
@@ -131,6 +140,10 @@ export function SavedViewsPopover<V extends SavedViewLike>({
   const [shareFlash, setShareFlash] = useState<string | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
 
+  // The two conditions the panel's keyboard turns on, from the declaration:
+  // whether the panel is showing, and whether a form is showing on top of it.
+  const gates = savedViewsGates({ open, mode });
+
   const refresh = useCallback(() => setViews(store.list()), [store]);
 
   // Load after mount (localStorage is client-only) and follow writes from
@@ -238,6 +251,19 @@ export function SavedViewsPopover<V extends SavedViewLike>({
         align="start"
         updatePositionStrategy="always"
         className={cn('w-80 p-0', mono && 'border-gray-200')}
+        // Escape in the form steps back to the list; only the list's Escape is
+        // the panel's own dismissal — the layering the declaration states with
+        // `close-panel under form`. It has to be decided HERE, on the layer,
+        // because Radix dismisses in the CAPTURE phase (components/delegate/
+        // shortcuts.ts records the same measurement): a handler on the field
+        // would run after the panel had already been dismissed out from under
+        // the form, and the field's branch is only reachable if this prevents
+        // the default first.
+        onEscapeKeyDown={(event) => {
+          if (!layerIsLive(BACK_TO_LIST.id, gates)) return;
+          event.preventDefault();
+          setMode('list');
+        }}
       >
         {mode !== 'list' ? (
           <div className="p-3">
@@ -283,13 +309,23 @@ export function SavedViewsPopover<V extends SavedViewLike>({
               ref={nameRef}
               value={name}
               onChange={(event) => setName(event.target.value)}
+              // The field's own key, read from the declaration rather than
+              // spelled again here: Enter confirms, and only while the form is
+              // showing — the same gate the attribute below is built from.
+              // Escape is deliberately not handled on this input; the panel's
+              // layer takes it (see `onEscapeKeyDown`).
               onKeyDown={(event) => {
-                if (event.key === 'Enter') confirm();
-                if (event.key === 'Escape') setMode('list');
+                if (!CONFIRM_NAME.keys.includes(event.key)) return;
+                if (!rowIsLive(CONFIRM_NAME, gates)) return;
+                event.preventDefault();
+                confirm();
               }}
               placeholder="e.g. Submitted only"
               className="mt-2 h-8 text-[13px]"
               aria-label="View name"
+              aria-keyshortcuts={
+                liveShortcuts(SAVED_VIEWS_SURFACE_ROWS.name, gates) || undefined
+              }
             />
             <div className="mt-2 flex justify-end gap-1.5">
               <button

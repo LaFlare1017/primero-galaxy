@@ -2,12 +2,14 @@ import { expect, test } from '@playwright/test';
 
 import {
   UNGATED,
+  agreement,
   coherence,
   reachableWorlds,
   type CoherenceReport,
   type KeyboardChord,
   type KeyboardManifest,
   type KeyboardRow,
+  type NamedDeclaration,
 } from './keyboard-coherence';
 
 /**
@@ -27,6 +29,12 @@ import {
  * readers below are a minimal reference implementation rather than a second
  * copy of the console's: enough to answer the harness's questions and no more,
  * which is exactly what a manifest hands over in practice.
+ *
+ * The third check is about a PAIR of declarations rather than about one, so it
+ * is exercised on a pair of its own — the shape of the real one, the console's
+ * global row beside the palette's — coherent in one case and broken seven ways,
+ * including the disagreement that actually existed: a chord declared with one
+ * of its two platform spellings.
  *
  * It runs in node, like the harness: no page, no DOM, no fixtures.
  */
@@ -422,6 +430,91 @@ test.describe('keyboard declaration harness', () => {
     for (const item of broken) {
       const report = coherence(item.build(), FAKE_WORLDS, FAKE_OPTIONS);
       expect(item.pick(report).join(' | '), `${item.label}: ${item.why}`).toContain(item.expect);
+    }
+  });
+
+  test('two declarations describing one binding have to describe it the same way', () => {
+    // The check that needs no state and no readers: two rows, one binding, and
+    // whether they say the same thing about it. The pair below is deliberately
+    // the shape of the real one — the console documents a global key the
+    // palette binds — including the one difference that is NOT a disagreement:
+    // the left declares its two spellings in the other order, because the order
+    // a surface lists alternatives in is a rendering choice.
+    const left: NamedDeclaration = {
+      name: 'the console',
+      rows: [{ id: 'open-palette', keys: ['Control+k', 'Meta+k'], gate: UNGATED, mount: 'global' }],
+    };
+    const right: NamedDeclaration = {
+      name: 'the palette',
+      rows: [{ id: 'toggle-palette', keys: ['Meta+k', 'Control+k'], gate: UNGATED, mount: 'global' }],
+    };
+    const pairs = [{ left: 'open-palette', right: 'toggle-palette' }];
+    const withRow = (row: Partial<KeyboardRow>): NamedDeclaration => ({
+      ...right,
+      rows: [{ ...right.rows[0], ...row }],
+    });
+
+    expect(agreement(left, right, pairs), 'one binding, spelled in another order, is agreed about').toEqual(
+      [],
+    );
+
+    const broken: Array<{
+      label: string;
+      left?: NamedDeclaration;
+      right?: NamedDeclaration;
+      pairs?: typeof pairs;
+      expect: string;
+      why: string;
+    }> = [
+      {
+        label: 'one declaration names one spelling of a two-platform chord',
+        left: { ...left, rows: [{ ...left.rows[0], keys: ['Meta+k'] }] },
+        expect: 'different keys ([Meta+k] and [Control+k Meta+k])',
+        why: 'a surface documenting a key it does not bind would teach a PC user only half of it',
+      },
+      {
+        label: 'the same binding under two different gates',
+        right: withRow({ gate: 'panel' }),
+        expect: 'different gate ([always] and [panel])',
+        why: 'one of them would be documenting a key that is not there when the other is',
+      },
+      {
+        label: 'the same binding standing down for another',
+        right: withRow({ under: 'panel' }),
+        expect: 'different under ([nothing] and [panel])',
+        why: 'the two would disagree about when the binding answers at all',
+      },
+      {
+        label: 'the same binding mounted differently',
+        right: withRow({ mount: 'map' }),
+        expect: 'different mount ([global] and [map])',
+        why: 'a documented binding and a bound one are different claims about who answers',
+      },
+      {
+        label: 'the same binding yielding different keys',
+        right: withRow({ yieldKeys: ['k'] }),
+        expect: 'different yieldKeys ([] and [k])',
+        why: 'a yield is part of the binding: who keeps the key while a control holds it',
+      },
+      {
+        label: 'a pair naming a row that does not exist',
+        pairs: [{ left: 'open-palette', right: 'toggle-palette-x' }],
+        expect: 'the palette declares no row toggle-palette-x',
+        why: 'a renamed row has to break its spec rather than quietly pair with nothing',
+      },
+      {
+        label: 'a pairing that names no bindings at all',
+        pairs: [],
+        expect: 'a check that compares nothing cannot fail',
+        why: 'the same guard the enumeration has: a comparison of nothing reads green',
+      },
+    ];
+
+    for (const item of broken) {
+      expect(
+        agreement(item.left ?? left, item.right ?? right, item.pairs ?? pairs).join(' | '),
+        `${item.label}: ${item.why}`,
+      ).toContain(item.expect);
     }
   });
 });

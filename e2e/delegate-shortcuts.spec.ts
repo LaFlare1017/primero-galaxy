@@ -22,7 +22,8 @@ import {
   type ShortcutGate,
 } from '../components/delegate/consoleShortcuts';
 import { OVERLAY_DISMISS_KEY } from '../components/delegate/shortcuts';
-import { coherence, reachableWorlds, type KeyboardManifest } from './keyboard-coherence';
+import { PALETTE_KEYS } from '../components/ui/commandPaletteKeys';
+import { agreement, coherence, reachableWorlds, type KeyboardManifest } from './keyboard-coherence';
 
 /**
  * Unit spec for the shared keyboard-shortcut POLICY
@@ -1043,5 +1044,38 @@ test.describe('Facilitator console keyboard declaration', () => {
     expect(report.claims, 'a surface must advertise, and the chip offer, exactly what is bound').toEqual([]);
     expect(report.unimplemented, 'a binding the page does not implement is neither kept nor offered').toEqual([]);
     expect(report.structure, 'the declaration is shaped the way its readers assume').toEqual([]);
+  });
+
+  test('the one binding this console documents for another surface is the one that surface binds', () => {
+    // One binding is declared twice in this repo, and this is it. The console's
+    // sheet has to print the palette's app-wide ⌘K for a facilitator who has
+    // never opened the palette, so the console declares a key it does not mount
+    // (`mount: 'global'`) — and the palette declares the same key, because it is
+    // the surface that binds it. Neither declaration can see the other, so
+    // e2e/command-palette.spec.ts and this file would each happily pass while the
+    // two said different things; the agreement check is the one that cannot.
+    const globalRows = (rows: readonly { id: string; mount: string }[]) =>
+      rows.filter((row) => row.mount === 'global').map((row) => row.id);
+
+    // Pinned, because a global row is exactly the row that can be described
+    // twice: each declaration has one and they are the same key. A second in
+    // either — a new app-wide binding, or one this console documents and the
+    // other surface does not know about — has to be paired here deliberately
+    // rather than left unchecked.
+    expect(globalRows(CONSOLE_KEYS), 'a global row is a binding owned elsewhere').toEqual([
+      'open-palette',
+    ]);
+    expect(globalRows(PALETTE_KEYS), 'and the palette owns exactly that one').toEqual([
+      'toggle-palette',
+    ]);
+
+    expect(
+      agreement(
+        { name: 'the console', rows: CONSOLE_KEYS },
+        { name: 'the palette', rows: PALETTE_KEYS },
+        [{ left: 'open-palette', right: 'toggle-palette' }],
+      ),
+      'two declarations that describe one binding have to describe it the same way',
+    ).toEqual([]);
   });
 });

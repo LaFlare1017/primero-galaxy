@@ -214,7 +214,14 @@ export const CONSOLE_KEYS: readonly ConsoleKey[] = [
   },
   {
     id: 'open-palette',
-    keys: ['Meta+k'],
+    // Both spellings the palette binds, not just the Mac one. This row is the
+    // console's account of a binding it does not mount, and the surface that
+    // does mount it declares the same two keys
+    // (components/ui/commandPaletteKeys.ts) — so the two accounts are compared
+    // rather than trusted, in e2e/delegate-shortcuts.spec.ts. The SHEET still
+    // prints one cap (`display`), because the label already names the PC
+    // spelling in words and a legend does not have to say it twice.
+    keys: ['Meta+k', 'Control+k'],
     display: ['⌘K'],
     label: 'Open the command palette (Ctrl+K on PC keyboards)',
     group: 'anywhere',

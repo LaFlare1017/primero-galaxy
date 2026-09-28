@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { CONSOLE_CHORDS, CONSOLE_KEYS } from '../components/delegate/consoleShortcuts';
+import { pressEveryDeclaredBinding, type Exercise } from './keyboard-coverage';
 
 /**
  * Every binding the console declares, pressed, with a visible effect demanded
@@ -21,6 +22,13 @@ import { CONSOLE_CHORDS, CONSOLE_KEYS } from '../components/delegate/consoleShor
  * facilitator meets most of these keys. The few that need more say so in
  * `prepare`, and they are the rows whose gate is about something other than
  * the room being on screen.
+ *
+ * None of the shape above is the console's private business, so it lives in
+ * e2e/keyboard-coverage.ts: the property (the declaration and the table are one
+ * list, and every key of every binding is pressed) is the runner's, and what
+ * each key DOES — the table below, and the room this console reads it against —
+ * is this spec's. The palette is the runner's second client
+ * (e2e/command-palette.spec.ts).
  */
 
 /** What the room looks like immediately before a key is pressed. */
@@ -37,17 +45,6 @@ interface Room {
   cursor: string | null;
   /** The participant the watch pane is mirroring, or null when it is shut. */
   pane: string | null;
-}
-
-/**
- * One declared binding, exercised: how the console reaches a state where the
- * binding is live, and the visible change its key has to make. `before` is the
- * room as it was immediately before the press; `key` is which of the row's
- * keys is being pressed, since a row may bind alternatives (Enter and w).
- */
-interface Exercise {
-  prepare?: (page: Page) => Promise<void>;
-  effect: (page: Page, before: Room, key: string) => Promise<void>;
 }
 
 const STAMP = Date.now().toString(36).slice(-5);
@@ -109,7 +106,7 @@ async function watchAt(page: Page, index: number): Promise<void> {
 
 const last = (names: readonly string[]) => names[names.length - 1];
 
-const EXERCISES: Record<string, Exercise> = {
+const EXERCISES: Record<string, Exercise<Room>> = {
   'walk-down': {
     // From a cold console, which is also where this pins where a walk enters.
     effect: async (page, before) => {
@@ -185,8 +182,10 @@ const EXERCISES: Record<string, Exercise> = {
     },
   },
   'open-palette': {
-    // The declared spelling, Meta+k: the palette accepts both that and the
-    // Ctrl+K the label promises PC keyboards, and this pins the row's own.
+    // Both declared spellings get a step, and both have to open the palette:
+    // the row names the Mac chord and the PC one its label promises, and the
+    // palette binds both (delegate-shortcuts.spec.ts compares the two
+    // declarations that describe this one binding).
     effect: async (page) => {
       await expect(palette(page)).toBeVisible();
     },
@@ -248,34 +247,18 @@ const DECLARED: ReadonlyArray<{ id: string; keys: readonly string[] }> = [
 ];
 
 test('every declared binding does something visible', async ({ page }) => {
-  // The check that makes this file worth having: the declaration is the list
-  // of bindings and the table above is the list of exercises, so they have to
-  // be the same list. A row added to the declaration without an exercise
-  // fails HERE, before a browser opens — which is the only way "documented and
-  // working" stays a property of the console rather than of whoever
-  // remembered to write a test.
-  expect(
-    Object.keys(EXERCISES).sort(),
-    'every declared binding has an exercise, and every exercise names a declared binding',
-  ).toEqual(DECLARED.map((row) => row.id).sort());
-
-  await ensureRoom(page, 3);
-
-  for (const row of DECLARED) {
-    // Per KEY rather than per row: a row may bind alternatives, and each one
-    // is a key a facilitator can press.
-    for (const key of row.keys) {
-      await test.step(`${row.id} — ${key}`, async () => {
-        await page.goto('/delegate/facilitator');
-        await expect(rows(page).first()).toBeVisible({ timeout: 15_000 });
-        const exercise = EXERCISES[row.id];
-        await exercise.prepare?.(page);
-        const before = await room(page);
-        // Chords are typed as a sequence, which is also how the hook reads
-        // them: the room and its declaration use one spelling.
-        for (const pressed of key.split(' ')) await page.keyboard.press(pressed);
-        await exercise.effect(page, before, key);
-      });
-    }
-  }
+  await pressEveryDeclaredBinding<Room>(page, {
+    declared: DECLARED,
+    exercises: EXERCISES,
+    // The room the steps need, seeded once — the shop's own API, so a step that
+    // is about a row existing starts from a room that has one.
+    raise: (page) => ensureRoom(page, 3),
+    // Where a press begins: the console, freshly opened, which is also where a
+    // facilitator meets most of these keys.
+    enter: async (page) => {
+      await page.goto('/delegate/facilitator');
+      await expect(rows(page).first()).toBeVisible({ timeout: 15_000 });
+    },
+    snapshot: room,
+  });
 });

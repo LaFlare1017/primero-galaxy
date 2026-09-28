@@ -18,8 +18,15 @@
  *      exists to make impossible, and in front of assistive tech it is worse
  *      than silence.
  *
- * Both are things a manifest can be checked for, so they live here rather
- * than inside the one spec that first needed them. A manifest is data plus the
+ *   3. A binding TWO declarations describe is described the same way by both.
+ *      A key owned by a component elsewhere is declared twice — once by the
+ *      surface that binds it, once by a surface that only documents it — and
+ *      neither declaration can see the other, so one of them can be wrong for
+ *      as long as nobody asks.
+ *
+ * The first two are properties of one manifest and the third is a property of
+ * a pair, but all three are things a declaration can be checked for, so they
+ * live here rather than inside the one spec that first needed them. A manifest is data plus the
  * READERS that interpret it, handed over as they are, so the checks run the
  * shipped code rather than a second copy of it. What this file cannot know is
  * what a state of YOUR surface can be — that is the manifest's own business,
@@ -444,6 +451,82 @@ export function coherence<
     structure,
   };
 }
+
+/** A declaration as the agreement check reads it: what to call it, and its rows. */
+export interface NamedDeclaration {
+  /** What this declaration is called in a failure message. */
+  name: string;
+  rows: readonly KeyboardRow[];
+}
+
+/**
+ * Every way two declarations that describe ONE binding disagree about it.
+ *
+ * A binding owned by a component elsewhere in the app ends up declared twice:
+ * the surface that OWNS it declares it because that is the key it answers to,
+ * and a surface that merely documents it declares it because its readers have
+ * to be told the key exists — `mount: 'global'` in both is exactly that
+ * arrangement, and the console's sheet printing the palette's `⌘K` is the case
+ * that exists today. Two rows describing one key on one keyboard are not two
+ * opinions: whichever one has the key wrong is telling its readers something
+ * untrue, and neither declaration can see the other.
+ *
+ * What is compared is only what describes the BINDING: its keys (as a SET —
+ * the order two surfaces list alternatives in is a rendering choice), the gate
+ * it lives under, the gate it stands down for, how it is mounted, and the keys
+ * it yields. Ids, labels and display strings stay out of it, because those are
+ * how each surface speaks to its own readers and the sheet's words are not the
+ * palette's.
+ *
+ * `pairs` is knowledge rather than anything derivable: two ids for one binding
+ * have nothing in common to match on. So the caller states it, and pins it
+ * where a reader can see it — a pairing dropped from the list would otherwise
+ * stop being checked at all.
+ */
+export function agreement(
+  left: NamedDeclaration,
+  right: NamedDeclaration,
+  pairs: ReadonlyArray<{ left: string; right: string }>,
+): string[] {
+  if (pairs.length === 0) {
+    return ['no shared bindings were named, and a check that compares nothing cannot fail'];
+  }
+  const violations: string[] = [];
+  for (const pair of pairs) {
+    const leftRow = left.rows.find((row) => row.id === pair.left);
+    const rightRow = right.rows.find((row) => row.id === pair.right);
+    if (leftRow === undefined) {
+      violations.push(`${left.name} declares no row ${pair.left}`);
+      continue;
+    }
+    if (rightRow === undefined) {
+      violations.push(`${right.name} declares no row ${pair.right}`);
+      continue;
+    }
+    const where = `${left.name} ${pair.left} and ${right.name} ${pair.right}`;
+    for (const fact of ROW_FACTS) {
+      const from = fact.of(leftRow);
+      const to = fact.of(rightRow);
+      if (from === to) continue;
+      violations.push(`${where} describe one binding with different ${fact.name} ([${from}] and [${to}])`);
+    }
+  }
+  return violations;
+}
+
+/**
+ * The facts that describe a binding rather than one surface's account of it.
+ * Each is rendered as one string, so a disagreement can be printed the way it
+ * was declared; the key sets are sorted, since two surfaces that list the same
+ * alternatives in another order are saying the same thing.
+ */
+const ROW_FACTS: ReadonlyArray<{ name: string; of: (row: KeyboardRow) => string }> = [
+  { name: 'keys', of: (row) => [...row.keys].sort().join(' ') },
+  { name: 'gate', of: (row) => row.gate },
+  { name: 'under', of: (row) => row.under ?? 'nothing' },
+  { name: 'mount', of: (row) => row.mount },
+  { name: 'yieldKeys', of: (row) => [...(row.yieldKeys ?? [])].sort().join(' ') },
+];
 
 /** The declaration on its own, without the readers — all the shape checks need. */
 interface Declaration {
