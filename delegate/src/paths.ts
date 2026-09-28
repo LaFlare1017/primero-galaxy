@@ -9,7 +9,7 @@
  */
 
 import { existsSync } from "fs";
-import { join, resolve } from "path";
+import { dirname, isAbsolute, join, resolve } from "path";
 
 export function resolveDelegateRoot(): string {
   const cwd = resolve(process.cwd());
@@ -29,4 +29,21 @@ export function dataDir(): string {
 
 export function scenariosDir(): string {
   return join(resolveDelegateRoot(), "scenarios");
+}
+
+/**
+ * The E2E suite's scratch store — the room the Playwright run owns.
+ *
+ * playwright.config.ts sets the server's DELEGATE_DATA_DIR to
+ * `.next-e2e/delegate-data` and clears it per run, so the suite never writes
+ * into the workshop's real store. A relative override is resolved against the
+ * REPO ROOT rather than the cwd, because Playwright runs from there and this
+ * function is reachable from delegate/ too — the reset tool uses it, and both
+ * callers have to agree on one directory.
+ */
+export function e2eDataDir(): string {
+  const repoRoot = dirname(resolveDelegateRoot());
+  const override = process.env.DELEGATE_DATA_DIR;
+  if (override) return isAbsolute(override) ? override : join(repoRoot, override);
+  return join(repoRoot, ".next-e2e", "delegate-data");
 }

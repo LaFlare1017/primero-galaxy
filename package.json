@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "reset:delegate": "npm --prefix delegate run build --silent && node delegate/dist/alpha/reset-cohort.js"
   },
   "dependencies": {
     "@radix-ui/react-checkbox": "^1.3.11",

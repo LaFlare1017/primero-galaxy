@@ -91,7 +91,7 @@ Substrate volume: **3,058 JEs · 767 invoices · 1,431 bank lines · 222 account
 | `readout.ts` | One-page cohort readout (§8): five-axis profile, three headline numbers, preventers-vs-detectors, flagged behaviors as counts. Individual attribution structurally excluded and tested |
 | `score-store.ts` | Single writer for `data/scores.json` |
 | `test-readout.ts` | Readout aggregation + §8 no-attribution test |
-| `src/alpha/` | **Week-6 alpha kit**: `reset-cohort.ts` (archive+wipe with manifest), `preflight.ts` (C1–C7 environment checks incl. live server probe, tool-gating verification, C6e chunk-integrity detection of a clobbered dev `.next`, and C7 live-chat verification of which agent the server process is actually running), `readout-cli.ts` (readout from live store or archive) |
+| `src/alpha/` | **Week-6 alpha kit**: `reset-cohort.ts` (store reset — workshop archive+wipe with manifest, `--target e2e` wipes the suite's scratch store, dry run by default), `preflight.ts` (C1–C7 environment checks incl. live server probe, tool-gating verification, C6e chunk-integrity detection of a clobbered dev `.next`, and C7 live-chat verification of which agent the server process is actually running), `readout-cli.ts` (readout from live store or archive) |
 
 **Web UI (root Next.js app)**
 
@@ -142,12 +142,16 @@ npm run alpha:preflight -- --url http://127.0.0.1:3000   # environment checks; C
 # Build guard: never run a root-level production build (`npm run build` / `next build`) while the
 # dev server is live. It overwrites the shared .next; pages keep 200ing but chunks 404 and the UI
 # is dead (unhydrated). Preflight C6e detects this; the fix is a dev-server restart, not code.
-npm run alpha:reset -- --yes                             # archive data/ → snapshots/alpha/<ts>/ with manifest, wipe store
-npm run alpha:reset -- --dry-run                         # show what would be archived, change nothing
+npm run alpha:reset -- --dry-run                         # plan only — what would be archived or wiped; changes nothing
+npm run alpha:reset -- --yes                             # workshop: archive data/ → snapshots/alpha/<ts>/ with manifest, then wipe
+npm run alpha:reset -- --target e2e --yes                # the E2E suite's scratch store (.next-e2e/delegate-data) — wiped, no archive
+npm run alpha:reset -- --target all --dry-run            # both stores, planned
 npm run alpha:readout -- <cohortId> [archiveDir]         # one-page cohort readout → docs/readout-<cohortId>.md
 ```
 
-The reset archives **everything** (sessions, runs, events, scores) with a row-count manifest — alpha data is rubric-rewrite raw material and is never destroyed. The readout works from the live store *or* any reset archive, so a post-alpha reset loses nothing. Store state: `delegate/data/{sessions,runs,events,scores}.json`; the facilitator grid and scorers read them fresh per request, so a file-level reset is a complete reset.
+The reset covers **two stores**, and the only difference between them is what happens to the rows. The **workshop room** (`delegate/data/`) archives **everything** (sessions, runs, events, scores) with a row-count manifest *before* wiping — alpha data is rubric-rewrite raw material and is never destroyed. The **suite's scratch store** (`.next-e2e/delegate-data`, the `DELEGATE_DATA_DIR` `playwright.config.ts` sets) is wiped outright: it is regenerated with the build the suite runs against and belongs to no participant, so a reset that archived it would be a reset nobody runs. The readout works from the live store *or* any reset archive, so a post-alpha reset loses nothing. Store state: `delegate/data/{sessions,runs,events,scores}.json`; the facilitator grid and scorers read them fresh per request, so a file-level reset is a complete reset — a running server picks the empty store up on its next request. In-memory runtimes go with it: they are per-process and keyed by runId, so a reset invalidates every run id handed out before it — which is exactly the stale `?watch=` link the facilitator console self-heals, and why a reset belongs *between* participants, never during one.
+
+An unconfirmed invocation is a **dry run**: nothing is touched without `--yes`, and the plan prints either way, so the command is safe to run blind. `DELEGATE_DATA_DIR` (which the suite sets, and which points this tool at a scratch store in tests) is honoured by both targets; if it names one directory for both, that directory is reset once, with the workshop's archive-then-wipe. A store that does not exist resets as a no-op rather than an error, so the second reset in a row is fine. From the repo root the same tool is `npm run reset:delegate -- --target e2e` (the root script builds the CLI first). `src/alpha/test-reset-store.ts` (`npm run test:reset`) holds the two claims that make it safe: a dry run changes nothing, and the workshop reset moves every row into the archive before wiping.
 
 ### Live Anthropic runs
 
@@ -195,6 +199,6 @@ Then confirm with the preflight: `npm run alpha:preflight -- --url http://127.0.
 - `src/runtime/` — agent loop, tools, event log, scenario runtime
 - `src/scoring/` — scorers + scenario loader
 - `src/report/` — cohort readout generator
-- `src/alpha/` — Week-6 alpha kit (reset, preflight, readout CLI)
+- `src/alpha/` — Week-6 alpha kit (store reset, preflight, readout CLI)
 - `scenarios/` — six scenario packages: manifest, checklist, debrief (+ the s5 contract document)
 - `app/delegate/`, `app/api/delegate/` (repo root) — participant UI, facilitator view, API routes
