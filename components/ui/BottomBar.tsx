@@ -98,8 +98,12 @@ export function BottomBar({
   }, []);
 
   return (
+    // Height comes from the `--bottom-bar-h` token and not a number typed here:
+    // the profile panel and the toast stack both offset by it, and the panel
+    // covering this bar's controls is exactly what a second copy of the height
+    // costs. `pointer-events-none` on the bar, `auto` on the controls.
     <motion.div
-      className="pointer-events-none fixed inset-x-0 bottom-0 z-20 flex h-14 items-center justify-between px-6"
+      className="pointer-events-none fixed inset-x-0 bottom-0 z-20 flex h-[var(--bottom-bar-h)] items-center justify-between px-6"
       initial={{ opacity: 0 }}
       animate={{ opacity: visible ? 1 : 0 }}
       transition={{ duration: 0.8, ease: 'easeOut' }}

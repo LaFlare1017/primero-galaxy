@@ -38,9 +38,17 @@ export function PlanetPanel() {
   return (
     <AnimatePresence>
       {selected && (
+        // The drawer stops where the bottom bar begins (`--bottom-bar-h`,
+        // declared in app/globals.css) rather than reaching bottom-0. It is
+        // z-30 against the bar's z-20, so a full-height panel simply COVERED
+        // that end of the bar: with a profile open, Reset view, Search, Add
+        // Company and Share were all behind an opaque drawer, unclickable by
+        // pointer and reachable only by tab order. Bar height in one place
+        // means the two can move together; the panel owns the offset so the
+        // chrome is never what has to give way.
         <motion.aside
           key={selected.id}
-          className="fixed bottom-0 right-0 top-0 z-30 flex w-[400px] max-w-[92vw] flex-col overflow-y-auto border-l border-border-subtle bg-void/95 backdrop-blur-xl"
+          className="fixed bottom-[var(--bottom-bar-h)] right-0 top-0 z-30 flex w-[400px] max-w-[92vw] flex-col overflow-y-auto border-l border-border-subtle bg-void/95 backdrop-blur-xl"
           initial={{ x: '100%' }}
           animate={{ x: 0 }}
           exit={{ x: '100%' }}

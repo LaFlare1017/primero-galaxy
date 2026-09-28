@@ -14,6 +14,16 @@
   --ui-muted: #8e8eae;
   --ui-dim: #b0b0c8;
   --border-subtle: #1a1a3a;
+  /*
+   * The bottom bar's height, declared once. The galaxy page's chrome lives in
+   * a bar pinned to the bottom edge, and everything that must not cover it
+   * offsets by this: the profile panel (which used to reach bottom-0 and sit on
+   * top of the bar's controls with a higher z-index, so Search and Add Company
+   * were unclickable whenever a profile was open) and the toast stack. Two
+   * copies of this number is how that happens — the bar and its neighbours
+   * have to read the same one.
+   */
+  --bottom-bar-h: 3.5rem;
 }
 
 html {

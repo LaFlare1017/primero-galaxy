@@ -378,6 +378,89 @@ test('double-clicking a star opens planet view; trajectory + reset complete the 
     .toBeGreaterThan(700);
 });
 
+/**
+ * Is this control the element a pointer at its centre actually reaches?
+ *
+ * `elementFromPoint` asks the browser the same question a click asks, and names
+ * the culprit: a failure reads as "the panel is on top of Search" rather than as
+ * a click that retried until it timed out.
+ */
+async function hitTest(page: Page, name: string) {
+  return page.getByRole('button', { name }).evaluate((el) => {
+    const rect = el.getBoundingClientRect();
+    const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    const mine = Boolean(hit && (hit === el || el.contains(hit)));
+    return {
+      reachable: mine,
+      interrupt: mine
+        ? ''
+        : `${hit?.tagName ?? 'nothing'}.${String(hit?.className ?? '').slice(0, 60)}`,
+      rect: `${Math.round(rect.x)},${Math.round(rect.y)} ${Math.round(rect.width)}×${Math.round(rect.height)}`,
+    };
+  });
+}
+
+/**
+ * The bottom bar is chrome: a profile drawer may cover the galaxy, never the
+ * controls that are the page's only pointer route back out of it.
+ *
+ * It used to: the panel reached bottom-0 at z-30 over the bar's z-20, so with a
+ * profile open all four controls were behind an opaque drawer — unclickable,
+ * and reachable only by tab order. Nothing noticed for as long as it existed,
+ * because every other test clicks the bar BEFORE selecting anything, which is
+ * the state where the bar is still bare.
+ *
+ * The click IS the assertion (Playwright refuses to click what something else
+ * would receive); the hit test above is there so a failure names what is in the
+ * way, and the effects are asserted so a control that is merely exposed but
+ * broken cannot pass.
+ */
+test('a company profile leaves the bottom bar’s controls clickable', async ({ page, context }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  await waitForApp(page);
+
+  // A profile, opened the way a person opens one.
+  await page.getByRole('button', { name: 'Search' }).click();
+  await page.getByRole('combobox', { name: 'Search companies' }).fill('Nvidia');
+  await page.getByRole('option', { name: /Nvidia/ }).first().click();
+  const profile = page.locator('aside');
+  await expect(profile).toBeVisible();
+  await expect(page.getByText('Planet view')).toBeVisible();
+
+  for (const name of ['Reset view', 'Search', 'Add Company', 'Share galaxy']) {
+    const hit = await hitTest(page, name);
+    expect(
+      hit.reachable,
+      `"${name}" sits at ${hit.rect} but ${hit.interrupt} is in front of it`
+    ).toBe(true);
+  }
+
+  // Each control still DOES what it says with a profile open: the drawer is
+  // anchored to a selection, so the first three must work without dropping it,
+  // and Reset view is the one that drops it.
+  await page.getByRole('button', { name: 'Search' }).click();
+  const searchField = page.getByRole('combobox', { name: 'Search companies' });
+  await expect(searchField).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(searchField).toBeHidden();
+  await expect(profile, 'closing the palette is not dropping the profile').toBeVisible();
+
+  await page.getByRole('button', { name: 'Add Company' }).click();
+  const sheet = page.getByRole('heading', { name: 'Add Your Company' });
+  await expect(sheet).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toBeHidden();
+  await expect(profile, 'closing the sheet is not dropping the profile').toBeVisible();
+
+  const share = page.getByRole('button', { name: 'Share galaxy' });
+  await share.click();
+  await expect(share).toContainText('Copied');
+  await expect(profile).toBeVisible();
+
+  await page.getByRole('button', { name: 'Reset view' }).click();
+  await expect(profile).toBeHidden();
+});
+
 test('searching a company by name flies to its star and opens its profile', async ({ page }) => {
   test.setTimeout(120_000);
   await waitForApp(page);

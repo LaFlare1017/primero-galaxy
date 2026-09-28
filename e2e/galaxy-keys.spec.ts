@@ -89,18 +89,23 @@ const searchInput = (page: Page) => page.getByRole('combobox', { name: 'Search c
 const profile = (page: Page) => page.locator('aside');
 
 /**
- * Press one of the bottom bar's controls the way a KEYBOARD user reaches it:
- * focus it, then Enter.
+ * Press one of the bottom bar's controls as a POINTER user reaches it: click
+ * the control itself.
  *
- * Not a click, and the difference is a real one this spec ran into: with a
- * company profile open, the panel covers that end of the bar and Playwright's
- * click retries forever on "subtree intercepts pointer events". The control is
- * in the tab order in every state, so focusing it is the path that exists —
- * and it is the same path a person without a mouse takes.
+ * This used to be focus + Enter, and the reason is worth keeping: with a
+ * company profile open the panel covered that end of the bar, and Playwright's
+ * click retried forever on "subtree intercepts pointer events". Focus is the
+ * path that exists when a control is covered — but it is the tab-order path,
+ * and a page where that is the only path has a layout bug, not a design.
+ *
+ * So the click is back, and it is doing real work: two of the rungs below
+ * (the search, and the add-company sheet) are opened with a profile already on
+ * screen, which is exactly the state the panel used to make unclickable. If it
+ * ever covers the bar again, the cover story is a click that never lands
+ * rather than a step that quietly takes another route in.
  */
 async function pressControl(page: Page, name: string): Promise<void> {
-  await page.getByRole('button', { name }).focus();
-  await page.keyboard.press('Enter');
+  await page.getByRole('button', { name }).click();
 }
 
 /** The add-company sheet, recognised by the heading it slides in with. */
