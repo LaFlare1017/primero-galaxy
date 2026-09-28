@@ -3,12 +3,12 @@
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/primitives/dialog';
 import { KeyCap } from '@/components/ui/KeyCap';
 import {
+  CONSOLE_CHORDS,
   CONSOLE_GROUPS,
   CONSOLE_KEYS,
   gateIsLive,
   type ConsoleGates,
   type ShortcutGate,
-  type ShortcutGroupId,
 } from '@/components/delegate/consoleShortcuts';
 import { cn } from '@/lib/utils';
 
@@ -25,14 +25,16 @@ import { cn } from '@/lib/utils';
  * very expressions that mount each binding, so an entry dims in the same
  * render its key goes dead, and the two cannot disagree.
  *
- * Nothing about the keys themselves is written here. The single keys, their
- * words, their sections and their gates all arrive from
- * ./consoleShortcuts — the same module the page binds from and the same one
- * the `aria-keyshortcuts` strings are built from — and the chained keys
- * arrive as `chords` from the surface that binds them. A sheet that retyped
- * either would be a second source of truth for the same keyboard, which is
- * the drift this component exists to prevent: this file is now layout,
- * ordering and words, with no keyboard facts of its own.
+ * Nothing about the keys themselves is written here. The single keys AND the
+ * chained ones, with their words, their sections and their gates, all arrive
+ * from ./consoleShortcuts — the same module the page binds from and the same
+ * one the `aria-keyshortcuts` strings are built from. Retyping either would
+ * be a second source of truth for the same keyboard, which is the drift this
+ * component exists to prevent: this file is layout, ordering and words, with
+ * no keyboard facts of its own. The chords are read from the declaration
+ * rather than handed in by the surface that binds them, because the module
+ * that owns the single keys now owns them too — there is nowhere left for a
+ * documented chord and a bound chord to disagree.
  *
  * The sheet is a Radix dialog, which is the whole reason it inherits the
  * shared shortcut policy for free: the policy refuses any key whose target
@@ -59,23 +61,6 @@ import { cn } from '@/lib/utils';
  * palette owns ⌘K — and keeping that in the data means the sheet never
  * implies the console dispatches something it does not.
  */
-
-/**
- * One destination of a chained shortcut, passed in by the surface that
- * owns the bindings. The sheet documents every chord, including the ones
- * that are dead right now, so the descriptor has to come from the same
- * list the hook dispatches from rather than being retyped here — a legend
- * that lists chords the page cannot perform is the exact failure this
- * component exists to prevent.
- */
-export interface ShortcutChord {
-  /** The full chord, space separated: "g i". */
-  keys: string;
-  label: string;
-  /** Which section this belongs to. Typed, so a chord cannot name a section that does not exist. */
-  group: ShortcutGroupId;
-  gate: ShortcutGate;
-}
 
 interface ShortcutEntry {
   /**
@@ -118,14 +103,11 @@ export function ShortcutLegend({
   open,
   onOpenChange,
   gates,
-  chords,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** The very expressions that mount the bindings, from ./consoleShortcuts. */
   gates: ConsoleGates;
-  /** The surface's chained shortcuts, merged into the section each one belongs to. */
-  chords: ShortcutChord[];
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -141,16 +123,19 @@ export function ShortcutLegend({
             // Single keys first, then the chords that belong to this
             // section — so `g i` sits with j and k, and `g v` with the
             // keys that work anywhere, rather than in a chord annex that
-            // nobody would think to read.
+            // nobody would think to read. Both lists come from the same
+            // declaration module, in its order.
             const entries: ShortcutEntry[] = [
               ...CONSOLE_KEYS.filter((key) => key.group === group.id).map((key) => ({
                 keys: [...(key.display ?? key.keys)],
                 label: key.label,
                 gate: key.gate,
               })),
-              ...chords
-                .filter((chord) => chord.group === group.id)
-                .map((chord) => ({ keys: [chord.keys], label: chord.label, gate: chord.gate })),
+              ...CONSOLE_CHORDS.filter((chord) => chord.group === group.id).map((chord) => ({
+                keys: [chord.keys],
+                label: chord.label,
+                gate: chord.gate,
+              })),
             ];
             if (entries.length === 0) return null;
             return (

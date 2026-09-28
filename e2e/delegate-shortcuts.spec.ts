@@ -168,11 +168,14 @@ async function loadConsoleKeys(page: Page): Promise<void> {
     CONSOLE_PATH,
     [
       'CONSOLE_KEYS',
+      'CONSOLE_CHORDS',
       'CONSOLE_GROUPS',
       'consoleGates',
       'gateIsLive',
       'rowIsLive',
       'liveKeyMap',
+      'liveChordMap',
+      'armedChords',
       'layerIsLive',
       'liveShortcuts',
     ],
@@ -639,6 +642,139 @@ test.describe('Facilitator console keyboard declaration', () => {
       'pane',
       'sweep',
       'views',
+      'walk',
+    ]);
+  });
+
+  test('declares the chord namespace beside the keys, and binds only what it runs', async ({
+    page,
+  }) => {
+    // The chords are read by four surfaces — the hook that dispatches them,
+    // the chip that offers them, the sheet that documents them and this
+    // file — and the point of declaring them in the keys' module is that
+    // there is one list behind all four. So the table is asserted exactly:
+    // a reworded label, a key moved, a gate loosened or a chord renamed is
+    // a deliberate change here, not a silent one in the UI.
+    await page.goto('about:blank');
+    await loadConsoleKeys(page);
+
+    const read = await page.evaluate(() => {
+      const consoleApi = (
+        window as unknown as {
+          __console: {
+            CONSOLE_CHORDS: Array<{ id: string; keys: string; label: string; group: string; gate: string }>;
+            CONSOLE_GROUPS: Array<{ id: string }>;
+            consoleGates: (state: unknown) => ConsoleGates;
+            liveChordMap: (
+              gates: ConsoleGates,
+              runs: Record<string, (() => void) | undefined>,
+            ) => Record<string, () => void>;
+            armedChords: (prefix: string, gates: ConsoleGates) => Array<{ keys: string }>;
+          };
+        }
+      ).__console;
+
+      // Behaviour for every chord id the page supplies, so a chord with no
+      // handler shows up as a missing chord rather than as a binding nobody
+      // can see. The values are throwaways: only the SET of chords matters.
+      const runs: Record<string, (() => void) | undefined> = {};
+      for (const chord of consoleApi.CONSOLE_CHORDS) runs[chord.id] = () => undefined;
+
+      const cold = consoleApi.consoleGates({
+        sweepList: ['run-1', 'run-2'],
+        watchId: null,
+        viewsOpen: false,
+        cursorTarget: 'run-1',
+        cursorRow: { participant: 'A' },
+      });
+      const empty = consoleApi.consoleGates({
+        sweepList: [],
+        watchId: null,
+        viewsOpen: false,
+        cursorTarget: null,
+        cursorRow: null,
+      });
+
+      // One chord's behaviour withheld, to prove the map is built from the
+      // declaration and not from whatever the page hands over.
+      const partial = { ...runs };
+      delete partial['jump-last'];
+
+      return {
+        table: consoleApi.CONSOLE_CHORDS.map((chord) => [
+          chord.id,
+          chord.keys,
+          chord.label,
+          chord.group,
+          chord.gate,
+        ]),
+        coldMap: Object.keys(consoleApi.liveChordMap(cold, runs)),
+        emptyMap: Object.keys(consoleApi.liveChordMap(empty, runs)),
+        partialMap: Object.keys(consoleApi.liveChordMap(cold, partial)),
+        armedCold: consoleApi.armedChords('g', cold).map((chord) => chord.keys),
+        armedEmpty: consoleApi.armedChords('g', empty).map((chord) => chord.keys),
+        armedOtherPrefix: consoleApi.armedChords('x', cold).length,
+        armedNoPrefix: consoleApi.armedChords('', cold).length,
+        idCount: new Set(consoleApi.CONSOLE_CHORDS.map((chord) => chord.id)).size,
+        prefixes: [...new Set(consoleApi.CONSOLE_CHORDS.map((chord) => chord.keys.split(' ')[0]))],
+        lengths: [...new Set(consoleApi.CONSOLE_CHORDS.map((chord) => chord.keys.split(' ').length))],
+        groups: [...new Set(consoleApi.CONSOLE_CHORDS.map((chord) => chord.group))].sort(),
+        gateNames: [...new Set(consoleApi.CONSOLE_CHORDS.map((chord) => chord.gate))].sort(),
+        sectionIds: consoleApi.CONSOLE_GROUPS.map((group) => group.id),
+      };
+    });
+
+    // The declaration itself, in the order the chip offers it.
+    expect(read.table).toEqual([
+      ['jump-first', 'g i', 'jump to the first row', 'walk', 'walk'],
+      ['jump-last', 'g n', 'jump to the last row', 'walk', 'walk'],
+      ['watch-cursor', 'g w', 'watch the cursor row', 'watch', 'commit'],
+      ['copy-cursor-link', 'g l', "copy the cursor row's run link", 'row', 'link'],
+      ['open-views', 'g v', 'open the saved views', 'anywhere', 'always'],
+    ]);
+
+    // The map the hook mounts: every live chord, spelled as the sequence
+    // hook takes it. On a cold console all five are live — a room to jump
+    // around, a row to watch, a row to link, and a panel that is always
+    // there — and each one runs the behaviour supplied for ITS id.
+    expect(read.coldMap).toEqual(['g i', 'g n', 'g w', 'g l', 'g v']);
+    // An empty room keeps only the one chord that has nothing to do with the
+    // room: the gates are the single keys', so there is nowhere to jump and
+    // nothing to watch or copy.
+    expect(read.emptyMap).toEqual(['g v']);
+    // A chord the page supplies no behaviour for contributes nothing, so the
+    // sheet cannot document a chord the page would not perform.
+    expect(read.partialMap).toEqual(['g i', 'g w', 'g l', 'g v']);
+
+    // What the chip may offer while a prefix is armed: the same chords, the
+    // same gates, narrowed by the prefix that is actually armed — and
+    // nothing at all for a prefix no chord opens, including the empty one,
+    // which must not match every chord by accident.
+    expect(read.armedCold).toEqual(['g i', 'g n', 'g w', 'g l', 'g v']);
+    expect(read.armedEmpty).toEqual(['g v']);
+    expect(read.armedOtherPrefix).toBe(0);
+    expect(read.armedNoPrefix).toBe(0);
+
+    // Structural: the shape every reader above depends on. One prefix, one
+    // key after it (which is what makes "the armed prefix" a prefix of the
+    // chord at all), unique ids for the behaviour record to be keyed by, and
+    // sections and gates that are the keys' own vocabulary rather than a
+    // second one.
+    expect(read.idCount, 'chord ids are unique').toBe(read.table.length);
+    expect(read.prefixes, 'every chord shares one prefix key').toEqual(['g']);
+    expect(read.lengths, 'every chord is a prefix and one key').toEqual([2]);
+    expect(read.groups, 'chords are sorted into the same sections as the keys').toEqual([
+      'anywhere',
+      'row',
+      'walk',
+      'watch',
+    ]);
+    expect(read.sectionIds).toEqual(['walk', 'watch', 'row', 'anywhere']);
+    expect(read.groups.every((id) => read.sectionIds.includes(id))).toBe(true);
+    expect(read.gateNames, 'every chord gate is a gate the single keys already use').toEqual([
+      'always',
+      'commit',
+      'link',
       'walk',
     ]);
   });

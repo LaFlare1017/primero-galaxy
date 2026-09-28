@@ -702,6 +702,12 @@ test.describe('Facilitator run links', () => {
     // accumulating while the suite runs.
     await page.getByRole('button', { name: 'Close watch pane' }).click();
     await expect(pane).toHaveCount(0);
+    // Settled before the reload, because the URL trails the DOM: nuqs writes
+    // ?watch= away through history.replaceState, and a reload that beat that
+    // write would restore the run the close just dropped — which is how this
+    // failed once, with the pane back open on a row nobody had chosen and
+    // the cold-console case below asserting against a warm console.
+    await expect.poll(() => new URL(page.url()).searchParams.get('watch')).toBeNull();
     await page.reload();
     await expect(rows.first()).toBeVisible({ timeout: 15_000 });
     await expect(cursored).toHaveCount(0);

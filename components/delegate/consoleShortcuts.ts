@@ -120,10 +120,12 @@ export const CONSOLE_GROUPS: ReadonlyArray<{ id: ShortcutGroupId; title: string 
 
 /**
  * Every single key the console answers to, in the order they are met: the
- * walk, then the watch, then the keys that work anywhere. The chords of the
- * `g` namespace are NOT here — they are declared where they are bound,
- * because a chord's keys are a sequence and the sheet merges them into
- * these same sections (see ./ShortcutLegend).
+ * walk, then the watch, then the keys that work anywhere. The `g` namespace
+ * is declared below (`CONSOLE_CHORDS`) rather than in this list, because a
+ * chord is a sequence and a row is one press — but it is declared in THIS
+ * module, for the reason every row is: the sheet documents what is declared
+ * here and nothing else, so a chord bound in the page and a key declared
+ * here would be two sources of truth for one keyboard.
  */
 export const CONSOLE_KEYS: readonly ConsoleKey[] = [
   {
@@ -216,6 +218,66 @@ export const CONSOLE_KEYS: readonly ConsoleKey[] = [
     gate: 'always',
     mount: 'global',
   },
+];
+
+/**
+ * One chord: a prefix key that opens a menu of destinations and the key that
+ * performs one.
+ *
+ * Declared here rather than where it is bound, and for exactly the reason a
+ * single key is: the sheet documents every chord, the hook dispatches every
+ * chord, and the armed-chip offers every chord — three readers who must not
+ * be able to disagree. The page's share of a chord is BEHAVIOUR, supplied
+ * keyed by `id`; a chord it supplies no behaviour for is not bound at all.
+ */
+export interface ConsoleChord {
+  /**
+   * Stable id: the behaviour record the page hands to `liveChordMap` is
+   * keyed by it, so renaming one fails the spec rather than binding a chord
+   * to the wrong destination.
+   */
+  id: string;
+  /**
+   * The chord as the DOM spells it, SPACE-joined — the same spelling
+   * `useKeySequence` takes in its map and returns as an armed prefix, so the
+   * declaration, the map and the chip are all one string, and "what is
+   * armed" is a prefix of "what completes it" rather than a parallel table.
+   */
+  keys: string;
+  label: string;
+  group: ShortcutGroupId;
+  gate: ShortcutGate;
+}
+
+/**
+ * The console's `g` namespace, in the order the chip offers its destinations.
+ *
+ * `g` is not a command, it is a prefix that opens a menu, the way GitHub and
+ * Gmail bind it — and every destination here is something the console
+ * already does, so the namespace buys reach without spending more single
+ * keys on a surface that already has j/k/w/Enter to teach. `w` watches the
+ * cursor row and `g w` is that same action inside the namespace, which is
+ * also why the gates are the single keys' own names: a chord gated on
+ * `commit` and the Enter that does the same thing go dead together, and
+ * saying that once is the point of both declarations living here.
+ *
+ * `g l` is the one whose gate cannot be read off the room alone — whether
+ * there is a link to copy depends on the cursor row's run id, which is why
+ * a live cursor ROW is the gate and the chord no-ops if it vanishes under
+ * the press.
+ */
+export const CONSOLE_CHORDS: readonly ConsoleChord[] = [
+  { id: 'jump-first', keys: 'g i', label: 'jump to the first row', group: 'walk', gate: 'walk' },
+  { id: 'jump-last', keys: 'g n', label: 'jump to the last row', group: 'walk', gate: 'walk' },
+  { id: 'watch-cursor', keys: 'g w', label: 'watch the cursor row', group: 'watch', gate: 'commit' },
+  {
+    id: 'copy-cursor-link',
+    keys: 'g l',
+    label: "copy the cursor row's run link",
+    group: 'row',
+    gate: 'link',
+  },
+  { id: 'open-views', keys: 'g v', label: 'open the saved views', group: 'anywhere', gate: 'always' },
 ];
 
 /**
@@ -326,6 +388,48 @@ export function liveKeyMap(
     }
   }
   return map;
+}
+
+/**
+ * The chord map the sequence hook mounts: every declared chord that is live
+ * right now, spelled as `useKeySequence` takes it, with the behaviour the
+ * page supplied for that chord's id.
+ *
+ * Same two rules as `liveKeyMap`, for the same reasons. A chord whose gate
+ * is shut is not in the map, so an armed `g` never offers a destination that
+ * would do nothing. A chord the page supplies no behaviour for is dropped
+ * rather than mounted, so the sheet cannot document a chord the page cannot
+ * perform — which, with the chords declared here, is the only way those two
+ * can still drift, and it is visible in the tests rather than silent in the
+ * UI.
+ */
+export function liveChordMap(
+  gates: ConsoleGates,
+  runs: Readonly<Record<string, (() => void) | undefined>>,
+): Record<string, () => void> {
+  const map: Record<string, () => void> = {};
+  for (const chord of CONSOLE_CHORDS) {
+    if (!gateIsLive(chord.gate, gates)) continue;
+    const run = runs[chord.id];
+    if (run !== undefined) map[chord.keys] = run;
+  }
+  return map;
+}
+
+/**
+ * The destinations an armed prefix is waiting for — the chip's list, and the
+ * reason it can never hint at a dead key: the same declaration the hook
+ * dispatches from, filtered by the same gates, narrowed to the prefix that is
+ * actually armed.
+ *
+ * Prefix-generic rather than `g`-shaped, since "what does this prefix open"
+ * is a question about the chords and not about which namespace is under the
+ * facilitator's fingers; a second namespace would need no change here.
+ */
+export function armedChords(prefix: string, gates: ConsoleGates): readonly ConsoleChord[] {
+  return CONSOLE_CHORDS.filter(
+    (chord) => gateIsLive(chord.gate, gates) && chord.keys.startsWith(`${prefix} `),
+  );
 }
 
 /**

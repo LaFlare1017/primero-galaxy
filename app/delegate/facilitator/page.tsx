@@ -18,14 +18,14 @@ import type { FacilitatorViewState } from "@/components/delegate/saved-views";
 import { useElapsedClock } from "@/components/delegate/useElapsedClock";
 import { useKeySequence } from "@/components/delegate/useKeySequence";
 import { useKeyboardShortcuts } from "@/components/delegate/useKeyboardShortcuts";
-import { ShortcutLegend, type ShortcutChord } from "@/components/delegate/ShortcutLegend";
+import { ShortcutLegend } from "@/components/delegate/ShortcutLegend";
 import {
+  armedChords,
   consoleGates,
-  gateIsLive,
   layerIsLive,
+  liveChordMap,
   liveKeyMap,
   liveShortcuts,
-  type ShortcutGate,
 } from "@/components/delegate/consoleShortcuts";
 import { KeyCap } from "@/components/ui/KeyCap";
 import {
@@ -205,14 +205,6 @@ function detectionLabel(detected: boolean | undefined): string {
  * submitted run restores read-only. The ids are opaque capability tokens,
  * so the label stays out of the URL (audit §5).
  */
-/**
- * A destination of the `g` namespace: the sheet's own chord descriptor plus
- * the thing it does. The two live together in one object on purpose — the
- * words a facilitator reads in the sheet and the code that runs are the
- * same entry, so they cannot describe different destinations.
- */
-type NamespaceChord = ShortcutChord & { run: () => void };
-
 /** The key still owed after a prefix: "g i" armed on "g" is waiting for "i". */
 function nextKeyOf(keys: string): string {
   return keys.split(" ").slice(1).join(" ");
@@ -1124,48 +1116,32 @@ function FacilitatorGrid() {
   );
 
   // ── The g namespace ──
-  // `g` is not a command, it is a prefix that opens a menu of
-  // destinations, the way GitHub and Gmail bind it. Every destination is
-  // something this console already does: the namespace buys reach without
-  // spending more single keys, which is the whole argument for chords on a
-  // surface that already has j/k/w/Enter to teach. Single-key shortcuts
-  // stay single — `w` still watches the cursor row and `g w` is that same
-  // action inside the namespace, so learning either one teaches the
-  // behaviour.
-  //
-  // ONE list, read four times: the hook dispatches from it, the
-  // armed-chord chip offers from it, the sheet documents it, and the
-  // sheet is handed these same objects rather than a retyped copy, because
-  // a legend that lists chords the page cannot perform is exactly the lie
-  // this design exists to prevent.
-  const chordIsLive = (gate: ShortcutGate) => gateIsLive(gate, gates);
-  const namespace: NamespaceChord[] = [
-    { keys: "g i", label: "jump to the first row", group: "walk", gate: "walk", run: () => jumpSweep("first") },
-    { keys: "g n", label: "jump to the last row", group: "walk", gate: "walk", run: () => jumpSweep("last") },
-    { keys: "g w", label: "watch the cursor row", group: "watch", gate: "commit", run: openCursor },
-    {
-      keys: "g l",
-      label: "copy the cursor row's run link",
-      group: "row",
-      gate: "link",
-      run: () => {
-        if (cursorRow !== null) copyRunLink(cursorRow);
-      },
+  // The chords themselves — keys, words, section and gate — are declared in
+  // components/delegate/consoleShortcuts.ts, beside the single keys, because
+  // the sheet documents both and a list it can print but the page cannot
+  // perform is exactly the drift that module exists to rule out. The page's
+  // share is BEHAVIOUR, keyed by chord id: `w` and `g w` run the same
+  // function rather than two spellings of one action, and a chord the page
+  // supplies no behaviour for is simply not bound.
+  const chordRuns: Record<string, (() => void) | undefined> = {
+    "jump-first": () => jumpSweep("first"),
+    "jump-last": () => jumpSweep("last"),
+    "watch-cursor": openCursor,
+    "copy-cursor-link": () => {
+      if (cursorRow !== null) copyRunLink(cursorRow);
     },
-    { keys: "g v", label: "open the saved views", group: "anywhere", gate: "always", run: () => setViewsOpen(true) },
-  ];
+    "open-views": () => setViewsOpen(true),
+  };
   // What the chip may offer is what the hook can actually run: a chord
   // whose gate is shut is not in the map at all, so `g` never hints at a
   // destination that would do nothing. The sheet still shows it, dimmed —
-  // the sheet documents the vocabulary, the chip offers the menu.
-  const liveChords = namespace.filter((chord) => chordIsLive(chord.gate));
-  const armedChord = useKeySequence(
-    Object.fromEntries(liveChords.map((chord) => [chord.keys, chord.run])),
-    liveChords.length > 0,
-  );
+  // the sheet documents the vocabulary, the chip offers the menu. Both
+  // lists are read off the declaration, so neither can grow a destination
+  // the other has not heard of.
+  const chordMap = liveChordMap(gates, chordRuns);
+  const armedChord = useKeySequence(chordMap, Object.keys(chordMap).length > 0);
   // The destinations the armed prefix is waiting for, from the same list.
-  const armedChordDestinations =
-    armedChord === null ? [] : liveChords.filter((chord) => chord.keys.startsWith(`${armedChord} `));
+  const armedChordDestinations = armedChord === null ? [] : armedChords(armedChord, gates);
 
   // ── Sweep by keyboard ──
   // Left/Right step the watched room, Home/End jump to its ends, so a
@@ -1554,12 +1530,7 @@ function FacilitatorGrid() {
           the object the bindings above are mounted from, so a dimmed entry
           here is the same condition that took the key away — and the keys
           and their words come from the same declaration the bindings do. */}
-      <ShortcutLegend
-        open={legendOpen}
-        onOpenChange={setLegendOpen}
-        gates={gates}
-        chords={namespace}
-      />
+      <ShortcutLegend open={legendOpen} onOpenChange={setLegendOpen} gates={gates} />
     </div>
   );
 }
