@@ -2,6 +2,14 @@
 
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/primitives/dialog';
 import { KeyCap } from '@/components/ui/KeyCap';
+import {
+  CONSOLE_GROUPS,
+  CONSOLE_KEYS,
+  gateIsLive,
+  type ConsoleGates,
+  type ShortcutGate,
+  type ShortcutGroupId,
+} from '@/components/delegate/consoleShortcuts';
 import { cn } from '@/lib/utils';
 
 /**
@@ -13,20 +21,24 @@ import { cn } from '@/lib/utils';
  * in an empty room, nothing to commit when the cursor is already watched,
  * nothing to sweep unless a run is being watched and the room has more than
  * one participant), so a sheet that cannot show that is quietly lying about
- * the surface it documents. `bound` is the way out: the page passes the
+ * the surface it documents. `gates` is the way out: the page passes the
  * very expressions that mount each binding, so an entry dims in the same
  * render its key goes dead, and the two cannot disagree.
+ *
+ * Nothing about the keys themselves is written here. The single keys, their
+ * words, their sections and their gates all arrive from
+ * ./consoleShortcuts — the same module the page binds from and the same one
+ * the `aria-keyshortcuts` strings are built from — and the chained keys
+ * arrive as `chords` from the surface that binds them. A sheet that retyped
+ * either would be a second source of truth for the same keyboard, which is
+ * the drift this component exists to prevent: this file is now layout,
+ * ordering and words, with no keyboard facts of its own.
  *
  * The sheet is a Radix dialog, which is the whole reason it inherits the
  * shared shortcut policy for free: the policy refuses any key whose target
  * is inside an open role="dialog", so every shortcut on the page goes inert
  * the moment this opens and comes back when it closes. There is nothing to
  * suspend here, which is the reason this is a dialog and not a panel.
- *
- * The chained keys are NOT written here: they arrive as `chords` from the
- * surface that binds them. A sheet that retyped them would be a second
- * source of truth for the same keyboard, which is the drift this whole
- * component is an attempt to avoid.
  *
  * `?` opens it and Escape closes it (the dialog primitive's own
  * dismissal). `?` deliberately does NOT toggle: while the sheet is open the
@@ -40,27 +52,13 @@ import { cn } from '@/lib/utils';
  * open, and a single "Esc closes the sheet or the panel" line cannot say
  * that. Split, each entry dims with the layer it closes, so the sheet
  * shows the key the way the page will honour it right now.
+ *
+ * Each row also says HOW its key is bound (`mount`), which is a claim the
+ * sheet is making either way: `primitive` and `global` rows are documented
+ * here but bound elsewhere — the dialog dismisses itself, the app layout's
+ * palette owns ⌘K — and keeping that in the data means the sheet never
+ * implies the console dispatches something it does not.
  */
-export interface ShortcutGates {
-  /** j/k and the jump chords: there is something on screen to walk. */
-  walk: boolean;
-  /** Enter/w and the watch chord: there is a row to commit, and it is not what is already watched. */
-  commit: boolean;
-  /** The pane transport: a run is watched and the room has more than one participant. */
-  sweep: boolean;
-  /** The copy-link chord: the cursor has landed on a row with a run to share. */
-  link: boolean;
-  /** The pane is open, so Escape has a watch pane to close. */
-  pane: boolean;
-  /** The views panel is open, so Escape has a panel to close. */
-  views: boolean;
-}
-
-/** Whether a shortcut is bound right now, or never gated at all. */
-export type ShortcutGate = keyof ShortcutGates | 'always';
-
-/** The sections of the sheet, in the order a facilitator meets them. */
-export type ShortcutGroupId = 'walk' | 'watch' | 'row' | 'anywhere';
 
 /**
  * One destination of a chained shortcut, passed in by the surface that
@@ -91,61 +89,6 @@ interface ShortcutEntry {
   gate: ShortcutGate;
 }
 
-interface ShortcutGroup {
-  id: ShortcutGroupId;
-  title: string;
-  entries: ShortcutEntry[];
-}
-
-/**
- * The console's SINGLE-KEY vocabulary, in one list. The chained ones are
- * NOT here: they are passed in, because the surface that binds them is the
- * only place that knows what they do.
- */
-const LEGEND: ShortcutGroup[] = [
-  {
-    id: 'walk',
-    title: 'Walk the room',
-    entries: [
-      { keys: ['j'], label: 'Walk down one row, wrapping at the ends', gate: 'walk' },
-      { keys: ['k'], label: 'Walk up one row, wrapping at the ends', gate: 'walk' },
-    ],
-  },
-  {
-    id: 'watch',
-    title: 'Watch a run',
-    entries: [
-      {
-        keys: ['Enter', 'w'],
-        label: 'Open the watch pane on the row the walk stopped on',
-        gate: 'commit',
-      },
-      {
-        keys: ['←', '→'],
-        label: 'Step the watched room back and forward',
-        gate: 'sweep',
-      },
-      { keys: ['Home', 'End'], label: 'Jump the watched room to its ends', gate: 'sweep' },
-      { keys: ['Esc'], label: 'Close the watch pane', gate: 'pane' },
-    ],
-  },
-  {
-    id: 'row',
-    title: 'The cursor row',
-    entries: [],
-  },
-  {
-    id: 'anywhere',
-    title: 'Anywhere on this page',
-    entries: [
-      { keys: ['⌘K'], label: 'Open the command palette (Ctrl+K on PC keyboards)', gate: 'always' },
-      { keys: ['?'], label: 'Open this sheet', gate: 'always' },
-      { keys: ['Esc'], label: 'Close this sheet', gate: 'always' },
-      { keys: ['Esc'], label: 'Close the views panel', gate: 'views' },
-    ],
-  },
-];
-
 /**
  * Alternative keys, and chords within them, as caps separated by REAL
  * whitespace. The separators are text, not flex `gap`: a gap is invisible
@@ -174,12 +117,13 @@ function KeyList({ keys }: { keys: string[] }) {
 export function ShortcutLegend({
   open,
   onOpenChange,
-  bound,
+  gates,
   chords,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  bound: ShortcutGates;
+  /** The very expressions that mount the bindings, from ./consoleShortcuts. */
+  gates: ConsoleGates;
   /** The surface's chained shortcuts, merged into the section each one belongs to. */
   chords: ShortcutChord[];
 }) {
@@ -193,13 +137,17 @@ export function ShortcutLegend({
           </DialogDescription>
         </div>
         <div className="max-h-[70vh] overflow-y-auto px-4 py-3">
-          {LEGEND.map((group) => {
+          {CONSOLE_GROUPS.map((group) => {
             // Single keys first, then the chords that belong to this
             // section — so `g i` sits with j and k, and `g v` with the
             // keys that work anywhere, rather than in a chord annex that
             // nobody would think to read.
             const entries: ShortcutEntry[] = [
-              ...group.entries,
+              ...CONSOLE_KEYS.filter((key) => key.group === group.id).map((key) => ({
+                keys: [...(key.display ?? key.keys)],
+                label: key.label,
+                gate: key.gate,
+              })),
               ...chords
                 .filter((chord) => chord.group === group.id)
                 .map((chord) => ({ keys: [chord.keys], label: chord.label, gate: chord.gate })),
@@ -210,7 +158,7 @@ export function ShortcutLegend({
                 <h3 className="mb-1.5 text-[11px] uppercase tracking-wide text-gray-500">{group.title}</h3>
                 <ul className="space-y-1.5">
                   {entries.map((entry) => {
-                    const live = entry.gate === 'always' || bound[entry.gate];
+                    const live = gateIsLive(entry.gate, gates);
                     return (
                       <li
                         key={entry.label}

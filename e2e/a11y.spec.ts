@@ -275,6 +275,19 @@ test.describe('Delegate accessibility', () => {
     });
 
     test('facilitator console with seeded rows is clean', async ({ page }) => {
+      // The one scan whose cost is proportional to the ROOM rather than to
+      // the console: axe walks every element, and the grid mounts a row per
+      // session in the workshop store, which the suite grows on every run
+      // (and never clears). At ~2700 rows the scan needs minutes, so the
+      // global 150s budget stops being the thing that fails.
+      //
+      // `slow()` rather than a number, and keeping the scan whole rather
+      // than scoping axe to part of the page: the claim is that the console
+      // is clean, and a scan of the toolbar only would be a smaller claim
+      // wearing the same name. The real fix is the console's own rendering
+      // — a workshop is tens of participants, and no facilitator has 2700
+      // rows on screen — which is a product decision, not a test one.
+      test.slow();
       await page.goto('/delegate/facilitator');
       await waitUntilSeeded(page);
       await expectNoA11yViolations(page);

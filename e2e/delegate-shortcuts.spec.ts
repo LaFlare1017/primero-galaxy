@@ -47,6 +47,7 @@ import { expect, test, type Page } from '@playwright/test';
  */
 
 const GUARDS_PATH = join(__dirname, '..', 'components', 'delegate', 'shortcuts.ts');
+const CONSOLE_PATH = join(__dirname, '..', 'components', 'delegate', 'consoleShortcuts.ts');
 
 /**
  * Fixture DOM: every kind of target the policy has an opinion about.
@@ -129,19 +130,54 @@ const CASES: ShortcutCase[] = [
   { label: 'nothing focused', target: 'window', key: 'ArrowRight', mods: {}, allowed: true, why: 'no element owns the key' },
 ];
 
-/** Load the guards module itself into the page, from its source on disk. */
-async function loadGuards(page: Page): Promise<void> {
-  const source = readFileSync(GUARDS_PATH, 'utf8');
+/**
+ * Load one of the Delegate keyboard modules into the page from its source on
+ * disk, and hand its own exports to the page under a global — so nothing is
+ * re-declared here: if a module renames or drops an export, this spec breaks
+ * at the load rather than asserting against a stale copy.
+ */
+async function loadModule(
+  page: Page,
+  path: string,
+  names: readonly string[],
+  global: string,
+): Promise<void> {
+  const source = readFileSync(path, 'utf8');
   const js = ts.transpileModule(source, {
     compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.ESNext },
   }).outputText;
-  // Hand the module's own exports to the page so nothing is re-declared
-  // here: if the source renames or drops an export, this spec breaks.
   await page.addScriptTag({
     type: 'module',
-    content: `${js}\nwindow.__guards = { ownsArrowKeys, shortcutAllowed };`,
+    content: `${js}\nwindow.${global} = { ${names.join(', ')} };`,
   });
-  await page.waitForFunction(() => Boolean((window as unknown as { __guards?: unknown }).__guards));
+  await page.waitForFunction(
+    (key) => Boolean((window as unknown as Record<string, unknown>)[key]),
+    global,
+  );
+}
+
+/** The guards module, as used by the policy cases below. */
+async function loadGuards(page: Page): Promise<void> {
+  await loadModule(page, GUARDS_PATH, ['ownsArrowKeys', 'shortcutAllowed'], '__guards');
+}
+
+/** The console's keyboard declaration, as used by the manifest cases below. */
+async function loadConsoleKeys(page: Page): Promise<void> {
+  await loadModule(
+    page,
+    CONSOLE_PATH,
+    [
+      'CONSOLE_KEYS',
+      'CONSOLE_GROUPS',
+      'consoleGates',
+      'gateIsLive',
+      'rowIsLive',
+      'liveKeyMap',
+      'layerIsLive',
+      'liveShortcuts',
+    ],
+    '__console',
+  );
 }
 
 /**
@@ -292,5 +328,296 @@ test.describe('Delegate keyboard-shortcut policy', () => {
     expect(verdicts.flipped, 'a layer that closed itself on this key is still owned').toBe(false);
     expect(verdicts.removed, 'a layer that removed itself on this key is still owned').toBe(false);
     expect(verdicts.closedAndIdle, 'a closed layer holding no focus is inert').toBe(true);
+  });
+});
+
+/**
+ * One console state, and the gates it has to read as. The states are named
+ * for the situation a facilitator is in rather than for the fields, because
+ * the thing under test is a judgement about the room: "is there anywhere to
+ * walk", "is there a row to commit" — the questions the sheet dims by and
+ * the bindings mount by.
+ */
+interface GateCase {
+  label: string;
+  state: {
+    sweepList: string[];
+    watchId: string | null;
+    viewsOpen: boolean;
+    cursorTarget: string | null;
+    cursorRow: unknown;
+  };
+  gates: ConsoleGates;
+  why: string;
+}
+
+interface ConsoleGates {
+  walk: boolean;
+  commit: boolean;
+  sweep: boolean;
+  link: boolean;
+  pane: boolean;
+  views: boolean;
+}
+
+const GATE_CASES: GateCase[] = [
+  {
+    label: 'cold console, room on screen',
+    state: { sweepList: ['run-1', 'run-2'], watchId: null, viewsOpen: false, cursorTarget: 'run-1', cursorRow: { participant: 'A' } },
+    gates: { walk: true, commit: true, sweep: false, link: true, pane: false, views: false },
+    why: 'a room to walk and a row to commit, but nothing watched to sweep',
+  },
+  {
+    label: 'empty room',
+    state: { sweepList: [], watchId: null, viewsOpen: false, cursorTarget: null, cursorRow: null },
+    gates: { walk: false, commit: false, sweep: false, link: false, pane: false, views: false },
+    why: 'nothing to walk, nothing to commit, nothing to link: every room key is dead',
+  },
+  {
+    label: 'watching the only participant',
+    state: { sweepList: ['run-1'], watchId: 'run-1', viewsOpen: false, cursorTarget: 'run-1', cursorRow: { participant: 'A' } },
+    gates: { walk: true, commit: false, sweep: false, link: true, pane: true, views: false },
+    why: 'the transport needs somewhere to step to; a lone run in a quiet room is a pane with no sweep',
+  },
+  {
+    label: 'watching with room to step',
+    state: {
+      sweepList: ['run-1', 'run-2'],
+      watchId: 'run-1',
+      viewsOpen: false,
+      cursorTarget: 'run-2',
+      cursorRow: { participant: 'B' },
+    },
+    gates: { walk: true, commit: true, sweep: true, link: true, pane: true, views: false },
+    why: 'watching one run while the cursor sits on another: there is still something to commit',
+  },
+  {
+    label: 'watching the cursor row',
+    state: {
+      sweepList: ['run-1', 'run-2'],
+      watchId: 'run-2',
+      viewsOpen: false,
+      cursorTarget: 'run-2',
+      cursorRow: { participant: 'B' },
+    },
+    gates: { walk: true, commit: false, sweep: true, link: true, pane: true, views: false },
+    why: 'Enter on the row already being watched has nothing to open',
+  },
+  {
+    label: 'views panel open over a watched run',
+    state: {
+      sweepList: ['run-1', 'run-2'],
+      watchId: 'run-1',
+      viewsOpen: true,
+      cursorTarget: 'run-2',
+      cursorRow: { participant: 'B' },
+    },
+    gates: { walk: true, commit: true, sweep: true, link: true, pane: true, views: true },
+    why: 'the panel is a layer, not a room state: every room gate is untouched by it',
+  },
+];
+
+test.describe('Facilitator console keyboard declaration', () => {
+  test('reads the console state as gates', async ({ page }) => {
+    // The gate expressions are the thing the sheet dims by and the bindings
+    // mount by, so they are worth a table rather than one pass through the
+    // UI: "there is something to walk" is a judgement about the room, and
+    // the interesting cases are the ones a workshop actually produces.
+    await page.goto('about:blank');
+    await loadConsoleKeys(page);
+
+    const verdicts = await page.evaluate(
+      (cases) =>
+        cases.map((item) =>
+          (
+            window as unknown as {
+              __console: { consoleGates: (state: unknown) => ConsoleGates };
+            }
+          ).__console.consoleGates(item.state),
+        ),
+      GATE_CASES,
+    );
+
+    GATE_CASES.forEach((item, i) => {
+      expect(verdicts[i], `${item.label}: ${item.why}`).toEqual(item.gates);
+    });
+  });
+
+  test('builds the key map, the layer mounts and the aria strings from the same rows', async ({
+    page,
+  }) => {
+    // The three readers, against the module the page actually binds from:
+    // the map the hook mounts, the ordered layer mounts, and the string the
+    // surface hands to `aria-keyshortcuts`. They are built from one list, so
+    // the claim being pinned is that they agree — the sheet cannot offer a
+    // key nothing dispatches, and an attribute cannot advertise one either.
+    await page.goto('about:blank');
+    await loadConsoleKeys(page);
+
+    const read = await page.evaluate(() => {
+      const keys = (
+        window as unknown as {
+          __console: {
+            CONSOLE_KEYS: Array<{ id: string; keys: string[]; gate: string; mount: string; group: string }>;
+            CONSOLE_GROUPS: Array<{ id: string }>;
+            consoleGates: (state: unknown) => ConsoleGates;
+            liveKeyMap: (
+              gates: ConsoleGates,
+              held: { ownControlFocused: boolean },
+              handlers: Record<string, Record<string, () => void>>,
+            ) => Record<string, () => void>;
+            layerIsLive: (id: string, gates: ConsoleGates) => boolean;
+            liveShortcuts: (ids: string[], gates: ConsoleGates, held?: { ownControlFocused: boolean }) => string;
+          };
+        }
+      ).__console;
+
+      // Behaviour for every row id the page supplies, so a row with no
+      // handler shows up as a missing key rather than as a binding nobody
+      // can see. The values are throwaways: only the SET of keys matters.
+      const handlers: Record<string, Record<string, () => void>> = {};
+      for (const row of keys.CONSOLE_KEYS) {
+        const perKey: Record<string, () => void> = {};
+        for (const key of row.keys) perKey[key] = () => undefined;
+        handlers[row.id] = perKey;
+      }
+
+      const cold = keys.consoleGates({
+        sweepList: ['run-1', 'run-2'],
+        watchId: null,
+        viewsOpen: false,
+        cursorTarget: 'run-1',
+        cursorRow: { participant: 'A' },
+      });
+      const watching = keys.consoleGates({
+        sweepList: ['run-1', 'run-2'],
+        watchId: 'run-1',
+        viewsOpen: false,
+        cursorTarget: 'run-2',
+        cursorRow: { participant: 'B' },
+      });
+      const panelOverWatching = keys.consoleGates({
+        sweepList: ['run-1', 'run-2'],
+        watchId: 'run-1',
+        viewsOpen: true,
+        cursorTarget: 'run-2',
+        cursorRow: { participant: 'B' },
+      });
+      const empty = keys.consoleGates({
+        sweepList: [],
+        watchId: null,
+        viewsOpen: false,
+        cursorTarget: null,
+        cursorRow: null,
+      });
+
+      // One row's handlers withheld, to prove the map is built from the
+      // rows and not from whatever the page hands over.
+      const partial = { ...handlers };
+      delete partial['walk-up'];
+
+      return {
+        coldKeys: Object.keys(keys.liveKeyMap(cold, { ownControlFocused: false }, handlers)),
+        heldKeys: Object.keys(keys.liveKeyMap(cold, { ownControlFocused: true }, handlers)),
+        watchingKeys: Object.keys(keys.liveKeyMap(watching, { ownControlFocused: false }, handlers)),
+        emptyKeys: Object.keys(keys.liveKeyMap(empty, { ownControlFocused: false }, handlers)),
+        partialKeys: Object.keys(keys.liveKeyMap(cold, { ownControlFocused: false }, partial)),
+        layers: {
+          panelOpen: keys.layerIsLive('dismiss-views', panelOverWatching),
+          paneUnderPanel: keys.layerIsLive('dismiss-pane', panelOverWatching),
+          paneAlone: keys.layerIsLive('dismiss-pane', watching),
+          panelAlone: keys.layerIsLive('dismiss-views', watching),
+          notALayer: keys.layerIsLive('commit', cold),
+          emptyRoom: keys.layerIsLive('dismiss-pane', empty),
+        },
+        strings: {
+          grid: keys.liveShortcuts(['walk-down', 'walk-up', 'commit'], cold),
+          gridHeld: keys.liveShortcuts(['walk-down', 'walk-up', 'commit'], cold, { ownControlFocused: true }),
+          pane: keys.liveShortcuts(['sweep-step', 'sweep-jump', 'dismiss-pane'], watching),
+          paneUnderPanel: keys.liveShortcuts(['sweep-step', 'sweep-jump', 'dismiss-pane'], panelOverWatching),
+          paneClosed: keys.liveShortcuts(['sweep-step', 'sweep-jump', 'dismiss-pane'], cold),
+          sheet: keys.liveShortcuts(['open-sheet'], cold),
+          unknownIds: keys.liveShortcuts(['no-such-row'], cold),
+        },
+        rowIds: keys.CONSOLE_KEYS.map((row) => row.id),
+        rowGateNames: [...new Set(keys.CONSOLE_KEYS.map((row) => row.gate))].sort(),
+        rowMounts: [...new Set(keys.CONSOLE_KEYS.map((row) => row.mount))].sort(),
+        groups: keys.CONSOLE_GROUPS.map((group) => group.id),
+        declaredGroups: [...new Set(keys.CONSOLE_KEYS.map((row) => row.group))],
+      };
+    });
+
+    // The map the page mounts, in declaration order: the walk, the commit
+    // (BOTH its keys — Enter and w are one row), and the sheet's own key.
+    expect(read.coldKeys).toEqual(['j', 'k', 'Enter', 'w', '?']);
+    // A control holding the keyboard stands down Enter ALONE: w is still
+    // bound, and a row-level reading of that rule would silently kill it.
+    expect(read.heldKeys).toEqual(['j', 'k', 'w', '?']);
+    // With a run watched, the transport arrives from the same list.
+    expect(read.watchingKeys).toEqual([
+      'j',
+      'k',
+      'Enter',
+      'w',
+      'ArrowLeft',
+      'ArrowRight',
+      'Home',
+      'End',
+      '?',
+    ]);
+    // An empty room binds nothing at all — and the Escape layers are not in
+    // this map whatever the state, because a key two overlays both answer to
+    // is decided by stacking, not by a gate.
+    expect(read.emptyKeys).toEqual(['?']);
+    // A row the page supplies no handler for contributes no key.
+    expect(read.partialKeys).toEqual(['j', 'Enter', 'w', '?']);
+
+    // The layering, said once: the panel is above the pane, so the pane's
+    // Escape is only live while the panel is shut.
+    expect(read.layers).toEqual({
+      panelOpen: true,
+      paneUnderPanel: false,
+      paneAlone: true,
+      panelAlone: false,
+      notALayer: false,
+      emptyRoom: false,
+    });
+
+    // The aria strings, from the same rows: what the grid claims, what the
+    // pane claims, and the empty string a surface must turn into no
+    // attribute at all rather than an empty claim.
+    expect(read.strings).toEqual({
+      grid: 'j k Enter w',
+      gridHeld: 'j k w',
+      pane: 'ArrowLeft ArrowRight Home End Escape',
+      paneUnderPanel: 'ArrowLeft ArrowRight Home End',
+      paneClosed: '',
+      sheet: '?',
+      unknownIds: '',
+    });
+
+    // Structural: the data itself, because every case above is built on it.
+    expect(new Set(read.rowIds).size, 'row ids are unique').toBe(read.rowIds.length);
+    expect(read.groups, 'every group in the sheet has a section, in order').toEqual([
+      'walk',
+      'watch',
+      'row',
+      'anywhere',
+    ]);
+    expect(read.declaredGroups.every((id) => read.groups.includes(id)), 'no row names a section that is not rendered').toBe(true);
+    expect(read.rowMounts, 'every mount kind is one of the four the sheet documents').toEqual([
+      'global',
+      'layer',
+      'map',
+      'primitive',
+    ]);
+    expect(read.rowGateNames, 'every gate the rows name is a real gate or "always"').toEqual([
+      'always',
+      'commit',
+      'pane',
+      'sweep',
+      'views',
+      'walk',
+    ]);
   });
 });

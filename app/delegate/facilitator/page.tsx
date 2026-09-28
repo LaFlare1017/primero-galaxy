@@ -18,12 +18,15 @@ import type { FacilitatorViewState } from "@/components/delegate/saved-views";
 import { useElapsedClock } from "@/components/delegate/useElapsedClock";
 import { useKeySequence } from "@/components/delegate/useKeySequence";
 import { useKeyboardShortcuts } from "@/components/delegate/useKeyboardShortcuts";
+import { ShortcutLegend, type ShortcutChord } from "@/components/delegate/ShortcutLegend";
 import {
-  ShortcutLegend,
-  type ShortcutChord,
-  type ShortcutGates,
+  consoleGates,
+  gateIsLive,
+  layerIsLive,
+  liveKeyMap,
+  liveShortcuts,
   type ShortcutGate,
-} from "@/components/delegate/ShortcutLegend";
+} from "@/components/delegate/consoleShortcuts";
 import { KeyCap } from "@/components/ui/KeyCap";
 import {
   Table,
@@ -300,6 +303,7 @@ function WatchPane({
   onStep,
   onReveal,
   onRecover,
+  keyShortcuts,
   position,
   canStep,
   hiddenByFacet,
@@ -309,6 +313,13 @@ function WatchPane({
   onStep: (delta: number) => void;
   /** Lift the status filter so this run's row exists in the grid again. */
   onReveal: () => void;
+  /**
+   * What this pane answers to, from the rows that bind it (see
+   * components/delegate/consoleShortcuts.ts). Passed in rather than
+   * written here, so the live and dead panes advertise the same keys and
+   * neither can hand-write an attribute the console does not honour.
+   */
+  keyShortcuts: string;
   /**
    * The dead link's way out: drop `?watch=` and the facet it arrived with,
    * and land the cursor on a row that exists. Deliberately not a shortcut —
@@ -408,8 +419,8 @@ function WatchPane({
       aria-describedby={STALE_RUN_ID}
       // Escape is advertised independently of the sweep: it closes the pane
       // whether or not there is anywhere to step to, and the two gates
-      // genuinely differ.
-      aria-keyshortcuts={canStep ? "ArrowLeft ArrowRight Home End Escape" : "Escape"}
+      // genuinely differ. Both come from the same rows either way.
+      aria-keyshortcuts={keyShortcuts || undefined}
       >
         <p className="text-sm font-medium text-black">This run could not be found.</p>
         <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
@@ -438,11 +449,11 @@ function WatchPane({
       // the current filter has removed from the room, and without this the
       // console shows a run with no row behind it and says nothing.
       aria-describedby={hiddenByFacet ? HIDDEN_BY_FACET_ID : undefined}
-      // Announced only when stepping is possible, so the shortcut is never
-      // advertised on a room with nothing to sweep. Escape is the one
-      // exception: it closes the pane, and it is bound whatever the sweep
-      // is doing — a lone run in a quiet room is still a pane to close.
-      aria-keyshortcuts={canStep ? "ArrowLeft ArrowRight Home End Escape" : "Escape"}
+      // Announced from the rows: the sweep only while stepping is possible,
+      // so the transport is never advertised on a room with nothing to
+      // sweep, and Escape always, because a lone run in a quiet room is
+      // still a pane to close.
+      aria-keyshortcuts={keyShortcuts || undefined}
     >
       <div className="flex items-center gap-3 border-b border-gray-200 bg-gray-50 px-3 py-2">
         <span className="text-[13px] font-medium text-black">{label || "…"}</span>
@@ -965,10 +976,10 @@ function FacilitatorGrid() {
   );
   /**
    * Enter / w / g w: open the watch pane on the row the walk stopped on.
-   * Unbound when the target is already what is watched — there is nothing
-   * to open — and silent otherwise, which is why it says what it did.
+   * Silent unless the target is something other than what is already
+   * watched — there is nothing to open, which is the `commit` gate — and it
+   * says what it did, because nothing here moves focus.
    */
-  const canOpenCursor = cursorTarget !== null && cursorTarget !== watchId;
   const openCursor = useCallback(() => {
     if (cursorTarget === null || cursorTarget === watchId) return;
     void setWatchId(cursorTarget);
@@ -1005,18 +1016,12 @@ function FacilitatorGrid() {
   // cursor yet, j enters at the first row and k at the last, and w opens
   // the first row, so neither key has to be learned before it works.
   //
-  // The three conditions are named rather than inlined because they are
-  // also what the shortcut sheet dims: one expression decides whether a
-  // key is mounted AND whether the legend calls it available, so the sheet
-  // cannot describe a key the page has stopped listening for.
-  const canWalk = sweepList.length > 0;
-  const canCommit = canOpenCursor;
-  // The pane transport: a run is watched and there is somewhere to step to.
-  const canSweep = watchId !== null && sweepList.length > 1;
-  // g l copies the cursor row's link, so it needs a row — not a link
-  // string, which cannot be tested here anyway: runLink reads
-  // window.location, and this component is prerendered.
-  const canLink = cursorRow !== null;
+  // The conditions a key lives under are NOT named here any more. They are
+  // one function in components/delegate/consoleShortcuts.ts — the same
+  // answer the sheet dims with and the same one the aria-keyshortcuts
+  // strings are built from — so there is no second reading of "there is
+  // something to walk" left to drift from the first.
+  const gates = consoleGates({ sweepList, watchId, viewsOpen, cursorTarget, cursorRow });
   /**
    * Escape closes the topmost thing this page opened, and only that.
    *
@@ -1043,24 +1048,37 @@ function FacilitatorGrid() {
    * role="dialog" layers, so the shared rule hands Escape to whatever is on
    * top and the primitive dismisses itself.
    */
-  useKeyboardShortcuts({ Escape: closeViews }, viewsOpen);
-  useKeyboardShortcuts({ Escape: closeWatchPane }, !viewsOpen && watchId !== null);
+  useKeyboardShortcuts({ Escape: closeViews }, layerIsLive("dismiss-views", gates));
+  useKeyboardShortcuts({ Escape: closeWatchPane }, layerIsLive("dismiss-pane", gates));
+  // ── The single keys, from one declaration ──
+  // ONE list, read five times: this map is built from the rows in
+  // components/delegate/consoleShortcuts.ts, and those same rows are what
+  // the sheet renders and what the aria-keyshortcuts strings are written
+  // from. What is left here is behaviour, keyed by row id, so a row the
+  // page does not implement does nothing rather than quietly binding
+  // something the sheet never documented.
+  //
+  // A held control still stands Enter down, and that stays a courtesy here
+  // rather than a gate: whether Enter activates a focused facet chip has
+  // nothing to do with whether the row is available, and the sheet must not
+  // dim it for the first. The manifest carries the fact (`yieldKeys`) so
+  // the rule is stated where the key is declared.
   useKeyboardShortcuts(
-    {
-      j: () => stepSweep(1),
-      k: () => stepSweep(-1),
-    },
-    canWalk,
+    liveKeyMap(gates, { ownControlFocused }, {
+      "walk-down": { j: () => stepSweep(1) },
+      "walk-up": { k: () => stepSweep(-1) },
+      // w has no native meaning on a control, so it is bound either way.
+      commit: { w: openCursor, Enter: openCursor },
+      "sweep-step": { ArrowLeft: () => stepSweep(-1), ArrowRight: () => stepSweep(1) },
+      "sweep-jump": { Home: () => jumpSweep("first"), End: () => jumpSweep("last") },
+      // The sheet itself. Unconditional, because the one thing a person who
+      // does not know the shortcuts need is a way to find them; it inherits
+      // the overlay rule for free while it is open (a role="dialog" target
+      // is not ours to act on), so the room goes quiet on its own.
+      "open-sheet": { "?": () => setLegendOpen(true) },
+    }),
+    true,
   );
-  // w has no native meaning on a control, so it is bound either way; Enter
-  // yields to whatever control on this console holds the keyboard.
-  useKeyboardShortcuts({ w: openCursor }, canCommit);
-  useKeyboardShortcuts({ Enter: openCursor }, canCommit && !ownControlFocused);
-  // The sheet itself. Unconditional, because the one thing a person who
-  // does not know the shortcuts need is a way to find them; it inherits the
-  // overlay rule for free while it is open (a role="dialog" target is not
-  // ours to act on), so the room underneath goes quiet on its own.
-  useKeyboardShortcuts({ "?": () => setLegendOpen(true) });
 
   // ── The g namespace ──
   // `g` is not a command, it is a prefix that opens a menu of
@@ -1074,19 +1092,10 @@ function FacilitatorGrid() {
   //
   // ONE list, read four times: the hook dispatches from it, the
   // armed-chord chip offers from it, the sheet documents it, and the
-  // `aria-keyshortcuts` question was answered once and for all by not
-  // hand-writing it here. The sheet is handed these same objects rather
-  // than a retyped copy, because a legend that lists chords the page
-  // cannot perform is exactly the lie this design exists to prevent.
-  const gates: ShortcutGates = {
-    walk: canWalk,
-    commit: canCommit,
-    sweep: canSweep,
-    link: canLink,
-    pane: watchId !== null,
-    views: viewsOpen,
-  };
-  const chordIsLive = (gate: ShortcutGate) => gate === "always" || gates[gate];
+  // sheet is handed these same objects rather than a retyped copy, because
+  // a legend that lists chords the page cannot perform is exactly the lie
+  // this design exists to prevent.
+  const chordIsLive = (gate: ShortcutGate) => gateIsLive(gate, gates);
   const namespace: NamespaceChord[] = [
     { keys: "g i", label: "jump to the first row", group: "walk", gate: "walk", run: () => jumpSweep("first") },
     { keys: "g n", label: "jump to the last row", group: "walk", gate: "walk", run: () => jumpSweep("last") },
@@ -1124,15 +1133,15 @@ function FacilitatorGrid() {
   // for the policy). Home/End would otherwise scroll the page, so while a
   // run is being watched they belong to the sweep — the one place these
   // keys stop meaning "scroll to the top/bottom".
-  useKeyboardShortcuts(
-    {
-      ArrowLeft: () => stepSweep(-1),
-      ArrowRight: () => stepSweep(1),
-      Home: () => jumpSweep("first"),
-      End: () => jumpSweep("last"),
-    },
-    canSweep,
-  );
+/**
+   * The keys the pane claims, written from the rows that bind them: the
+   * transport when there is somewhere to step, and Escape whenever the pane
+   * is on screen. Computed once and handed to the pane, so its live and dead
+   * states advertise the same thing and neither can hand-write a key.
+   */
+  const paneShortcuts = liveShortcuts(["sweep-step", "sweep-jump", "dismiss-pane"], gates);
+  /** The grid's own keys, from the same rows. */
+  const gridShortcuts = liveShortcuts(["walk-down", "walk-up", "commit"], gates);
 
   function toggleStatus(status: string) {
     void setStatuses((prev) => {
@@ -1266,8 +1275,13 @@ function FacilitatorGrid() {
             if (landing !== null) setWalkedRunId(landing);
             announce("Watch link is dead — showing the full room");
           }}
+          keyShortcuts={paneShortcuts}
           position={sweepList.length > 0 ? { index: sweepIndex, total: sweepList.length } : null}
-          canStep={sweepList.length > 1}
+          // The pane only renders while a run is watched, so the sweep
+          // gate's watchId half is already true here: this is exactly "there
+          // is somewhere to step to", read from the same expression the
+          // transport keys are mounted from.
+          canStep={gates.sweep}
           hiddenByFacet={hiddenByFacet}
         />
       )}
@@ -1332,7 +1346,7 @@ function FacilitatorGrid() {
               type="button"
               onClick={() => setLegendOpen(true)}
               aria-haspopup="dialog"
-              aria-keyshortcuts="?"
+              aria-keyshortcuts={liveShortcuts(["open-sheet"], gates)}
               className="text-xs text-gray-500 underline-offset-2 hover:text-black hover:underline"
               title="j and k walk the visible rows, wrapping at the ends; Enter or w opens the watch pane on the row you stopped on; g then i or n jumps to the first or last row, g then w watches the cursor row, g then l copies its run link, g then v opens the saved views. Press ? for the full sheet."
             >
@@ -1398,7 +1412,11 @@ function FacilitatorGrid() {
 
           <Table
             aria-label="Participants"
-            aria-keyshortcuts="j k Enter w"
+            // Written from the rows that bind them, so the grid cannot
+            // advertise a key the page has stopped listening for (and
+            // omits the attribute entirely on an empty room, where it would
+            // claim to answer to nothing in particular).
+            aria-keyshortcuts={gridShortcuts || undefined}
           >
             <TableHeader>
               <TableRow className="hover:bg-transparent">
@@ -1466,13 +1484,14 @@ function FacilitatorGrid() {
         </>
       )}
 
-      {/* The sheet itself, portaled out by the dialog primitive. `bound` is
-          the three gate expressions that mount the bindings above, so a
-          dimmed entry here is the same condition that took the key away. */}
+      {/* The sheet itself, portaled out by the dialog primitive. `gates` is
+          the object the bindings above are mounted from, so a dimmed entry
+          here is the same condition that took the key away — and the keys
+          and their words come from the same declaration the bindings do. */}
       <ShortcutLegend
         open={legendOpen}
         onOpenChange={setLegendOpen}
-        bound={gates}
+        gates={gates}
         chords={namespace}
       />
     </div>
