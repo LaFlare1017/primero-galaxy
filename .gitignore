@@ -1,5 +1,6 @@
-# dependencies
-/node_modules
+# dependencies (unanchored on purpose: a nested workspace installs its own, and
+# `git add delegate/` must not sweep thousands of them in)
+node_modules
 
 # next.js
 /.next/
