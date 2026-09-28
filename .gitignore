@@ -43,6 +43,10 @@ playwright/.cache/
 /finbench/
 /finbench-output/
 .env*
+# ...but the env template is tracked on purpose (the README points at it), and
+# `.env*` above is unanchored, so it covers the template too. Re-include it, or
+# scripts/gitignore-gate.mjs fails on a path that belongs in the repo.
+!.env.local.example
 
 # delegate workshop runtime data (participant labels + transcripts — never commit)
 delegate/data/

@@ -60,6 +60,8 @@ The E2E suite proves the interaction pipeline with **real browser input**: boot 
 
 CI also enforces the Lighthouse accessibility/SEO scores (currently **100/100 on both routes**) via `scripts/lighthouse-gate.mjs`; the gate fails the build on any regression.
 
+A tracked path that a `.gitignore` rule also covers is invisible in both places you would look for it — `git status` says nothing, because the file is committed, and the rule reads as though the path were never meant to be here — so `scripts/gitignore-gate.mjs` asks `git check-ignore` about every tracked file and fails naming the path and the rule that shadows it. It counts only the `.gitignore` files committed here (your own global excludes are yours) and treats a `!` re-inclusion as the opposite of a violation, which is what git reports for it. It refuses to pass when it has nothing to read, and runs a fixture that plants a tracked, ignored file and must catch it.
+
 On CI (`retries: 2`, `trace: on-all-retries`), a flaky test **passes** the job — so the run is followed by `scripts/flaky-report.mjs`, which parses the JSON report and writes the flaky table (test, attempts, first-failure point) into the job summary and exposes a `flaky_count` output: the flake rate is a visible metric, never silently absorbed. Report and retry-attempt traces upload on every run, green or not. Locally the suite runs with `retries: 0` — a flake is a failure you see immediately, and the deterministic patterns in `e2e/cmdk.ts` exist precisely to keep it rare.
 
 ## The Circle extraction: shared UI primitives and filter engine

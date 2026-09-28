@@ -25,6 +25,10 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # A tracked path that a rule also covers is invisible to `git status` and
+      # to the rule's reader alike; nothing else in this job would notice.
+      - name: Check that no tracked file is gitignored
+        run: node scripts/gitignore-gate.mjs
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run build
