@@ -263,13 +263,22 @@ export default function LandingPage() {
             {COMPANY_COUNT} companies &middot; 12 industries &middot; AI
             maturity estimates
           </span>
-          <Link
-            href="/galaxy"
-            prefetch={false}
-            className="inline-block py-2.5 transition-colors hover:text-star-bright"
-          >
-            Launch the galaxy ↗
-          </Link>
+          <span className="flex items-center gap-5">
+            <Link
+              href="/finbench"
+              prefetch={false}
+              className="inline-block py-2.5 transition-colors hover:text-star-bright"
+            >
+              FinBench ↗
+            </Link>
+            <Link
+              href="/galaxy"
+              prefetch={false}
+              className="inline-block py-2.5 transition-colors hover:text-star-bright"
+            >
+              Launch the galaxy ↗
+            </Link>
+          </span>
         </div>
       </footer>
     </main>
