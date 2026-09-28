@@ -9,6 +9,7 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
+    "hooks:install": "git config core.hooksPath .githooks",
     "reset:delegate": "npm --prefix delegate run build --silent && node delegate/dist/alpha/reset-cohort.js"
   },
   "dependencies": {
