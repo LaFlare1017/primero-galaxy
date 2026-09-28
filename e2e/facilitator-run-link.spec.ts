@@ -352,6 +352,73 @@ test.describe('Facilitator run links', () => {
     await expect(pane).toBeVisible();
   });
 
+  test('a shared ?watch= link that points at nothing heals into the full room', async ({ page }) => {
+    // The other end of the shared-link story, and the one that used to
+    // strand people: a link whose run is not in the store — cleared after
+    // the link was handed over, or copied off a machine that never had it.
+    // The endpoint 404s, which is the same answer a deleted run gives, and
+    // the console used to answer it with a bare sentence in a <div> that
+    // had dropped the pane's name: no region, no close button, no lever at
+    // all. Someone arriving by link was parked in front of a dead pane.
+    await startRun(page, `E2E ${STAMP} StaleHost`, 's1');
+    const submitted = await startRun(page, `E2E ${STAMP} StaleSub`, 's2');
+    const res = await page.request.post('/api/delegate/submit', {
+      data: { runId: submitted.runId, answer: MIN_40_WORDS },
+    });
+    expect(res.ok()).toBeTruthy();
+    // A run id the store has never held, in the shape a real one takes.
+    const dead = `run_stale_${STAMP}`;
+
+    // Arriving with a facet, so "the full room" is a claim the test can
+    // check: the working row this test seeded is filtered out on arrival
+    // and present after the recovery.
+    await page.goto(`/delegate/facilitator?status=submitted&watch=${dead}`);
+
+    // The pane keeps its landmark in the dead state — the thing the old
+    // <div> lost — and names the contradiction as its description, so the
+    // note is part of the pane rather than a sentence floating under it.
+    const pane = page.getByRole('region', { name: 'Watch pane' });
+    await expect(pane).toBeVisible({ timeout: 15_000 });
+    await expect(pane).toHaveAttribute('aria-describedby', 'watch-stale-run');
+    await expect(pane.locator('#watch-stale-run')).toContainText('no longer in the workshop store');
+    await expect(pane.getByText('This run could not be found.')).toBeVisible();
+    // Not the OTHER contradiction: a run the store never had is not a run
+    // the status filter hid, so the facet note and its lever stay away.
+    await expect(page.locator('#watch-hidden-by-facet')).toHaveCount(0);
+    // Nor did it quietly watch somebody else on the way in.
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('watch'))
+      .toBe(dead);
+
+    const rows = page.locator('tbody tr');
+    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+    await expect(rows.filter({ hasText: `E2E ${STAMP} StaleHost` })).toHaveCount(0);
+
+    // The offer is the repair, and it is one action: the dead pointer and
+    // the facet it arrived with both go, and the cursor lands on a row that
+    // is really there — not on the run that vanished.
+    await pane.getByRole('button', { name: 'Show the full room' }).click();
+    const actions = page.getByRole('status', { name: 'Console action' });
+    await expect(actions).toHaveText('Watch link is dead — showing the full room');
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('watch'), { timeout: 5_000 })
+      .toBe(null);
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('status'), { timeout: 5_000 })
+      .toBe(null);
+    await expect(pane).toHaveCount(0);
+
+    // The room is a room: the working row the facet was hiding is back,
+    // and the cursor is on a row that exists rather than on the dead id —
+    // a dead run has no row at all, so a marked row is a real one.
+    const host = rows.filter({ hasText: `E2E ${STAMP} StaleHost` });
+    await expect(host).toHaveCount(1);
+    await expect(page.locator('tbody tr[aria-current="true"]')).toHaveCount(1);
+    // And the landing spoke: the walk region is derived from the row the
+    // cursor is on, so it is non-empty exactly when the cursor is real.
+    await expect(page.getByRole('status', { name: 'Cursor row' })).toContainText(`, `);
+  });
+
   test('the watch pane sweeps the visible participants with prev/next', async ({ page }) => {
     // Three sessions with labels that sort as a CONTIGUOUS block: the
     // stamp leads ("E2E <stamp> SweepA/B/C"), so this execution's trio is

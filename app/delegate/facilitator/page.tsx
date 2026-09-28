@@ -275,6 +275,14 @@ const WATCH_POLL_MS = 3000;
 const HIDDEN_BY_FACET_ID = "watch-hidden-by-facet";
 
 /**
+ * Id of the dead-link note, wired the same way. Separate from the facet
+ * note because the two never show at once — a run the store does not have
+ * cannot also be a run the grid filtered out — and a shared id would make
+ * `aria-describedby` point at an element that is not there.
+ */
+const STALE_RUN_ID = "watch-stale-run";
+
+/**
  * Live mirror of a participant's run (the audit's end-to-end sharing,
  * taken to the console itself): polls GET /api/delegate/run/[runId]/state
  * and renders what the participant sees — status, the elapsed clock
@@ -291,6 +299,7 @@ function WatchPane({
   onClose,
   onStep,
   onReveal,
+  onRecover,
   position,
   canStep,
   hiddenByFacet,
@@ -300,6 +309,13 @@ function WatchPane({
   onStep: (delta: number) => void;
   /** Lift the status filter so this run's row exists in the grid again. */
   onReveal: () => void;
+  /**
+   * The dead link's way out: drop `?watch=` and the facet it arrived with,
+   * and land the cursor on a row that exists. Deliberately not a shortcut —
+   * it is a repair offered once, at the one moment it is the only thing
+   * that helps, not a destination worth a key.
+   */
+  onRecover: () => void;
   position: { index: number; total: number } | null;
   canStep: boolean;
   /** The grid is filtered so this run has no row, though the run is fine. */
@@ -371,12 +387,42 @@ function WatchPane({
   const mm = String(Math.floor(elapsed / 60)).padStart(2, "0");
   const ss = String(elapsed % 60).padStart(2, "0");
 
+  // A link that points at nothing is still a shared link, and the person
+  // holding it is usually standing in a room they cannot see the rest of.
+  // So the dead pane is not a dead end: it keeps the pane's own landmark and
+  // key hints (the arrows still step `?watch=` onto a run that exists, and
+  // the pane remounts on it), states the contradiction, and offers the one
+  // action that repairs it. What is deliberately NOT done is quietly
+  // watching somebody else instead — the same rule as the hidden-by-facet
+  // note: say what is wrong, offer the fix, never rewrite the view.
   if (missing) {
     return (
-      <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">
-        <p className="font-medium text-black">This run could not be found.</p>
-        <p className="mt-1 text-xs">It may have been cleared from the workshop store. Close the pane and pick another row.</p>
-      </div>
+      <section
+        className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-4"
+        // Still a region in the dead state. This used to render a bare
+        // <div>, so the moment a link went stale the pane's name vanished
+        // too: nothing in the accessibility tree said a watch was even
+        // open, and the note below it was a floating sentence nobody could
+        // find. Named where it is invisible, described by the note.
+        aria-label="Watch pane"
+        aria-describedby={STALE_RUN_ID}
+        aria-keyshortcuts={canStep ? "ArrowLeft ArrowRight Home End" : undefined}
+      >
+        <p className="text-sm font-medium text-black">This run could not be found.</p>
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+          <p id={STALE_RUN_ID} className="max-w-prose text-xs text-gray-600">
+            The run this link points at is no longer in the workshop store, so there is nothing
+            to mirror. The room below still has everyone in it — pick a participant{canStep ? ", or press ← or → to step to one who is still here" : ""}.
+          </p>
+          <button
+            type="button"
+            onClick={onRecover}
+            className="shrink-0 rounded-md border border-gray-300 bg-white px-2 py-1 text-xs text-gray-600 hover:border-gray-500 hover:text-black"
+          >
+            Show the full room
+          </button>
+        </div>
+      </section>
     );
   }
 
@@ -1096,6 +1142,22 @@ function FacilitatorGrid() {
           }}
           onStep={stepSweep}
           onReveal={() => void setStatuses(null)}
+          // A dead link self-heals into the room it was shared from: the
+          // pointer and the facet it arrived with both go, because a
+          // facilitator handed a link wants the whole room, not a filtered
+          // slice of one — and the cursor lands on the first row this
+          // console could already see, which stays visible once the facet
+          // lifts, so Enter and g l act on a participant rather than on
+          // nothing. Announced, because the view changed under them and
+          // nothing else on screen moves.
+          onRecover={() => {
+            const landing = sweepList[0] ?? null;
+            void setWatchId(null);
+            void setStatuses(null);
+            setCursorId(landing);
+            if (landing !== null) setWalkedRunId(landing);
+            announce("Watch link is dead — showing the full room");
+          }}
           position={sweepList.length > 0 ? { index: sweepIndex, total: sweepList.length } : null}
           canStep={sweepList.length > 1}
           hiddenByFacet={hiddenByFacet}
