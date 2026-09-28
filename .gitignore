@@ -48,3 +48,8 @@ delegate/data/
 delegate/snapshots/
 delegate/dist/
 delegate/docs/readout-*.md
+
+# ... and the rehearsal debrief, which is filled from a scripted cohort so the
+# facilitator can time the walk, and which says to delete itself once the real
+# session has run
+delegate/docs/alpha-debrief-REHEARSAL.md

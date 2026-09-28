@@ -190,6 +190,7 @@ Then confirm with the preflight: `npm run alpha:preflight -- --url http://127.0.
 ## Repository map
 
 - `docs/delegate-handoff.md` — the full engineering handoff (scope, architecture, six scenarios, scoring, gates)
+- `docs/url-state-audit.md` — the URL-state audit across Galaxy, FinBench and Delegate, with the delegate items annotated in place as they ship
 - `docs/alpha-run-of-show.md` — facilitator card: per-participant sequence, scripts, interview questions, capture sheet
 - `docs/alpha-dry-run.md` — three-pass rehearsal checklist (self-review → full dress → day-of) with go/no-go gates
 - `docs/alpha-findings.md` — interview capture + rubric-rewrite candidates template (filled live during the alpha)
