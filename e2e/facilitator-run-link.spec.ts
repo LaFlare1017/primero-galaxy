@@ -1076,7 +1076,13 @@ test.describe('Facilitator run links', () => {
     await expect(cursored).toHaveCount(0);
     await expect(pane).toHaveCount(0);
 
-    // Resolving the chord takes the chip down with it.
+    // Resolving the chord takes the chip down with it — armed again first,
+    // because the prefix lapses after 1500ms and the assertions above are
+    // not free on a room this long: the store accumulates, and a grid of
+    // thousands of rows makes each of them a re-render. Re-arming keeps the
+    // test about RESOLUTION rather than about whether three assertions fit
+    // inside a timer.
+    await page.keyboard.press('g');
     await page.keyboard.press('n');
     await expect(chip).toHaveCount(0, { timeout: PROMPT_MS });
     await expect(rows.last()).toHaveAttribute('aria-current', 'true');
@@ -1276,6 +1282,107 @@ test.describe('Facilitator run links', () => {
     await page.keyboard.press('Escape');
     await expect(views).toHaveCount(0);
     await expect(actions).toHaveText('Saved views closed');
+  });
+
+  test('the walk scrolls the cursor row into view, and only when it is off-screen', async ({ page }) => {
+    // The walk is a cursor the eye has to be able to follow, and every key
+    // the console binds suppresses the browser's own scrolling — so without
+    // a scroll the ring would keep travelling below the fold: announced to
+    // a screen reader, never seen. `g n` is where it is most obvious, being
+    // one key that lands on the last row of a room nobody can see.
+    //
+    // A deliberately short window and a handful of seeded rows, so the claim
+    // is about scrolling rather than about a room that happens to fit: a
+    // fresh store and an accumulated one both overflow a 300px window, and
+    // the store is long past the point where a seeded room would change
+    // anything. The labels sort AFTER every other row, so this test's own
+    // block is the tail of the grid either way — its geometry is the test's
+    // own, not the store's. Seeded as few rows as the window needs: the
+    // store accumulates, and every row here is permanent junk every later
+    // run has to re-render.
+    await page.setViewportSize({ width: 900, height: 300 });
+    const seeded: Array<{ label: string; runId: string }> = [];
+    for (let i = 0; i < 8; i += 1) {
+      const label = `zz E2E ${STAMP} Scroll${i}`;
+      const run = await startRun(page, label, 's1');
+      seeded.push({ label, runId: run.runId });
+    }
+
+    await page.goto('/delegate/facilitator');
+    const rows = page.locator('tbody tr');
+    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+    const cursored = page.locator('tbody tr[aria-current="true"]');
+    const fullyInView = (row: Locator) =>
+      row.evaluate((el) => {
+        const box = el.getBoundingClientRect();
+        return box.top >= 0 && box.bottom <= window.innerHeight;
+      });
+    const scrollY = () => page.evaluate(() => Math.round(window.scrollY));
+    // Exact, by cell: the labels are Scroll1 / Scroll10 / Scroll11…, so a
+    // substring filter would match five rows at once.
+    const rowFor = (label: string) =>
+      rows.filter({ has: page.getByRole('cell', { name: label, exact: true }) });
+
+    // The room really is taller than the window, and its top is on screen:
+    // both halves of the precondition, so a pass cannot mean "everything
+    // fitted anyway". A cold console has no cursor at all — arriving does
+    // not walk anywhere — so nothing is marked yet, which is the state the
+    // first key starts from.
+    const rowCount = await rows.count();
+    expect(rowCount, 'the grid overflows the window').toBeGreaterThan(4);
+    await expect(cursored).toHaveCount(0);
+    await expect.poll(() => fullyInView(rows.first())).toBe(true);
+    await expect.poll(() => fullyInView(rows.last())).toBe(false);
+    // One of this test's own rows, below the fold, kept for the last step.
+    const seen = await Promise.all(seeded.map((s) => fullyInView(rowFor(s.label))));
+    const offScreen = seeded[seen.indexOf(false)];
+    expect(offScreen, 'this test seeded a row below the fold').toBeTruthy();
+
+    // g n: one chord to the last row, and the page follows it there. This is
+    // the whole feature — the destination is a row, so landing on it has to
+    // be a row you can see.
+    await page.keyboard.press('g');
+    await page.keyboard.press('n');
+    await expect(cursored).toHaveCount(1);
+    await expect(cursored).toHaveAttribute('aria-current', 'true');
+    await expect.poll(() => fullyInView(cursored)).toBe(true);
+    const atEnd = await scrollY();
+    expect(atEnd, 'the page moved to the end of the room').toBeGreaterThan(0);
+
+    // j from the last row wraps to the first, so the walk scrolls back up as
+    // readily as it scrolls down. Not necessarily to 0: `nearest` stops at
+    // the minimum scroll that reveals the row, and the toolbar above the
+    // grid means the first row is not the top of the document.
+    await page.keyboard.press('j');
+    await expect
+      .poll(async () => (await rows.first().getAttribute('aria-current')) === 'true')
+      .toBe(true);
+    await expect.poll(() => fullyInView(rows.first())).toBe(true);
+    const backAtTop = await scrollY();
+    expect(backAtTop, 'the page came back up to the top of the room').toBeLessThan(atEnd);
+
+    // A step INSIDE the visible room must not move the page at all: this is
+    // `block: "nearest"`, not `center`. A facilitator scanning a run of
+    // working participants would otherwise have the whole grid sliding
+    // under the cursor on every keystroke.
+    await page.keyboard.press('j');
+    await expect
+      .poll(async () => (await rows.nth(1).getAttribute('aria-current')) === 'true')
+      .toBe(true);
+    expect(await scrollY(), 'a step within the visible room left the page where it was').toBe(backAtTop);
+    await expect.poll(() => fullyInView(rows.nth(1))).toBe(true);
+
+    // And the decision the keying encodes: ARRIVING is not walking. A shared
+    // ?watch= link points at a row below the fold, and the pane opens at the
+    // top of the page — the page must stay where the reader found it, or
+    // every shared link would yank the window away from the pane someone
+    // just asked to watch. (The outcome, not the mechanism: the effect is
+    // keyed on the walked run, and a deep link also mounts an empty grid, so
+    // the two cannot be told apart from out here. See the effect's comment.)
+    await page.goto(`/delegate/facilitator?watch=${offScreen.runId}`);
+    await expect(page.locator('section[aria-label^="Watching run for"]')).toBeVisible({ timeout: 15_000 });
+    await expect.poll(() => fullyInView(rowFor(offScreen.label))).toBe(false);
+    expect(await scrollY(), 'opening a shared link left the page where the reader found it').toBe(0);
   });
 
   test('the saved-views popover shields the room from j, k, and w', async ({ page }) => {

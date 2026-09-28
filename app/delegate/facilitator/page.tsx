@@ -867,6 +867,48 @@ function FacilitatorGrid() {
     [walkedRunId, visibleRows],
   );
   /**
+   * The walk is a cursor the eye has to be able to follow. A workshop room
+   * is a long grid, and every key the console binds suppresses the browser's
+   * own scrolling, so without this the walk would happily carry a ring
+   * further and further below the fold: audible, in the live region, and
+   * invisible. The chord that made it obvious is `g n` — one key that jumps
+   * to the last row, which was always going to land off-screen.
+   *
+   * Keyed on `walkedRunId` rather than on the cursor because that is exactly
+   * "the walk moved": every route that walks sets it (j/k, the pane's
+   * arrows, Home/End, g i / g n) and arriving through a shared `?watch=`
+   * link does not, which is right — opening a link should leave the page
+   * where the reader found it. One effect, so no route can be the one that
+   * forgets.
+   *
+   * Arriving is in fact safe twice over, and the spec pins the OUTCOME
+   * rather than the mechanism, because the two cannot be told apart from
+   * outside today: keying on the cursor instead would fire the effect on
+   * arrival — and still scroll nothing, since a deep link mounts the console
+   * with an empty grid, so the row it names does not exist yet at the moment
+   * the cursor takes its value. Both are worth keeping: the keying is the
+   * rule, the empty grid is the accident that happens to agree with it.
+   *
+   * `block: "nearest"` so the page moves ONLY when the row is off-screen:
+   * a step inside the visible room must not nudge the grid under the
+   * cursor, and `center` would scroll on every single step. Instant rather
+   * than smooth, because a held key queues one glide per repeat and the row
+   * would arrive long after the ring did — and a scroll is not motion worth
+   * animating when the thing it serves is a keystroke.
+   *
+   * The row is FOUND rather than ref'd: the table primitives in
+   * components/ui/primitives/table.tsx are typed `ComponentPropsWithoutRef`
+   * and forward no refs, and adding them for one caller would put the file
+   * out of step with itself. So the query is the same one the specs read the
+   * cursor with — `tr[aria-current="true"]` — scoped to the page root, and
+   * it cannot drift from what the grid is marking because it IS what the
+   * grid is marking.
+   */
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    gridRef.current?.querySelector('tr[aria-current="true"]')?.scrollIntoView({ block: "nearest" });
+  }, [walkedRunId]);
+  /**
    * A shared `?watch=` link can name a run the current status facets have
    * removed from the room — the link is the whole point of the feature, so
    * the pane opens regardless, but the grid behind it has no row for this
@@ -1127,6 +1169,10 @@ function FacilitatorGrid() {
 
   return (
     <div
+      // The page root, and the scope the walk's scroll effect queries for
+      // the cursor row (see the effect: the table primitives forward no
+      // refs). One ref on the page rather than one per row.
+      ref={gridRef}
       className="min-h-screen bg-white text-black p-6"
       onFocus={() => setOwnControlFocused(true)}
       onBlur={() => setOwnControlFocused(false)}
@@ -1368,8 +1414,7 @@ function FacilitatorGrid() {
                 </TableHead>
               </TableRow>
             </TableHeader>
-            <TableBody>
-              {visibleRows.map((r, i) => (
+            <TableBody>                {visibleRows.map((r, i) => (
                 <TableRow
                   key={i}
                   aria-current={r.runId === cursorRunId ? "true" : undefined}
