@@ -44,6 +44,14 @@ import { expect, test, type Page } from '@playwright/test';
  * The consumer side (the watch pane sweep) is proven end to end in
  * facilitator-run-link.spec.ts, including a positive control and
  * mutation-proven guards.
+ *
+ * The file also runs the console's keyboard DECLARATION
+ * (components/delegate/consoleShortcuts.ts) the same way — from source, in a
+ * browser — and holds it to the coherence its one-declaration design promises:
+ * no reachable console state may let two bindings answer to one key, and no
+ * gate may be declared that no state can reach or no binding reads. The two
+ * modules are loaded together there, because the one key a declaration may
+ * bind twice is the one the policy names.
  */
 
 const GUARDS_PATH = join(__dirname, '..', 'components', 'delegate', 'shortcuts.ts');
@@ -158,7 +166,12 @@ async function loadModule(
 
 /** The guards module, as used by the policy cases below. */
 async function loadGuards(page: Page): Promise<void> {
-  await loadModule(page, GUARDS_PATH, ['ownsArrowKeys', 'shortcutAllowed'], '__guards');
+  await loadModule(
+    page,
+    GUARDS_PATH,
+    ['ownsArrowKeys', 'shortcutAllowed', 'OVERLAY_DISMISS_KEY'],
+    '__guards',
+  );
 }
 
 /** The console's keyboard declaration, as used by the manifest cases below. */
@@ -383,6 +396,35 @@ interface ConsoleGates {
   link: boolean;
   pane: boolean;
   views: boolean;
+}
+
+/**
+ * The console's state as `consoleGates` takes it — the five inputs every gate
+ * is a judgement about. The coherence case below enumerates these directly
+ * rather than going through the UI, because the claim is about the
+ * DECLARATION, and the state space is small enough to walk exhaustively.
+ */
+interface ConsoleState {
+  sweepList: string[];
+  watchId: string | null;
+  viewsOpen: boolean;
+  cursorTarget: string | null;
+  cursorRow: unknown;
+}
+
+/**
+ * The declaration and the readers the coherence case calls, described by
+ * SHAPE rather than imported: the module is loaded from its own source into
+ * the page, so a renamed export breaks the load above rather than quietly
+ * satisfying a type here.
+ */
+interface ConsoleDeclarationApi {
+  CONSOLE_KEYS: Array<{ id: string; keys: readonly string[]; gate: string; under?: string; mount: string }>;
+  CONSOLE_CHORDS: Array<{ id: string; keys: string; gate: string }>;
+  consoleGates: (state: ConsoleState) => ConsoleGates;
+  gateIsLive: (gate: string, gates: ConsoleGates) => boolean;
+  rowIsLive: (row: { gate: string; under?: string }, gates: ConsoleGates) => boolean;
+  layerIsLive: (id: string, gates: ConsoleGates) => boolean;
 }
 
 const GATE_CASES: GateCase[] = [
@@ -777,5 +819,200 @@ test.describe('Facilitator console keyboard declaration', () => {
       'link',
       'walk',
     ]);
+  });
+
+  test('no reachable state lets two bindings claim one key, and every gate is reachable', async ({
+    page,
+  }) => {
+    // The guards above check the declaration against a handful of named
+    // rooms and against tables written here. This one checks it against
+    // ITSELF: the state space is enumerated, and the coherence its
+    // one-declaration design promises is asserted everywhere in it, so a row
+    // added to the declaration cannot quietly collide with a row already
+    // there — which is the failure a single key map makes silent, since the
+    // later binding simply wins and the sheet goes on documenting both.
+    //
+    // Two claims, the ones the sheet's own honesty rests on:
+    //
+    //   1. No reachable state lets two bindings claim one key. The console
+    //      binds through three surfaces, and each is checked on its own
+    //      terms because each fails differently: the single KEY MAP (two live
+    //      rows on one key, where the second silently clobbers the first), the
+    //      ordered LAYERS (two live layers on one key, where one press closes
+    //      two things — the bug `under` exists to prevent), and the CHORD
+    //      namespace (two live chords on one sequence, which the sequence
+    //      hook's map would collapse the same way).
+    //
+    //      Escape is the one key that legitimately appears more than once: the
+    //      sheet closes with its own Radix dismissal, and the panel and the
+    //      pane each bind it as a layer. The declaration resolves that two
+    //      ways and both are asserted here — the two layer rows are stacked by
+    //      `under`, so they are never live together, and the third is a
+    //      `primitive` row, which may share the POLICY's dismissal key with a
+    //      console binding precisely because the policy hands that key to the
+    //      open overlay before the page hears it. The dismissal key is read
+    //      from the policy module rather than typed here, so the console's
+    //      literal and the policy's constant cannot drift apart.
+    //
+    //   2. Every declared gate is reachable from some real console state, and
+    //      read by something. A gate no state can satisfy is a documented key
+    //      nobody can ever press; a gate no binding reads is a name with no
+    //      meaning. Both are the same class of dead weight, and neither is
+    //      visible in the sheet.
+    //
+    // The state space is enumerated OVER the console's real invariants rather
+    // than over every combination of the five fields, because several
+    // combinations cannot happen and a guard that let them count would accept
+    // a gate that is only ever true somewhere the console cannot be. Two are
+    // worth naming. `cursorTarget` is never null in a room that has rows —
+    // the page falls back to the first visible row — so it is drawn from the
+    // room rather than from all six values. And `watchId` MAY sit outside the
+    // room, because a shared `?watch=` link to a run the facets have hidden is
+    // a state this console explicitly supports (that is the `hiddenByFacet`
+    // branch), so one run id outside the room is drawn as well.
+    await page.goto('about:blank');
+    await loadConsoleKeys(page);
+    await loadGuards(page);
+
+    const read = await page.evaluate(() => {
+      const api = (window as unknown as { __console: ConsoleDeclarationApi }).__console;
+      const guards = (window as unknown as { __guards: { OVERLAY_DISMISS_KEY: string } }).__guards;
+
+      // ── The reachable states ──
+      // Three runs is more room than any gate asks about — they turn on
+      // emptiness, single-versus-multiple, and membership — and the sizes
+      // below are walked anyway so the enumeration cannot be the thing that
+      // decided a gate was reachable.
+      const RUNS = ['r1', 'r2', 'r3'];
+      const states: Array<{ label: string; state: ConsoleState }> = [];
+      for (const size of [0, 1, 2, 3]) {
+        const room = RUNS.slice(0, size);
+        // Nothing watched, any row watched, or a run the room does not hold.
+        const watchIds: Array<string | null> = [null, ...room, 'ghost'];
+        // The cursor is a MEMBER whenever the room is not empty.
+        const targets: Array<string | null> = room.length === 0 ? [null] : [...room];
+        for (const watchId of watchIds) {
+          for (const cursorTarget of targets) {
+            for (const viewsOpen of [false, true]) {
+              states.push({
+                label: `room=[${room.join(',')}] watch=${watchId === null ? 'none' : watchId} views=${viewsOpen ? 'open' : 'shut'} cursor=${cursorTarget === null ? 'none' : cursorTarget}`,
+                state: {
+                  sweepList: [...room],
+                  watchId,
+                  viewsOpen,
+                  cursorTarget,
+                  // The page derives this from the target, so it is null
+                  // exactly when the target is.
+                  cursorRow: cursorTarget === null ? null : { participant: cursorTarget },
+                },
+              });
+            }
+          }
+        }
+      }
+
+      const violations: string[] = [];
+      const firstTrue: Record<string, string> = {};
+      const sharedAcrossMounts = new Set<string>();
+
+      for (const entry of states) {
+        const gates = api.consoleGates(entry.state);
+        const values = gates as unknown as Record<string, boolean>;
+        for (const name of Object.keys(values)) {
+          if (values[name] === true && firstTrue[name] === undefined) firstTrue[name] = entry.label;
+        }
+
+        const mapClaims: Record<string, string[]> = {};
+        const layerClaims: Record<string, string[]> = {};
+        const overlayKeys = new Set<string>();
+        for (const row of api.CONSOLE_KEYS) {
+          // `held` is left false — the state where a focused control yields
+          // Enter — because a yield can only REMOVE a key, so the unheld map
+          // is a superset of what can ever be bound and the conservative one
+          // to check collisions against.
+          if (row.mount === 'map' && api.rowIsLive(row, gates)) {
+            for (const key of row.keys) mapClaims[key] = [...(mapClaims[key] ?? []), row.id];
+          }
+          if (row.mount === 'layer' && api.layerIsLive(row.id, gates)) {
+            for (const key of row.keys) layerClaims[key] = [...(layerClaims[key] ?? []), row.id];
+          }
+          if ((row.mount === 'primitive' || row.mount === 'global') && api.rowIsLive(row, gates)) {
+            for (const key of row.keys) overlayKeys.add(key);
+          }
+        }
+        for (const key of Object.keys(mapClaims)) {
+          if (mapClaims[key].length > 1) {
+            violations.push(`${entry.label}: the key map binds ${key} to ${mapClaims[key].join(' and ')} at once`);
+          }
+        }
+        for (const key of Object.keys(layerClaims)) {
+          if (layerClaims[key].length > 1) {
+            violations.push(`${entry.label}: two layers both answer ${key} (${layerClaims[key].join(' and ')})`);
+          }
+        }
+        const consoleKeys = new Set([...Object.keys(mapClaims), ...Object.keys(layerClaims)]);
+        for (const key of overlayKeys) if (consoleKeys.has(key)) sharedAcrossMounts.add(key);
+
+        const chordClaims: Record<string, string[]> = {};
+        for (const chord of api.CONSOLE_CHORDS) {
+          if (api.gateIsLive(chord.gate, gates)) {
+            chordClaims[chord.keys] = [...(chordClaims[chord.keys] ?? []), chord.id];
+          }
+        }
+        for (const sequence of Object.keys(chordClaims)) {
+          if (chordClaims[sequence].length > 1) {
+            violations.push(`${entry.label}: two chords share the sequence ${sequence} (${chordClaims[sequence].join(' and ')})`);
+          }
+        }
+      }
+
+      const allKeys = new Set(api.CONSOLE_KEYS.flatMap((row) => [...row.keys]));
+      const prefixes = [...new Set(api.CONSOLE_CHORDS.map((chord) => chord.keys.split(' ')[0]))];
+      const sequences = api.CONSOLE_CHORDS.map((chord) => chord.keys);
+
+      const gateNames = Object.keys(
+        api.consoleGates({ sweepList: [], watchId: null, viewsOpen: false, cursorTarget: null, cursorRow: null }),
+      ) as Array<keyof ConsoleGates>;
+      const named = new Set<string>();
+      for (const row of api.CONSOLE_KEYS) {
+        named.add(row.gate);
+        if (row.under !== undefined) named.add(row.under);
+      }
+      for (const chord of api.CONSOLE_CHORDS) named.add(chord.gate);
+
+      return {
+        stateCount: states.length,
+        violations,
+        sharedAcrossMounts: [...sharedAcrossMounts],
+        dismissalKey: guards.OVERLAY_DISMISS_KEY,
+        // A single key that is also a chord's prefix would be armed as a
+        // namespace and fired as a command by the same press.
+        prefixClashes: prefixes.filter((prefix) => allKeys.has(prefix)),
+        // A chord that is a prefix of another chord would fire before the
+        // longer one could ever complete.
+        chordPrefixClashes: sequences.filter((sequence) =>
+          sequences.some((other) => other !== sequence && other.startsWith(`${sequence} `)),
+        ),
+        unreachable: gateNames.filter((gate) => firstTrue[gate] === undefined),
+        unread: gateNames.filter((gate) => !named.has(gate)),
+        bogus: [...named].filter((gate) => gate !== 'always' && !gateNames.includes(gate as keyof ConsoleGates)),
+      };
+    });
+
+    // The enumeration, pinned: 4 room sizes x (size + 2 watch ids) x (size or
+    // 1 cursors) x 2 panel states = 4 + 6 + 16 + 30. Pinned rather than
+    // described because an enumeration that silently shrank to nothing would
+    // make every assertion below pass vacuously.
+    expect(read.stateCount, 'every state of a bounded room is enumerated').toBe(56);
+    expect(read.violations, 'no reachable state may let two bindings claim one key').toEqual([]);
+    expect(
+      read.sharedAcrossMounts,
+      `an overlay's own dismissal may share only the policy's dismissal key (${read.dismissalKey}) with the console's bindings`,
+    ).toEqual([read.dismissalKey]);
+    expect(read.prefixClashes, 'no single key may also be a chord prefix').toEqual([]);
+    expect(read.chordPrefixClashes, 'no chord may be a prefix of another').toEqual([]);
+    expect(read.unreachable, 'every declared gate must be reachable from some real console state').toEqual([]);
+    expect(read.unread, 'every declared gate must be read by some binding').toEqual([]);
+    expect(read.bogus, 'every gate a binding names must be a real gate').toEqual([]);
   });
 });

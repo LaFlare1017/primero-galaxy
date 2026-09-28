@@ -74,7 +74,15 @@ const OVERLAY_SELECTOR = [
  * clause instead, since the layer is still open at dispatch time — only the
  * dismissal key has to be reasoned about after the fact.
  */
-const OVERLAY_DISMISS_KEY = "Escape";
+/**
+ * Exported because it is the ONE key a declaration is allowed to bind twice:
+ * an overlay's own dismissal and a layer's Escape can both exist, and this is
+ * the name that says which key they are. The console's declaration keeps its
+ * own literal (that module is import-free by design, so the unit spec can run
+ * it on its own), and e2e/delegate-shortcuts.spec.ts bridges the two and
+ * fails if they ever stop agreeing.
+ */
+export const OVERLAY_DISMISS_KEY = "Escape";
 
 /**
  * The layer that owns this keystroke, or null.
