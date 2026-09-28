@@ -575,14 +575,27 @@ test.describe('Facilitator run links', () => {
 
     // Home/End are keys a text field owns too: the caret must still reach
     // the end of the palette search, with no sweep behind it.
-    const before = new URL(page.url()).searchParams.get('watch');
+    //
+    // The run Home landed on is read from the ROOM rather than from the
+    // address bar, and the address bar is then POLLED for it. Reading the URL
+    // the instant the keypress returned was this test's flake: nuqs writes
+    // `?watch=` with history.replaceState, so it trails the DOM by a tick (see
+    // `watching` above), and the read was of the run the deep link arrived on
+    // — the previous value — so the assertion below was about the wrong run.
+    // Two in three runs failed on it before this was fixed.
+    const room = (await (await page.request.get('/api/delegate/facilitator')).json()) as {
+      rows: Array<{ participant: string; runId?: string }>;
+    };
+    const firstRunId = room.rows.find((row) => row.participant === firstName)?.runId;
+    expect(firstRunId, `no run in the room for the first displayed row (${firstName})`).toBeTruthy();
+    await expect.poll(() => new URL(page.url()).searchParams.get('watch')).toBe(firstRunId);
+
     await page.keyboard.press('Control+KeyK');
     const search = page.getByPlaceholder('Type a command or search…');
     await expect(search).toBeFocused();
     await search.fill('delegate');
     await search.press('End');
-    await page.waitForTimeout(400);
-    expect(new URL(page.url()).searchParams.get('watch')).toBe(before);
+    await expect.poll(() => new URL(page.url()).searchParams.get('watch')).toBe(firstRunId);
     await expect(search).toHaveValue('delegate');
     await page.keyboard.press('Escape');
   });
