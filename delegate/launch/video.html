@@ -1,0 +1,743 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Delegate — launch video (15s)</title>
+    <!--
+      A 1920x1080, 15-second launch piece for Delegate, built to be SEEKED rather
+      than played: `window.__seek(t)` paints the frame at t seconds, so the
+      renderer captures frame N at exactly N/30s and a dropped frame or a slow
+      machine cannot move the timing. Nothing here reads the clock or a random
+      number — the same second always paints the same frame.
+
+      The palette is the product's own (`app/globals.css`, `.delegate-light`):
+      paper white, ink #0a0a0a, muted #71717a, hairline #e4e4e7 — plus the one
+      accent the app already owns, the destructive red #b91c1c, spent once, on
+      the planted defect. Type is Geist and Geist Mono, the same files the app
+      loads (SIL OFL 1.1, vendored in fonts/ with the licence).
+
+      The stills are real captures of the running product, taken by
+      capture.mjs into export/stills/, and the tool names in the event log come
+      from the runtime's own `availableTools` (export/stills/facts.js) rather
+      than from this file.
+    -->
+    <style>
+      @font-face {
+        font-family: 'Geist';
+        src: url('fonts/Geist-Variable.woff2') format('woff2');
+        font-weight: 100 900;
+        font-display: block;
+      }
+      @font-face {
+        font-family: 'Geist Mono';
+        src: url('fonts/GeistMono-Variable.woff2') format('woff2');
+        font-weight: 100 900;
+        font-display: block;
+      }
+
+      :root {
+        --ink: #0a0a0a;
+        --paper: #ffffff;
+        --muted: #71717a;
+        --rule: #e4e4e7;
+        --accent: #b91c1c;
+        --sans: 'Geist', ui-sans-serif, system-ui, sans-serif;
+        --mono: 'Geist Mono', ui-monospace, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: var(--sans);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .stage {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+      }
+
+      /* Hairlines, crosshairs and mono labels: the details that reward looking
+         closer, and never more than one of each. */
+      .rule {
+        position: absolute;
+        height: 1px;
+        background: var(--rule);
+        transform-origin: left center;
+      }
+      .crosshair {
+        position: absolute;
+        width: 13px;
+        height: 13px;
+        opacity: 0.75;
+      }
+      .crosshair::before,
+      .crosshair::after {
+        content: '';
+        position: absolute;
+        background: var(--rule);
+      }
+      .crosshair::before {
+        left: 6px;
+        top: 0;
+        width: 1px;
+        height: 13px;
+      }
+      .crosshair::after {
+        top: 6px;
+        left: 0;
+        height: 1px;
+        width: 13px;
+      }
+
+      .lockup {
+        position: absolute;
+        left: 96px;
+        top: 62px;
+        font-family: var(--mono);
+        font-size: 15px;
+        font-weight: 500;
+        letter-spacing: 0.22em;
+      }
+      .slug {
+        position: absolute;
+        right: 96px;
+        top: 62px;
+        font-family: var(--mono);
+        font-size: 14px;
+        letter-spacing: 0.2em;
+        color: var(--muted);
+      }
+      .index {
+        position: absolute;
+        left: 96px;
+        bottom: 58px;
+        font-family: var(--mono);
+        font-size: 14px;
+        letter-spacing: 0.2em;
+        color: var(--muted);
+      }
+      .foot {
+        position: absolute;
+        right: 96px;
+        bottom: 58px;
+        font-family: var(--mono);
+        font-size: 14px;
+        letter-spacing: 0.16em;
+        color: var(--muted);
+      }
+
+      .beat {
+        position: absolute;
+        inset: 0;
+        will-change: opacity;
+      }
+
+      /* ---------------------------------------------------------------- 1 */
+      .cover-stack {
+        position: absolute;
+        left: 96px;
+        top: 300px;
+      }
+      .kicker {
+        font-family: var(--mono);
+        font-size: 17px;
+        letter-spacing: 0.2em;
+        color: var(--muted);
+      }
+      .wordmark {
+        margin-top: 26px;
+        font-size: 172px;
+        font-weight: 300;
+        letter-spacing: -0.045em;
+        line-height: 0.94;
+        overflow: hidden;
+      }
+      .wordmark span {
+        display: inline-block;
+      }
+      .cover-sub {
+        margin-top: 34px;
+        max-width: 1000px;
+        font-size: 36px;
+        font-weight: 300;
+        line-height: 1.34;
+        letter-spacing: -0.012em;
+        color: var(--ink);
+      }
+      .cover-facts {
+        position: absolute;
+        left: 96px;
+        bottom: 150px;
+        display: flex;
+        gap: 46px;
+        font-family: var(--mono);
+        font-size: 15px;
+        letter-spacing: 0.16em;
+        color: var(--muted);
+      }
+
+      /* ---------------------------------------------------------------- 2 */
+      .brief {
+        position: absolute;
+        left: 96px;
+        top: 288px;
+        width: 640px;
+      }
+      .headline {
+        font-size: 76px;
+        font-weight: 300;
+        letter-spacing: -0.035em;
+        line-height: 1.06;
+      }
+      .brief-list {
+        margin-top: 44px;
+        font-family: var(--mono);
+        font-size: 21px;
+        line-height: 2.05;
+      }
+      .brief-list div {
+        white-space: nowrap;
+      }
+      .caret {
+        display: inline-block;
+        width: 11px;
+        height: 22px;
+        margin-left: 3px;
+        background: var(--ink);
+        vertical-align: -3px;
+      }
+      .caption {
+        margin-top: 40px;
+        font-size: 23px;
+        font-weight: 300;
+        color: var(--muted);
+      }
+
+      .window {
+        position: absolute;
+        border: 1px solid var(--rule);
+        background: var(--paper);
+        overflow: hidden;
+        box-shadow: 0 30px 70px rgba(10, 10, 10, 0.08);
+      }
+      .window .bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 40px;
+        padding: 0 16px;
+        border-bottom: 1px solid var(--rule);
+        font-family: var(--mono);
+        font-size: 13px;
+        letter-spacing: 0.14em;
+        color: var(--muted);
+      }
+      .window .bar b {
+        font-weight: 500;
+        color: var(--ink);
+      }
+      .window .shot {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+      .window img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: top left;
+        transform-origin: 30% 20%;
+      }
+      .chip {
+        position: absolute;
+        font-family: var(--mono);
+        font-size: 13px;
+        letter-spacing: 0.18em;
+        color: var(--muted);
+      }
+
+      /* ---------------------------------------------------------------- 3 */
+      .work-head {
+        position: absolute;
+        left: 96px;
+        top: 118px;
+        font-size: 54px;
+        font-weight: 300;
+        letter-spacing: -0.03em;
+      }
+      .log {
+        position: absolute;
+        left: 96px;
+        top: 290px;
+        width: 790px;
+        height: 620px;
+        overflow: hidden;
+      }
+      .log .line {
+        font-family: var(--mono);
+        font-size: 19px;
+        line-height: 1.28;
+        padding: 9px 0;
+        white-space: nowrap;
+        color: var(--ink);
+      }
+      .log .line .t {
+        color: var(--muted);
+      }
+      .log .line .k {
+        color: var(--muted);
+      }
+      .log-label {
+        position: absolute;
+        left: 96px;
+        top: 236px;
+        font-family: var(--mono);
+        font-size: 14px;
+        letter-spacing: 0.2em;
+        color: var(--muted);
+      }
+
+      /* ---------------------------------------------------------------- 4 */
+      .defect {
+        position: absolute;
+        left: 96px;
+        top: 300px;
+        width: 1160px;
+      }
+      .defect .scenario {
+        font-family: var(--mono);
+        font-size: 16px;
+        letter-spacing: 0.2em;
+        color: var(--muted);
+      }
+      .defect h2 {
+        margin-top: 30px;
+        font-size: 92px;
+        font-weight: 300;
+        letter-spacing: -0.038em;
+        line-height: 1.05;
+      }
+      .defect .amount {
+        color: var(--accent);
+      }
+      .defect .question {
+        margin-top: 52px;
+        font-size: 44px;
+        font-weight: 300;
+        color: var(--ink);
+      }
+      .scored {
+        position: absolute;
+        left: 96px;
+        bottom: 150px;
+        display: flex;
+        gap: 14px;
+        font-family: var(--mono);
+        font-size: 14px;
+        letter-spacing: 0.16em;
+        color: var(--muted);
+      }
+      .scored span {
+        border: 1px solid var(--rule);
+        padding: 9px 14px;
+      }
+      .accent-rule {
+        position: absolute;
+        height: 2px;
+        background: var(--accent);
+        transform-origin: left center;
+      }
+
+      /* ---------------------------------------------------------------- 5 */
+      .close-stack {
+        position: absolute;
+        left: 96px;
+        top: 258px;
+      }
+      .close-word {
+        font-size: 132px;
+        font-weight: 300;
+        letter-spacing: -0.045em;
+        line-height: 1;
+        overflow: hidden;
+      }
+      .close-word span {
+        display: inline-block;
+      }
+      .tagline {
+        margin-top: 34px;
+        font-size: 46px;
+        font-weight: 300;
+        letter-spacing: -0.02em;
+      }
+      .close-facts {
+        position: absolute;
+        left: 96px;
+        bottom: 200px;
+        font-family: var(--mono);
+        font-size: 15px;
+        letter-spacing: 0.16em;
+        line-height: 2.1;
+        color: var(--muted);
+      }
+      .close-url {
+        position: absolute;
+        left: 96px;
+        bottom: 138px;
+        font-family: var(--mono);
+        font-size: 17px;
+        letter-spacing: 0.16em;
+        color: var(--ink);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stage" id="stage">
+      <!-- chrome -->
+      <div class="lockup">DELEGATE</div>
+      <div class="slug" id="slug"></div>
+      <div class="index" id="index"></div>
+      <div class="foot">A WORKSHOP SIMULATOR FOR AI DELEGATION</div>
+      <div class="rule" id="rule-top" style="left: 96px; top: 96px; width: 1728px"></div>
+      <div class="rule" id="rule-bottom" style="left: 96px; top: 984px; width: 1728px"></div>
+      <div class="crosshair" style="left: 89px; top: 89px"></div>
+      <div class="crosshair" style="right: 89px; top: 89px"></div>
+      <div class="crosshair" style="left: 89px; bottom: 89px"></div>
+      <div class="crosshair" style="right: 89px; bottom: 89px"></div>
+
+      <!-- 1 — overview -->
+      <section class="beat" id="cover" data-probe>
+        <div class="cover-stack">
+          <div class="kicker" id="cover-kicker">V1 PRE-ALPHA · FACILITATED WORKSHOP</div>
+          <h1 class="wordmark"><span id="cover-word" data-probe>Delegate</span></h1>
+          <p class="cover-sub" id="cover-sub">
+            A finance professional, one fake company, and an AI agent that will do
+            exactly what the brief says — including the part that is wrong.
+          </p>
+        </div>
+        <div class="cover-facts" id="cover-facts"></div>
+      </section>
+
+      <!-- 2 — the brief -->
+      <section class="beat" id="brief">
+        <div class="brief">
+          <h2 class="headline">You specify<br />the work.</h2>
+          <div class="brief-list" id="brief-list"></div>
+          <p class="caption" id="brief-caption">
+            Six scenarios, one narrative order. The agent has one model, one tool
+            set, and no idea what you are about to ask for.
+          </p>
+        </div>
+        <div class="window" id="brief-window">
+          <div class="bar"><span><b>THE WORKSPACE</b></span><span>/delegate</span></div>
+          <div class="shot" style="height: 613px">
+            <img id="still-workspace" data-probe data-still="workspace" alt="The Delegate workspace: chat brief and ERP viewer" src="export/stills/workspace.png" />
+          </div>
+        </div>
+        <div class="chip" id="brief-chip" style="right: 96px; top: 132px">REAL UI · CAPTURED</div>
+      </section>
+
+      <!-- 3 — the work -->
+      <section class="beat" id="work">
+        <h2 class="work-head" id="work-head">The agent works the ledger.</h2>
+        <div class="log-label" id="log-label">EVENT LOG · EVERY CALL, EVERY DOCUMENT</div>
+        <div class="log" id="log" data-probe></div>
+        <div class="window" id="work-window">
+          <div class="bar"><span><b>THE LEDGER</b></span><span>HARBOR LANE INSTRUMENTS</span></div>
+          <div class="shot" style="height: 613px">
+            <img id="still-workspace-2" data-still="workspace" alt="The ERP viewer showing the seeded ledger" src="export/stills/workspace.png" />
+          </div>
+        </div>
+      </section>
+
+      <!-- 4 — the catch -->
+      <section class="beat" id="defect">
+        <div class="defect">
+          <div class="scenario" id="defect-scenario">SCENARIO 03 · THE SUMMARY READS FINE</div>
+          <h2 id="defect-head">
+            A <span class="amount" id="defect-amount"></span> reclass,<br />buried in a real trend.
+          </h2>
+          <p class="question" id="defect-question">Did you catch it?</p>
+        </div>
+        <div class="accent-rule" id="accent-rule" style="left: 96px; top: 246px; width: 1728px"></div>
+        <div class="window" id="defect-window">
+          <div class="bar"><span><b>FACILITATOR VIEW</b></span><span>/delegate/facilitator</span></div>
+          <div class="shot" style="height: 347px">
+            <img id="still-console" data-probe data-still="console" alt="The facilitator console: one row per participant" src="export/stills/console.png" />
+          </div>
+        </div>
+        <div class="scored" id="scored">
+          <span>SPECIFICATION</span><span>VERIFICATION</span><span>THE CATCH</span><span>THE REFUSAL</span>
+        </div>
+      </section>
+
+      <!-- 5 — takeaway -->
+      <section class="beat" id="close">
+        <div class="close-stack">
+          <h1 class="close-word"><span id="close-word">Delegate</span></h1>
+          <p class="tagline" id="tagline">Practice the delegation, not the prompt.</p>
+        </div>
+        <div class="close-facts" id="close-facts"></div>
+        <div class="close-url" id="close-url"></div>
+      </section>
+    </div>
+
+    <script src="export/stills/facts.js"></script>
+    <script>
+      // ---------------------------------------------------------------------
+      // The timeline. Beats are declared once, in order; every value below is a
+      // pure function of t, so any frame can be painted in any order.
+      // ---------------------------------------------------------------------
+      const DURATION = 15.0;
+      const BEATS = [
+        { id: 'cover', start: 0.0, end: 2.6, label: 'OVERVIEW' },
+        { id: 'brief', start: 2.6, end: 6.2, label: 'THE BRIEF' },
+        { id: 'work', start: 6.2, end: 9.6, label: 'THE WORK' },
+        { id: 'defect', start: 9.6, end: 12.6, label: 'THE CATCH' },
+        { id: 'close', start: 12.6, end: 15.0, label: 'TAKEAWAY' },
+      ];
+      const FADE = 0.34;
+
+      const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+      const seg = (t, from, to) => clamp((t - from) / (to - from), 0, 1);
+      const easeOut = (p) => 1 - Math.pow(1 - p, 3);
+      const easeInOut = (p) => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
+      const $ = (id) => document.getElementById(id);
+
+      const url = {
+        /* Fill this in to put a link on the end card; empty keeps it clean. */
+        text: '',
+      };
+
+      const facts =
+        window.__facts ?? {
+          company: 'Harbor Lane Instruments',
+          scenarios: 6,
+          tools: ['search_ledger', 'read_document', 'compute_variance'],
+          participants: 'a small cohort',
+        };
+
+      // The end card's facts, and the cover's, are the runtime's own: the tool
+      // names come from the session API, not from this file.
+      $('cover-facts').innerHTML = [
+        `COMPANY: ${facts.company.toUpperCase()}`,
+        `SCENARIOS: ${facts.scenarios}`,
+        'SCORED: THE HUMAN',
+      ]
+        .map((line) => `<span>${line}</span>`)
+        .join('');
+
+      $('close-facts').innerHTML = [
+        `${facts.scenarios} SCENARIOS IN A FIXED NARRATIVE ORDER`,
+        'EVIDENCE TRAIL ON EVERY SCORE',
+        'FACILITATOR VIEW · ONE-PAGE READOUT PER RUN',
+      ]
+        .map((line) => `<div>${line}</div>`)
+        .join('');
+      $('close-url').textContent = url.text;
+
+      // The amount is scenario 3's, read from the defect package by capture.mjs.
+      $('defect-amount').textContent = `$${Math.round((facts.defectAmount ?? 0) / 1000)}K`;
+
+      // ---- the brief, typed ------------------------------------------------
+      const BRIEF_LINES = [
+        '→ reconcile the march bank feed',
+        '→ flag anything that does not tie',
+        '→ show me the evidence, not the answer',
+      ];
+      $('brief-list').innerHTML = BRIEF_LINES.map(
+        (line) => `<div data-line>${line}</div>`,
+      ).join('');
+      const briefLines = [...document.querySelectorAll('#brief-list div')];
+      briefLines.forEach((line) => (line.dataset.full = line.textContent));
+
+      // ---- the event log: the run's own records ---------------------------
+      // capture.mjs reads these back from the state API after a real turn — the
+      // prompt that went in, every tool call with its arguments, the reply that
+      // came out. If they are missing, the render fails rather than showing a
+      // log that was made up for the video.
+      const log = Array.isArray(facts.log) ? facts.log : [];
+      $('log').innerHTML = log
+        .map(
+          (line, index) =>
+            `<div class="line" data-logline><span class="t">${String(index + 1).padStart(2, '0')}</span>  <span class="k">${line.kind}</span>  ${line.detail}</div>`,
+        )
+        .join('');
+      const logLines = [...document.querySelectorAll('[data-logline]')];
+      $('log-label').textContent = `EVENT LOG · ${facts.toolCallCount ?? 0} TOOL CALLS, EVERY ONE RECORDED`;
+
+      // ---- paint -----------------------------------------------------------
+      function render(t) {
+        for (const beat of BEATS) {
+          const el = $(beat.id);
+          const alpha = Math.min(
+            seg(t, beat.start, beat.start + FADE),
+            1 - seg(t, beat.end - FADE, beat.end),
+          );
+          el.style.opacity = alpha.toFixed(4);
+          el.style.display = alpha <= 0.001 ? 'none' : 'block';
+          el.dataset.active = alpha > 0.5 ? '1' : '0';
+        }
+
+        // chrome: which beat is on screen, in the product's own mono.
+        const active = BEATS.find((beat) => t >= beat.start && t < beat.end) ?? BEATS[BEATS.length - 1];
+        $('slug').textContent = active.label;
+        const position = BEATS.indexOf(active) + 1;
+        $('index').textContent = `${String(position).padStart(2, '0')} / ${String(BEATS.length).padStart(2, '0')}`;
+
+        // the two hairlines draw with the cover and hold for the piece.
+        const draw = easeOut(seg(t, 0.15, 1.15));
+        $('rule-top').style.transform = `scaleX(${draw.toFixed(4)})`;
+        $('rule-bottom').style.transform = `scaleX(${draw.toFixed(4)})`;
+
+        // -- 1 cover
+        const cover = seg(t, 0, 2.6);
+        $('cover-word').style.transform = `translateY(${((1 - easeOut(seg(t, 0.25, 1.25))) * 120).toFixed(2)}px)`;
+        $('cover-kicker').style.opacity = easeOut(seg(t, 0.5, 1.4)).toFixed(3);
+        $('cover-sub').style.opacity = easeOut(seg(t, 1.05, 1.95)).toFixed(3);
+        $('cover-facts').style.opacity = (easeOut(seg(t, 1.5, 2.3)) * (1 - seg(t, 2.35, 2.6))).toFixed(3);
+        $('cover-facts').style.transform = `translateY(${((1 - easeOut(seg(t, 1.5, 2.3))) * 18).toFixed(2)}px)`;
+        void cover;
+
+        // -- 2 the brief
+        const brief = seg(t, 2.6, 6.2);
+        const windowIn = easeOut(seg(t, 2.75, 3.85));
+        $('brief-window').style.width = '1010px';
+        $('brief-window').style.height = '655px';
+        $('brief-window').style.right = `${(1 - windowIn) * -40 + 96}px`;
+        $('brief-window').style.top = `${200 + (1 - windowIn) * 26}px`;
+        $('brief-window').style.opacity = windowIn.toFixed(3);
+        $('still-workspace').style.transform = `scale(${(1 + 0.035 * easeOut(brief)).toFixed(4)})`;
+        $('brief-chip').style.opacity = easeOut(seg(t, 3.6, 4.2)).toFixed(3);
+        briefLines.forEach((line, index) => {
+          const from = 3.05 + index * 0.52;
+          const typed = Math.round(easeOut(seg(t, from, from + 0.42)) * line.dataset.full.length);
+          line.textContent = line.dataset.full.slice(0, typed);
+        });
+        $('brief-caption').style.opacity = easeOut(seg(t, 4.5, 5.4)).toFixed(3) * (1 - seg(t, 5.9, 6.2));
+
+        // -- 3 the work
+        const work = seg(t, 6.2, 9.6);
+        $('work-head').style.opacity = easeOut(seg(t, 6.3, 7.1)).toFixed(3);
+        $('log-label').style.opacity = easeOut(seg(t, 6.7, 7.4)).toFixed(3);
+        logLines.forEach((line, index) => {
+          const from = 6.85 + index * 0.28;
+          const p = easeOut(seg(t, from, from + 0.34));
+          line.style.opacity = (p * (1 - seg(t, 9.35, 9.6))).toFixed(3);
+          line.style.transform = `translateX(${((1 - p) * 22).toFixed(2)}px)`;
+        });
+        $('log').style.transform = `translateY(${(-1 * easeOut(seg(t, 8.4, 9.6)) * 46).toFixed(2)}px)`;
+        const workWindow = easeOut(seg(t, 6.35, 7.3));
+        $('work-window').style.width = '760px';
+        $('work-window').style.height = '655px';
+        $('work-window').style.right = '96px';
+        $('work-window').style.top = `${200 + (1 - workWindow) * 26}px`;
+        $('work-window').style.opacity = workWindow.toFixed(3);
+        $('still-workspace-2').style.transform = `scale(${(1 + 0.02 * work).toFixed(4)})`;
+        $('work-window').style.transform = `translateX(${((1 - workWindow) * 40).toFixed(2)}px)`;
+
+        // -- 4 the catch (the one accent)
+        $('defect-scenario').style.opacity = easeOut(seg(t, 9.75, 10.3)).toFixed(3);
+        $('defect-head').style.opacity = easeOut(seg(t, 9.95, 10.8)).toFixed(3);
+        $('defect-head').style.transform = `translateY(${((1 - easeOut(seg(t, 9.95, 10.8))) * 24).toFixed(2)}px)`;
+        $('defect-question').style.opacity = easeOut(seg(t, 11.0, 11.6)).toFixed(3);
+        const accent = easeInOut(seg(t, 10.15, 11.05));
+        $('accent-rule').style.transform = `scaleX(${accent.toFixed(4)})`;
+        $('accent-rule').style.opacity = (accent * (1 - seg(t, 12.3, 12.6))).toFixed(3);
+        const defectWindow = easeOut(seg(t, 10.6, 11.5));
+        $('defect-window').style.width = '560px';
+        $('defect-window').style.height = '389px';
+        $('defect-window').style.right = '96px';
+        $('defect-window').style.top = `${320 + (1 - defectWindow) * 24}px`;
+        $('defect-window').style.opacity = (defectWindow * (1 - seg(t, 12.3, 12.6))).toFixed(3);
+        $('still-console').style.transform = `scale(${(1 + 0.03 * seg(t, 10.6, 12.6)).toFixed(4)})`;
+        [...document.querySelectorAll('#scored span')].forEach((chip, index) => {
+          chip.style.opacity = easeOut(seg(t, 11.35 + index * 0.14, 11.8 + index * 0.14)).toFixed(3);
+        });
+
+        // -- 5 takeaway
+        const close = seg(t, 12.6, 15.0);
+        $('close-word').style.transform = `translateY(${((1 - easeOut(seg(t, 12.75, 13.55))) * 96).toFixed(2)}px)`;
+        $('tagline').style.opacity = easeOut(seg(t, 13.25, 14.0)).toFixed(3);
+        $('close-facts').style.opacity = easeOut(seg(t, 13.6, 14.35)).toFixed(3);
+        $('close-facts').style.transform = `translateY(${((1 - easeOut(seg(t, 13.6, 14.35))) * 16).toFixed(2)}px)`;
+        $('close-url').style.opacity = (url.text ? easeOut(seg(t, 13.9, 14.5)) : 0).toFixed(3);
+        void close;
+      }
+
+      // ---------------------------------------------------------------------
+      // The renderer's two hooks: seek to a time, and report what is on screen
+      // (so a run can fail when a beat never appeared, or when nothing moved).
+      // ---------------------------------------------------------------------
+      window.__duration = DURATION;
+      window.__beats = BEATS.map((beat) => beat.id);
+      window.__seek = (t) => render(clamp(Number(t) || 0, 0, DURATION));
+
+      window.__signature = () => {
+        const active = BEATS.filter((beat) => $(beat.id).dataset.active === '1').map((beat) => beat.id);
+        const probes = [...document.querySelectorAll('[data-probe]')].map((el) => {
+          const rect = el.getBoundingClientRect();
+          return `${el.id || el.dataset.still}:${Math.round(rect.left)},${Math.round(rect.top)},${Math.round(rect.width)}`;
+        });
+        const text = [...document.querySelectorAll('.beat')]
+          .filter((el) => el.dataset.active === '1')
+          .map((el) => el.textContent.replace(/\s+/g, ' ').trim())
+          .join(' | ');
+        return JSON.stringify({ active, probes, text: text.slice(0, 400) });
+      };
+
+      // Everything must be loaded before the first frame is captured: a still
+      // that silently failed to load is a launch video with a hole in it.
+      const stills = [...document.querySelectorAll('img[data-still]')];
+      window.__ready = false;
+      window.__missing = {
+        stills: [],
+        facts: typeof window.__facts === 'undefined',
+        log: !(window.__facts && Array.isArray(window.__facts.log) && window.__facts.log.length > 0),
+      };
+
+      window.__fontsReady = document.fonts.ready.then(() => {
+        const sans = document.fonts.check('16px "Geist"');
+        const mono = document.fonts.check('16px "Geist Mono"');
+        window.__fonts = { sans, mono };
+        return { sans, mono };
+      });
+
+      Promise.all(
+        stills.map((img) =>
+          img.complete && img.naturalWidth > 0
+            ? Promise.resolve()
+            : new Promise((resolve) => {
+                img.addEventListener('load', resolve, { once: true });
+                img.addEventListener('error', () => {
+                  window.__missing.stills.push(img.dataset.still);
+                  resolve();
+                });
+              }),
+        ),
+      ).then(async () => {
+        await window.__fontsReady;
+        render(0);
+        window.__ready = true;
+      });
+
+      render(0);
+    </script>
+  </body>
+</html>
