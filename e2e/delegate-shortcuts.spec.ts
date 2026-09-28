@@ -29,6 +29,8 @@ import { expect, test, type Page } from '@playwright/test';
  *     all; the popper wrapper is the only marker left in the second case
  *   - a layer that is mounted but CLOSED: allowed — inert markup must
  *     not shadow the page
+ *   - a layer that closed or removed itself ON this very key: blocked, which
+ *     is a timing case rather than a markup one and gets its own test
  *   - any modifier held: blocked
  *   - Shift alone: allowed — pinned so the policy cannot quietly widen
  *     into claiming chords
@@ -195,5 +197,100 @@ test.describe('Delegate keyboard-shortcut policy', () => {
       expect(verdict.key).toBe(testCase.key);
       expect(verdict.allowed, `${testCase.label}: ${testCase.why}`).toBe(testCase.allowed);
     });
+  });
+
+  test('a layer that closed itself on this very key still owns it', async ({ page }) => {
+    // The one case that is about WHEN the policy is asked rather than what
+    // it is aimed at, so it cannot live in the table above. Radix listens
+    // for Escape in the CAPTURE phase: by the time a bubble-phase listener
+    // on window asks who owns the keystroke, a layer that dismissed itself
+    // has already flipped to data-state="closed" — while still mounted,
+    // and still holding the focus the key was aimed at. Measured on the
+    // saved-views panel, the shortcut sheet and the command palette alike.
+    // A selector keyed on "open" answers "nobody owns this", the key falls
+    // through to the layer underneath, and one Escape closed the panel AND
+    // the watch pane behind it.
+    //
+    // So the two shapes of "closed mid-keypress" are simulated here the way
+    // Radix produces them — by mutating the layer from a CAPTURE-phase
+    // listener, which runs before the window listener the policy is
+    // consulted from. The control at the end is the other reading of the
+    // same attribute: closed, and holding no focus, must stay inert.
+    await page.goto('about:blank');
+    await page.evaluate((html) => {
+      document.body.innerHTML = html;
+    }, FIXTURES);
+    await loadGuards(page);
+
+    const verdicts = await page.evaluate(() => {
+      const guards = (
+        window as unknown as { __guards: { shortcutAllowed: (event: KeyboardEvent) => boolean } }
+      ).__guards;
+      type Verdicts = { open: boolean; flipped: boolean; removed: boolean; closedAndIdle: boolean };
+      // The app's own shape, and the CONTENT element — the one that carries
+      // role and data-state. Returning the wrapper would mutate the wrong
+      // node and the test would pass for the wrong reason.
+      const freshLayer = (): HTMLElement => {
+        const host = document.createElement('div');
+        host.innerHTML =
+          '<div data-radix-popper-content-wrapper=""><div role="dialog" data-state="open" tabindex="-1">' +
+          '<button id="probe-button">panel row</button></div></div>';
+        document.body.append(host);
+        return host.firstElementChild?.firstElementChild as HTMLElement;
+      };
+      const press = (mutate: (layer: HTMLElement) => void): boolean => {
+        const layer = freshLayer();
+        const button = layer.querySelector('button') as HTMLElement;
+        button.focus();
+        const seen = { allowed: true };
+        // Capture, like Radix: this runs before the window listener.
+        document.addEventListener('keydown', () => mutate(layer), { capture: true, once: true });
+        const listener = (event: KeyboardEvent) => {
+          seen.allowed = guards.shortcutAllowed(event);
+        };
+        window.addEventListener('keydown', listener);
+        button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+        window.removeEventListener('keydown', listener);
+        return seen.allowed;
+      };
+      const verdicts: Verdicts = {
+        // Untouched: the ordinary case, the selector alone answers it.
+        open: press(() => {}),
+        // Dismissed: data-state flipped, node still mounted, still focused.
+        flipped: press((layer) => layer.setAttribute('data-state', 'closed')),
+        // Removed outright by the same key — the remaining shape, where
+        // there is no mounted-closed state left to catch it. Closed FIRST,
+        // as Radix does before unmounting: an orphan that still carries
+        // data-state="open" is caught by the plain selector, so it would
+        // prove nothing about the clause this case exists for.
+        removed: press((layer) => {
+          layer.setAttribute('data-state', 'closed');
+          layer.remove();
+        }),
+        // Closed and idle, with the key aimed at it from outside: a
+        // force-mounted layer must not shadow the page, so this one is
+        // allowed through.
+        closedAndIdle: (() => {
+          const layer = freshLayer();
+          layer.setAttribute('data-state', 'closed');
+          const button = layer.querySelector('button') as HTMLElement;
+          (document.getElementById('plain-button') as HTMLElement).focus();
+          const seen = { allowed: true };
+          const listener = (event: KeyboardEvent) => {
+            seen.allowed = guards.shortcutAllowed(event);
+          };
+          window.addEventListener('keydown', listener);
+          button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+          window.removeEventListener('keydown', listener);
+          return seen.allowed;
+        })(),
+      };
+      return verdicts;
+    });
+
+    expect(verdicts.open, 'a button inside an open layer is owned').toBe(false);
+    expect(verdicts.flipped, 'a layer that closed itself on this key is still owned').toBe(false);
+    expect(verdicts.removed, 'a layer that removed itself on this key is still owned').toBe(false);
+    expect(verdicts.closedAndIdle, 'a closed layer holding no focus is inert').toBe(true);
   });
 });

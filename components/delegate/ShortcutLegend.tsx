@@ -33,6 +33,13 @@ import { cn } from '@/lib/utils';
  * policy has already stopped `?` from reaching the page, and it would be
  * dishonest for the sheet about shortcuts to punch through the rule the
  * rest of the console obeys.
+ *
+ * Escape appears three times, once per layer it can close, and the three
+ * are gated separately for a reason: the console binds Escape to the
+ * topmost thing it opened, so which one a press reaches depends on what is
+ * open, and a single "Esc closes the sheet or the panel" line cannot say
+ * that. Split, each entry dims with the layer it closes, so the sheet
+ * shows the key the way the page will honour it right now.
  */
 export interface ShortcutGates {
   /** j/k and the jump chords: there is something on screen to walk. */
@@ -43,6 +50,10 @@ export interface ShortcutGates {
   sweep: boolean;
   /** The copy-link chord: the cursor has landed on a row with a run to share. */
   link: boolean;
+  /** The pane is open, so Escape has a watch pane to close. */
+  pane: boolean;
+  /** The views panel is open, so Escape has a panel to close. */
+  views: boolean;
 }
 
 /** Whether a shortcut is bound right now, or never gated at all. */
@@ -115,6 +126,7 @@ const LEGEND: ShortcutGroup[] = [
         gate: 'sweep',
       },
       { keys: ['Home', 'End'], label: 'Jump the watched room to its ends', gate: 'sweep' },
+      { keys: ['Esc'], label: 'Close the watch pane', gate: 'pane' },
     ],
   },
   {
@@ -128,7 +140,8 @@ const LEGEND: ShortcutGroup[] = [
     entries: [
       { keys: ['⌘K'], label: 'Open the command palette (Ctrl+K on PC keyboards)', gate: 'always' },
       { keys: ['?'], label: 'Open this sheet', gate: 'always' },
-      { keys: ['Esc'], label: 'Close this sheet, or the views panel', gate: 'always' },
+      { keys: ['Esc'], label: 'Close this sheet', gate: 'always' },
+      { keys: ['Esc'], label: 'Close the views panel', gate: 'views' },
     ],
   },
 ];

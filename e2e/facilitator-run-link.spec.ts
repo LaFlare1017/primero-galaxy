@@ -928,7 +928,17 @@ test.describe('Facilitator run links', () => {
       '⌘K Open the command palette (Ctrl+K on PC keyboards)',
     );
     await expect(entry('Open this sheet')).toHaveText('? Open this sheet');
-    await expect(entry('Close this sheet')).toHaveText('Esc Close this sheet, or the views panel');
+    // Escape, once per layer it can close. The console binds it to the
+    // topmost thing it opened, so which one a press reaches depends on what
+    // is open — which is exactly why one combined "Esc, or the views
+    // panel" line could not be true, and why the other two are dimmed here.
+    await expect(entry('Close this sheet')).toHaveText('Esc Close this sheet');
+    await expect(entry('Close the views panel')).toHaveText(
+      'Esc Close the views panel (not available right now)',
+    );
+    await expect(entry('Close the watch pane')).toHaveText(
+      'Esc Close the watch pane (not available right now)',
+    );
 
     // The dead ones, and only the dead ones. Nothing is watched yet, so the
     // pane transport is unbound and says so — in words, not just in gray,
@@ -939,7 +949,7 @@ test.describe('Facilitator run links', () => {
     await expect(entry('Jump the watched room')).toHaveText(
       'Home or End Jump the watched room to its ends (not available right now)',
     );
-    await expect(sheet.getByText('(not available right now)')).toHaveCount(2);
+    await expect(sheet.getByText('(not available right now)')).toHaveCount(4);
 
     // While the sheet is open the room underneath is inert, and it costs
     // nothing: a dialog is an overlay, and the shared shortcut policy
@@ -974,11 +984,17 @@ test.describe('Facilitator run links', () => {
       '← or → Step the watched room back and forward',
     );
     await expect(entry('Jump the watched room')).toHaveText('Home or End Jump the watched room to its ends');
+    // The pane is open, so the key that closes it went live with it — the
+    // same gate the binding reads, read back off the sheet.
+    await expect(entry('Close the watch pane')).toHaveText('Esc Close the watch pane');
     await expect(entry('Open the watch pane')).toContainText('(not available right now)');
     // The chord for the same action greys out with it: g w watches the
-    // cursor row, and the cursor row is what is already being watched.
+    // cursor row, and the cursor row is what is already being watched. The
+    // third is Escape for the views panel, which is shut — so the count is
+    // read as "only the dead ones" rather than as a number that happens to
+    // have held: Esc-to-close-the-pane went live above because the pane is.
     await expect(entry('watch the cursor row')).toContainText('(not available right now)');
-    await expect(sheet.getByText('(not available right now)')).toHaveCount(2);
+    await expect(sheet.getByText('(not available right now)')).toHaveCount(3);
 
     // A mouse user has no ? key, so the toolbar legend is a real button —
     // and because it is one, Enter on it must open the sheet rather than
@@ -1185,6 +1201,81 @@ test.describe('Facilitator run links', () => {
     await page.keyboard.press('g');
     await page.keyboard.press('i');
     await expect(rows.first()).toHaveAttribute('aria-current', 'true');
+  });
+
+  test('Escape closes the topmost layer the console opened, and only that', async ({ page }) => {
+    // The key everyone already expects to mean "get rid of what is on top of
+    // this page", so a facilitator closing a panel has to learn no chord.
+    // Two layers can be open at once here, which is the whole point: the
+    // property is not that Escape closes something, it is that it closes
+    // ONE of them. Two window listeners would both fire on a single press
+    // and cost the room the mirror they were reading at the same time.
+    const a = await startRun(page, `E2E ${STAMP} EscA`, 's1');
+    await startRun(page, `E2E ${STAMP} EscB`, 's2');
+    await page.goto(`/delegate/facilitator?watch=${a.runId}`);
+
+    const pane = page.locator('section[aria-label^="Watching run for"]');
+    await expect(pane).toBeVisible({ timeout: 15_000 });
+    const actions = page.getByRole('status', { name: 'Console action' });
+    const views = page.getByRole('dialog');
+    const watching = () => new URL(page.url()).searchParams.get('watch');
+
+    // The pane is the only thing open, so Escape takes it — and says so,
+    // because nothing else on screen moved. The pane advertises the key too:
+    // a region that can be closed this way and does not name it is asking to
+    // be hunted for with the mouse.
+    await expect(pane).toHaveAttribute('aria-keyshortcuts', /Escape/);
+    await page.keyboard.press('Escape');
+    await expect(actions).toHaveText('Watch pane closed');
+    await expect.poll(watching).toBe(null);
+    await expect(pane).toHaveCount(0);
+
+    // Nothing open, nothing dismissed: a console that answers every Escape
+    // with something would be eating a key the browser and the OS also use.
+    await page.keyboard.press('Escape');
+    await expect(views).toHaveCount(0);
+    await expect(pane).toHaveCount(0);
+    expect(watching()).toBeNull();
+
+    // The layering, with both open. The panel is a floating layer on top of
+    // the grid; the pane is a section of the page. So the panel goes, and
+    // the mirror underneath is left exactly where it was — asserted on both
+    // the panel being gone and the pane still being there, because "the
+    // pane closed too" is exactly what a shortcut firing through a layer
+    // that has already started dismissing itself looks like.
+    await page.keyboard.press('w');
+    await expect(pane).toBeVisible({ timeout: 10_000 });
+    await page.keyboard.press('g');
+    await page.keyboard.press('v');
+    await expect(views).toBeVisible();
+    const held = views.locator(':focus');
+    await expect(held).toHaveCount(1);
+    expect(await held.evaluate((el) => el.tagName), 'the panel holds the keyboard').toBe('BUTTON');
+    await page.keyboard.press('Escape');
+    await expect(actions).toHaveText('Saved views closed');
+    await expect(views).toHaveCount(0);
+    await expect(pane).toBeVisible();
+    expect(watching(), 'the pane survived the panel closing').not.toBeNull();
+
+    // And with the panel gone the same key reaches the pane, because that is
+    // now the topmost thing the console opened.
+    await page.keyboard.press('Escape');
+    await expect(actions).toHaveText('Watch pane closed');
+    await expect.poll(watching).toBe(null);
+    await expect(pane).toHaveCount(0);
+
+    // The panel on its own, dismissed by the key it is holding: Radix
+    // listens in the capture phase, so by the time the page's listener runs
+    // the layer has already closed and only the FOCUS says who owned the
+    // key. It still closes, still says so, and still closes ONCE — the
+    // closing comes back through the same funnel the outside click and the
+    // trigger use, which is what makes one announcement rather than two.
+    await page.keyboard.press('g');
+    await page.keyboard.press('v');
+    await expect(views).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(views).toHaveCount(0);
+    await expect(actions).toHaveText('Saved views closed');
   });
 
   test('the saved-views popover shields the room from j, k, and w', async ({ page }) => {

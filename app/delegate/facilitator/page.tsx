@@ -405,8 +405,11 @@ function WatchPane({
         // open, and the note below it was a floating sentence nobody could
         // find. Named where it is invisible, described by the note.
         aria-label="Watch pane"
-        aria-describedby={STALE_RUN_ID}
-        aria-keyshortcuts={canStep ? "ArrowLeft ArrowRight Home End" : undefined}
+      aria-describedby={STALE_RUN_ID}
+      // Escape is advertised independently of the sweep: it closes the pane
+      // whether or not there is anywhere to step to, and the two gates
+      // genuinely differ.
+      aria-keyshortcuts={canStep ? "ArrowLeft ArrowRight Home End Escape" : "Escape"}
       >
         <p className="text-sm font-medium text-black">This run could not be found.</p>
         <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
@@ -436,8 +439,10 @@ function WatchPane({
       // console shows a run with no row behind it and says nothing.
       aria-describedby={hiddenByFacet ? HIDDEN_BY_FACET_ID : undefined}
       // Announced only when stepping is possible, so the shortcut is never
-      // advertised on a room with nothing to sweep.
-      aria-keyshortcuts={canStep ? "ArrowLeft ArrowRight Home End" : undefined}
+      // advertised on a room with nothing to sweep. Escape is the one
+      // exception: it closes the pane, and it is bound whatever the sweep
+      // is doing — a lone run in a quiet room is still a pane to close.
+      aria-keyshortcuts={canStep ? "ArrowLeft ArrowRight Home End Escape" : "Escape"}
     >
       <div className="flex items-center gap-3 border-b border-gray-200 bg-gray-50 px-3 py-2">
         <span className="text-[13px] font-medium text-black">{label || "…"}</span>
@@ -480,6 +485,10 @@ function WatchPane({
             type="button"
             onClick={onClose}
             aria-label="Close watch pane"
+            // Its key in the tooltip, like the two transport buttons above:
+            // the sheet is two questions away, and this is the one control
+            // whose alternative is a shortcut.
+            title="Close watch pane (Esc)"
             className="ml-1 text-gray-400 hover:text-black"
           >
             <X className="h-3.5 w-3.5" />
@@ -697,6 +706,27 @@ function FacilitatorGrid() {
     // change in nothing at all.
     actionTimer.current = setTimeout(() => setActionNote(null), 3000);
   }, []);
+
+  /**
+   * One close for the watch pane, whichever way it is asked for: the
+   * button in its header, or Escape from the page. Both routes say what
+   * they did, because a pane that vanishes without a word leaves the
+   * cursor parked somewhere the facilitator has to rediscover.
+   */
+  const closeWatchPane = useCallback(() => {
+    void setWatchId(null);
+    announce("Watch pane closed");
+  }, [setWatchId, announce]);
+  /**
+   * Likewise for the views panel: every close path funnels through here —
+   * its own trigger, an outside click, Radix's Escape — because a panel
+   * that announces itself when you dismiss it with the keyboard and says
+   * nothing when you click away is not a thing anyone can rely on.
+   */
+  const closeViews = useCallback(() => {
+    setViewsOpen(false);
+    announce("Saved views closed");
+  }, [announce]);
 
   const copyRunLink = useCallback(
     (row: Row) => {
@@ -945,6 +975,34 @@ function FacilitatorGrid() {
   // string, which cannot be tested here anyway: runLink reads
   // window.location, and this component is prerendered.
   const canLink = cursorRow !== null;
+  /**
+   * Escape closes the topmost thing this page opened, and only that.
+   *
+   * TWO calls, and the layering is expressed by which one is MOUNTED: while
+   * the views panel is open only the panel's binding exists, so a single
+   * press cannot reach the pane. The order is the stacking — the panel is a
+   * floating layer on top of the grid, the pane is a section of the page.
+   *
+   * The rule this leans on hardest is in the shared policy, not here, and
+   * it was found by this binding breaking: Radix listens for Escape in the
+   * CAPTURE phase, so a layer that dismisses itself has already flipped to
+   * data-state="closed" by the time the page's bubble-phase listener asks
+   * who owns the keystroke. A "is a layer open" selector answers "nobody",
+   * the key falls through, and one Escape closed the panel AND the watch
+   * pane behind it (then the shortcut sheet AND the pane). components/
+   * delegate/shortcuts.ts now treats the layer holding the focused element
+   * as the owner, which is measured on the popover, the sheet and the
+   * command palette alike. What is left to state here is the ORDER, which
+   * the DOM cannot be asked for mid-dispatch: whether the panel is open is
+   * state this component holds, and it is also the only answer available
+   * for a panel that ever holds the keyboard outside itself.
+   *
+   * The shortcut SHEET and the palette need no arm of their own: both are
+   * role="dialog" layers, so the shared rule hands Escape to whatever is on
+   * top and the primitive dismisses itself.
+   */
+  useKeyboardShortcuts({ Escape: closeViews }, viewsOpen);
+  useKeyboardShortcuts({ Escape: closeWatchPane }, !viewsOpen && watchId !== null);
   useKeyboardShortcuts(
     {
       j: () => stepSweep(1),
@@ -978,7 +1036,14 @@ function FacilitatorGrid() {
   // hand-writing it here. The sheet is handed these same objects rather
   // than a retyped copy, because a legend that lists chords the page
   // cannot perform is exactly the lie this design exists to prevent.
-  const gates: ShortcutGates = { walk: canWalk, commit: canCommit, sweep: canSweep, link: canLink };
+  const gates: ShortcutGates = {
+    walk: canWalk,
+    commit: canCommit,
+    sweep: canSweep,
+    link: canLink,
+    pane: watchId !== null,
+    views: viewsOpen,
+  };
   const chordIsLive = (gate: ShortcutGate) => gate === "always" || gates[gate];
   const namespace: NamespaceChord[] = [
     { keys: "g i", label: "jump to the first row", group: "walk", gate: "walk", run: () => jumpSweep("first") },
@@ -1136,10 +1201,7 @@ function FacilitatorGrid() {
         <WatchPane
           key={watchId}
           runId={watchId}
-          onClose={() => {
-            void setWatchId(null);
-            announce("Watch pane closed");
-          }}
+          onClose={closeWatchPane}
           onStep={stepSweep}
           onReveal={() => void setStatuses(null)}
           // A dead link self-heals into the room it was shared from: the
@@ -1215,7 +1277,7 @@ function FacilitatorGrid() {
               viewState={viewState}
               onApply={applyViewState}
               open={viewsOpen}
-              onOpenChange={setViewsOpen}
+              onOpenChange={(open) => (open ? setViewsOpen(true) : closeViews())}
             />
             <span className="ml-auto text-xs tabular-nums text-gray-500">
               {visibleRows.length} of {rows.length} participants
