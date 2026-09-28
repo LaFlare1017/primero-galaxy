@@ -83,6 +83,17 @@ export async function pressEveryDeclaredBinding<Snapshot>(
     'every declared binding has an exercise, and every exercise names a declared binding',
   ).toEqual(declared.map((binding) => binding.id).sort());
 
+  // A binding that names no key is not exercised by anything: the loop below
+  // presses one key per declared key, so an empty list walks through the
+  // binding without a press and its exercise never runs — the same "a check
+  // that walks nothing cannot fail" vacuity the coherence harness refuses for
+  // a manifest with no states. Found by emptying a row's keys, which the
+  // both-directions check above cannot see, since it compares ids.
+  expect(
+    declared.filter((binding) => binding.keys.length === 0).map((binding) => binding.id),
+    'no declared binding may name zero keys, and be exercised by nobody',
+  ).toEqual([]);
+
   await raise?.(page);
 
   for (const binding of declared) {

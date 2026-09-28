@@ -5,6 +5,7 @@ import {
   agreement,
   coherence,
   reachableWorlds,
+  standingDown,
   type CoherenceReport,
   type KeyboardChord,
   type KeyboardManifest,
@@ -62,6 +63,33 @@ const FAKE_ROWS: readonly KeyboardRow[] = [
 
 const FAKE_CHORDS: readonly KeyboardChord[] = [{ id: 'jump', keys: 'g j', gate: 'walk' }];
 
+/**
+ * A LADDER of page-level bindings, which is the other shape `under` has to
+ * carry: three rows on one dismissal key, each answering only while every rung
+ * above it is shut. Their gates are deliberately independent of the fake's
+ * other three, so that each element of the bottom rung's list is the one doing
+ * the work in some reachable state — a ladder whose second element never
+ * mattered would prove nothing about either.
+ */
+const LADDER_ROWS: readonly KeyboardRow[] = [
+  { id: 'ladder-top', keys: ['Escape'], gate: 'search', mount: 'global' },
+  { id: 'ladder-middle', keys: ['Escape'], gate: 'form', mount: 'global', under: 'search' },
+  {
+    id: 'ladder-bottom',
+    keys: ['Escape'],
+    gate: 'selection',
+    mount: 'global',
+    under: ['search', 'form'],
+  },
+];
+
+const LADDER_GATES = (state: FakeState): FakeGates => ({
+  ...fakeGates(state),
+  search: state.panel,
+  form: state.cursor !== null,
+  selection: state.room.length > 0,
+});
+
 function fakeGates(state: FakeState): FakeGates {
   return { walk: state.room.length > 0, panel: state.panel, link: state.cursor !== null };
 }
@@ -72,7 +100,7 @@ function fakeGateIsLive(gate: string, gates: FakeGates): boolean {
 
 function fakeRowIsLive(row: KeyboardRow, gates: FakeGates): boolean {
   if (!fakeGateIsLive(row.gate, gates)) return false;
-  if (row.under !== undefined && fakeGateIsLive(row.under, gates)) return false;
+  if (standingDown(row).some((gate) => fakeGateIsLive(gate, gates))) return false;
   return true;
 }
 
@@ -300,6 +328,22 @@ test.describe('keyboard declaration harness', () => {
         why: 'a typo here is a binding that is never live and never explains why',
       },
       {
+        label: 'a rung of a ladder standing down for a gate that is not declared',
+        build: () =>
+          fake({
+            rows: [
+              ...FAKE_ROWS,
+              ...LADDER_ROWS.map((row) =>
+                row.id === 'ladder-bottom' ? { ...row, under: ['walk', 'nowhere'] } : row,
+              ),
+            ],
+            gates: LADDER_GATES,
+          }),
+        pick: (report) => report.gates.bogus,
+        expect: 'nowhere',
+        why: 'a ladder element is a gate name like any other, and a typo in the middle of one is invisible',
+      },
+      {
         label: 'a surface advertising a key it does not mount',
         build: () => fake({ liveShortcuts: () => 'j o' }),
         pick: (report) => report.claims,
@@ -431,6 +475,59 @@ test.describe('keyboard declaration harness', () => {
       const report = coherence(item.build(), FAKE_WORLDS, FAKE_OPTIONS);
       expect(item.pick(report).join(' | '), `${item.label}: ${item.why}`).toContain(item.expect);
     }
+  });
+
+  test('two rows the page binds itself may share one key only where the state keeps them apart', () => {
+    // The page's own listeners are the one mechanism with no order to them: a
+    // component elsewhere answering a key is whichever listener the browser
+    // registered second, and no layer stack can separate them, because neither
+    // row is mounted by anything. So the declaration has to say it instead —
+    // and `under` is the whole vocabulary for saying it, here as a LADDER
+    // rather than the pair a two-layer stack needs.
+    const ladder = fake({ rows: [...FAKE_ROWS, ...LADDER_ROWS], gates: LADDER_GATES });
+
+    expect(
+      coherence(ladder, FAKE_WORLDS, FAKE_OPTIONS).collisions,
+      'one dismissal key claimed by three rungs is coherent while each rung answers alone',
+    ).toEqual([]);
+
+    // The middle rung's `under` and the bottom rung's list are each load-
+    // bearing, so each is dropped in turn. Both failures name the two rows that
+    // would answer one press, because that is what a reader has to go and fix.
+    const withoutMiddle = fake({
+      rows: [...FAKE_ROWS, ...LADDER_ROWS.map((row) => (row.id === 'ladder-middle' ? { ...row, under: undefined } : row))],
+      gates: LADDER_GATES,
+    });
+    expect(
+      coherence(withoutMiddle, FAKE_WORLDS, FAKE_OPTIONS).collisions.join(' | '),
+      'a rung that stopped standing down for the one above it would answer the same press',
+    ).toContain('two rows the page binds itself both answer Escape (ladder-top and ladder-middle)');
+
+    const withoutTopRungElement = fake({
+      rows: [
+        ...FAKE_ROWS,
+        ...LADDER_ROWS.map((row) =>
+          row.id === 'ladder-bottom' ? { ...row, under: ['form'] } : row,
+        ),
+      ],
+      gates: LADDER_GATES,
+    });
+    expect(
+      coherence(withoutTopRungElement, FAKE_WORLDS, FAKE_OPTIONS).collisions.join(' | '),
+      'the first element of a ladder list is not decoration: it keeps the bottom rung off the top one',
+    ).toContain('two rows the page binds itself both answer Escape (ladder-top and ladder-bottom)');
+
+    // And the array is read as a list, not as one name: `standingDown` is what
+    // every reader of `under` — the harness's gate bookkeeping, a manifest's own
+    // `rowIsLive` — is built from, so a rung cannot stand down for a pair in one
+    // reader and for the first string in another.
+    expect(standingDown(LADDER_ROWS[2]), 'a rung stands down for every gate it names').toEqual([
+      'search',
+      'form',
+    ]);
+    expect(standingDown(LADDER_ROWS[0]), 'a rung with nothing above it stands down for nothing').toEqual(
+      [],
+    );
   });
 
   test('two declarations describing one binding have to describe it the same way', () => {

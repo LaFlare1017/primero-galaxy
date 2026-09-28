@@ -31,15 +31,12 @@ export function AddCompanyForm({
   const [industry, setIndustry] = useState<Industry>('Technology');
   const [aiStatus, setAiStatus] = useState(45);
 
-  // Esc closes the sheet
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  // Escape is deliberately NOT bound here. The sheet is one rung of the galaxy
+  // page's dismissal ladder (components/galaxy/galaxyKeys.ts, which declares
+  // `close-add-form` and is the page's only Escape listener): a second window
+  // listener for the same key is a second owner of one press, and the two
+  // cannot be kept in order by anything — this one used to fire beside the
+  // page's for every Escape while the sheet was open.
 
   // Reset transient fields each time the sheet opens
   useEffect(() => {

@@ -7,10 +7,10 @@
  * console:
  *
  *   1. The declaration agrees with itself. No reachable state lets two live
- *      bindings answer to one key (on any of the three surfaces a key can
- *      arrive through: the single key map, the ordered layers, the chord
- *      namespace), and no gate is declared that no real state can reach or no
- *      binding reads.
+ *      bindings answer to one key (on any of the four surfaces a key can
+ *      arrive through: the single key map, the ordered layers, the page's own
+ *      listeners, the chord namespace), and no gate is declared that no real
+ *      state can reach or no binding reads.
  *   2. The declaration agrees with what each surface SAYS. An
  *      `aria-keyshortcuts` string and an armed-chord menu are claims about
  *      what is bound, so each has to equal what is actually bound — an
@@ -53,8 +53,13 @@ export interface KeyboardRow {
   keys: readonly string[];
   /** The gate this row is mounted on, or `UNGATED`. */
   gate: string;
-  /** The gate that stands this row down — what stacks two layers on one key. */
-  under?: string;
+  /**
+   * The gate that stands this row down — what stacks two layers on one key, or
+   * orders a ladder of them. More than one is the ladder's case: a dismissal
+   * chain means "every overlay above me is shut", which is a list of gates
+   * rather than the one the pairwise stack needs.
+   */
+  under?: string | readonly string[];
   mount: KeyboardMount;
   /** Keys this row stands down while one of the console's own controls holds the keyboard. */
   yieldKeys?: readonly string[];
@@ -73,6 +78,15 @@ export interface KeyboardChord {
 
 /** The manifest's standing excuse for a binding that is always available. */
 export const UNGATED = 'always';
+
+/**
+ * The gates a row stands down for, as a list. Absent reads as none, and one
+ * gate reads as itself, so a declaration that needs no ladder writes no array.
+ */
+export function standingDown(row: KeyboardRow): readonly string[] {
+  if (row.under === undefined) return [];
+  return typeof row.under === 'string' ? [row.under] : row.under;
+}
 
 /** Whether one of the console's own controls is holding the keyboard. */
 export interface Held {
@@ -200,7 +214,11 @@ export interface CoherenceReport {
   worlds: number;
   /** The surface ids that advertise rows, so a dropped one cannot stop being checked. */
   surfaces: string[];
-  /** Two live bindings on one key, per mechanism, plus keys shared outside `allowedSharedKeys`. */
+  /**
+   * Two live bindings on one key, per mechanism — the key map, the layer
+   * stack, the page's own listeners and the chord namespace — plus keys shared
+   * outside `allowedSharedKeys`.
+   */
   collisions: string[];
   /** The keys two mounts share, for the caller to pin exact. */
   sharedKeys: string[];
@@ -278,7 +296,7 @@ export function coherence<
   const named = new Set<string>();
   for (const row of manifest.rows) {
     named.add(row.gate);
-    if (row.under !== undefined) named.add(row.under);
+    for (const standing of standingDown(row)) named.add(standing);
   }
   for (const chord of manifest.chords) named.add(chord.gate);
 
@@ -332,6 +350,24 @@ export function coherence<
       if (!allowed.has(key)) {
         collisions.push(
           `${world.label}: ${key} is claimed both by a console binding and by a row the console does not mount`,
+        );
+      }
+    }
+
+    // The page's own bindings are the fourth place two claims can meet. A row
+    // this component does not mount answers its key from a listener the page
+    // wrote, and two of those live at once means one is on the wrong side of a
+    // mounting condition — no layer stack can help here, since neither row is
+    // mounted by anything, so `under` is the only lever a ladder of them has.
+    const pageClaims: Record<string, string[]> = {};
+    for (const row of manifest.rows) {
+      if (row.mount !== 'global' || !manifest.rowIsLive(row, gates)) continue;
+      for (const key of row.keys) pageClaims[key] = [...(pageClaims[key] ?? []), row.id];
+    }
+    for (const [key, ids] of Object.entries(pageClaims)) {
+      if (ids.length > 1) {
+        collisions.push(
+          `${world.label}: two rows the page binds itself both answer ${key} (${ids.join(' and ')})`,
         );
       }
     }
@@ -523,7 +559,7 @@ export function agreement(
 const ROW_FACTS: ReadonlyArray<{ name: string; of: (row: KeyboardRow) => string }> = [
   { name: 'keys', of: (row) => [...row.keys].sort().join(' ') },
   { name: 'gate', of: (row) => row.gate },
-  { name: 'under', of: (row) => row.under ?? 'nothing' },
+  { name: 'under', of: (row) => [...standingDown(row)].sort().join(' ') || 'nothing' },
   { name: 'mount', of: (row) => row.mount },
   { name: 'yieldKeys', of: (row) => [...(row.yieldKeys ?? [])].sort().join(' ') },
 ];
