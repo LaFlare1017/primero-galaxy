@@ -23,6 +23,9 @@
  *     gate that decides it, and — the part that keeps the sheet honest —
  *     HOW it is bound, since a row that is not in the page's key map must
  *     say who does bind it;
+ *   - the SURFACES: which rows each one advertises, so the list behind an
+ *     attribute is declared beside the rows rather than typed into the page,
+ *     and a surface cannot claim a key it does not bind;
  *   - the `aria-keyshortcuts` STRING for any set of those rows, built from
  *     the rows themselves, so the attribute can only advertise keys this
  *     module declares.
@@ -281,6 +284,41 @@ export const CONSOLE_CHORDS: readonly ConsoleChord[] = [
 ];
 
 /**
+ * The surfaces that CLAIM rows: which bindings each one advertises in
+ * `aria-keyshortcuts`.
+ *
+ * Declared here because a claim about what a surface answers to is the same
+ * kind of fact as the row itself, and because it was the last hand-written
+ * copy of this keyboard left in the page. The module header complains about
+ * the four hand-written aria strings; the strings are built from the rows
+ * already, and the LIST of rows behind each one is what lived on in the
+ * page, where nothing could check that a surface answered to what it claimed.
+ * Now both the attribute and the guard at the bottom of
+ * e2e/delegate-shortcuts.spec.ts read this: the guard asserts, in every
+ * reachable state, that a surface advertises exactly the keys it binds.
+ *
+ * Only rows the CONSOLE mounts belong in these lists. A `primitive` row is
+ * dismissed by its own overlay and a `global` one by a component elsewhere,
+ * so a console surface may never claim either — it does not answer to them,
+ * and the guard fails a surface that tries.
+ *
+ * Coverage is deliberately NOT claimed: a row may be advertised by no
+ * surface at all (the views panel closes on Escape without advertising it),
+ * which is a gap, not a lie. The rule enforced here is honesty — a surface
+ * answers to what it says it answers to, no more and no less.
+ */
+export type ConsoleSurfaceId = "grid" | "pane" | "sheet";
+
+export const CONSOLE_SURFACE_ROWS: Readonly<Record<ConsoleSurfaceId, readonly string[]>> = {
+  /** The table: the walk, the row it stopped on, and the commit. */
+  grid: ["walk-down", "walk-up", "commit"],
+  /** The watch pane: the transport, and its own Escape while it is on top. */
+  pane: ["sweep-step", "sweep-jump", "dismiss-pane"],
+  /** The toolbar's way into the sheet: the key that opens it. */
+  sheet: ["open-sheet"],
+};
+
+/**
  * The console's state, read as the gate expressions. One function, so the
  * hook's mount conditions and the sheet's dimming cannot disagree about
  * what "there is something to walk" means — which they could, and did, when
@@ -391,45 +429,71 @@ export function liveKeyMap(
 }
 
 /**
- * The chord map the sequence hook mounts: every declared chord that is live
- * right now, spelled as `useKeySequence` takes it, with the behaviour the
- * page supplied for that chord's id.
+ * The chords that are live AND performable right now — the ONE list the
+ * hook's map and the chip's menu are both built from, so the menu cannot
+ * offer a destination the hook would not run.
  *
- * Same two rules as `liveKeyMap`, for the same reasons. A chord whose gate
- * is shut is not in the map, so an armed `g` never offers a destination that
- * would do nothing. A chord the page supplies no behaviour for is dropped
- * rather than mounted, so the sheet cannot document a chord the page cannot
- * perform — which, with the chords declared here, is the only way those two
- * can still drift, and it is visible in the tests rather than silent in the
- * UI.
+ * Two rules, and the second was the chip's to learn. A chord whose gate is
+ * shut would do nothing. And a chord the page supplies no BEHAVIOUR for is
+ * not bound at all, so offering it is the same lie in a different costume —
+ * the sheet may document it (the sheet is the vocabulary) but a menu that
+ * shows it as a destination is teaching a key that does nothing. Sharing the
+ * predicate is what makes the chip's honesty structural rather than a thing
+ * to remember: there is one question, "is this chord live", and one answer.
+ */
+function liveChords(
+  gates: ConsoleGates,
+  runs: Readonly<Record<string, (() => void) | undefined>>,
+): ReadonlyArray<{ chord: ConsoleChord; run: () => void }> {
+  const live: Array<{ chord: ConsoleChord; run: () => void }> = [];
+  for (const chord of CONSOLE_CHORDS) {
+    if (!gateIsLive(chord.gate, gates)) continue;
+    const run = runs[chord.id];
+    if (run === undefined) continue;
+    live.push({ chord, run });
+  }
+  return live;
+}
+
+/**
+ * The chord map the sequence hook mounts: every live chord, spelled as
+ * `useKeySequence` takes it, with the behaviour the page supplied for that
+ * chord's id. Same rule as `liveKeyMap` — a key nothing dispatches is not
+ * bound — which here means a chord the page cannot perform is not in the
+ * map, so the hook cannot dispatch it and no callback is ever undefined.
  */
 export function liveChordMap(
   gates: ConsoleGates,
   runs: Readonly<Record<string, (() => void) | undefined>>,
 ): Record<string, () => void> {
   const map: Record<string, () => void> = {};
-  for (const chord of CONSOLE_CHORDS) {
-    if (!gateIsLive(chord.gate, gates)) continue;
-    const run = runs[chord.id];
-    if (run !== undefined) map[chord.keys] = run;
-  }
+  for (const { chord, run } of liveChords(gates, runs)) map[chord.keys] = run;
   return map;
 }
 
 /**
  * The destinations an armed prefix is waiting for — the chip's list, and the
- * reason it can never hint at a dead key: the same declaration the hook
- * dispatches from, filtered by the same gates, narrowed to the prefix that is
- * actually armed.
+ * reason it can never hint at a dead key: the same predicate the hook mounts
+ * from, narrowed to the prefix that is actually armed.
+ *
+ * `runs` is REQUIRED rather than optional, and that is the point of the
+ * signature: a chip built from the gates alone can offer a chord the page
+ * does not implement, which is the gap the declaration self-check in
+ * e2e/delegate-shortcuts.spec.ts fails on. Taking the behaviour makes "what
+ * can I offer" the same question as "what can I run".
  *
  * Prefix-generic rather than `g`-shaped, since "what does this prefix open"
  * is a question about the chords and not about which namespace is under the
  * facilitator's fingers; a second namespace would need no change here.
  */
-export function armedChords(prefix: string, gates: ConsoleGates): readonly ConsoleChord[] {
-  return CONSOLE_CHORDS.filter(
-    (chord) => gateIsLive(chord.gate, gates) && chord.keys.startsWith(`${prefix} `),
-  );
+export function armedChords(
+  prefix: string,
+  gates: ConsoleGates,
+  runs: Readonly<Record<string, (() => void) | undefined>>,
+): readonly ConsoleChord[] {
+  return liveChords(gates, runs)
+    .map(({ chord }) => chord)
+    .filter((chord) => chord.keys.startsWith(`${prefix} `));
 }
 
 /**

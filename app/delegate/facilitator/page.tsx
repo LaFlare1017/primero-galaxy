@@ -21,6 +21,7 @@ import { useKeyboardShortcuts } from "@/components/delegate/useKeyboardShortcuts
 import { ShortcutLegend } from "@/components/delegate/ShortcutLegend";
 import {
   armedChords,
+  CONSOLE_SURFACE_ROWS,
   consoleGates,
   layerIsLive,
   liveChordMap,
@@ -1133,15 +1134,19 @@ function FacilitatorGrid() {
     "open-views": () => setViewsOpen(true),
   };
   // What the chip may offer is what the hook can actually run: a chord
-  // whose gate is shut is not in the map at all, so `g` never hints at a
+  // whose gate is shut is not in the map at all, and one the page supplies
+  // no behaviour for is not bound either, so `g` never hints at a
   // destination that would do nothing. The sheet still shows it, dimmed —
   // the sheet documents the vocabulary, the chip offers the menu. Both
   // lists are read off the declaration, so neither can grow a destination
   // the other has not heard of.
   const chordMap = liveChordMap(gates, chordRuns);
   const armedChord = useKeySequence(chordMap, Object.keys(chordMap).length > 0);
-  // The destinations the armed prefix is waiting for, from the same list.
-  const armedChordDestinations = armedChord === null ? [] : armedChords(armedChord, gates);
+  // The destinations the armed prefix is waiting for: the same predicate the
+  // map above is built from, so being offered and being dispatchable are one
+  // question. That is what `runs` buys, and the coherence guard asserts it.
+  const armedChordDestinations =
+    armedChord === null ? [] : armedChords(armedChord, gates, chordRuns);
 
   // ── Sweep by keyboard ──
   // Left/Right step the watched room, Home/End jump to its ends, so a
@@ -1158,9 +1163,9 @@ function FacilitatorGrid() {
    * is on screen. Computed once and handed to the pane, so its live and dead
    * states advertise the same thing and neither can hand-write a key.
    */
-  const paneShortcuts = liveShortcuts(["sweep-step", "sweep-jump", "dismiss-pane"], gates);
+  const paneShortcuts = liveShortcuts(CONSOLE_SURFACE_ROWS.pane, gates);
   /** The grid's own keys, from the same rows. */
-  const gridShortcuts = liveShortcuts(["walk-down", "walk-up", "commit"], gates);
+  const gridShortcuts = liveShortcuts(CONSOLE_SURFACE_ROWS.grid, gates);
 
   function toggleStatus(status: string) {
     void setStatuses((prev) => {
@@ -1365,7 +1370,7 @@ function FacilitatorGrid() {
               type="button"
               onClick={() => setLegendOpen(true)}
               aria-haspopup="dialog"
-              aria-keyshortcuts={liveShortcuts(["open-sheet"], gates)}
+              aria-keyshortcuts={liveShortcuts(CONSOLE_SURFACE_ROWS.sheet, gates)}
               className="text-xs text-gray-500 underline-offset-2 hover:text-black hover:underline"
               title="j and k walk the visible rows, wrapping at the ends; Enter or w opens the watch pane on the row you stopped on; g then i or n jumps to the first or last row, g then w watches the cursor row, g then l copies its run link, g then v opens the saved views. Press ? for the full sheet."
             >

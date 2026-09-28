@@ -4,6 +4,26 @@ import { join } from 'path';
 import ts from 'typescript';
 import { expect, test, type Page } from '@playwright/test';
 
+import {
+  CONSOLE_CHORDS,
+  CONSOLE_KEYS,
+  CONSOLE_SURFACE_ROWS,
+  armedChords,
+  consoleGates,
+  gateIsLive,
+  layerIsLive,
+  liveChordMap,
+  liveKeyMap,
+  liveShortcuts,
+  rowIsLive,
+  type ConsoleChord,
+  type ConsoleGates,
+  type ConsoleKey,
+  type ShortcutGate,
+} from '../components/delegate/consoleShortcuts';
+import { OVERLAY_DISMISS_KEY } from '../components/delegate/shortcuts';
+import { coherence, reachableWorlds, type KeyboardManifest } from './keyboard-coherence';
+
 /**
  * Unit spec for the shared keyboard-shortcut POLICY
  * (components/delegate/shortcuts.ts) — the ignore-guards every Delegate
@@ -46,11 +66,16 @@ import { expect, test, type Page } from '@playwright/test';
  * mutation-proven guards.
  *
  * The file also runs the console's keyboard DECLARATION
- * (components/delegate/consoleShortcuts.ts) the same way — from source, in a
- * browser — and holds it to the coherence its one-declaration design promises:
- * no reachable console state may let two bindings answer to one key, and no
- * gate may be declared that no state can reach or no binding reads. The two
- * modules are loaded together there, because the one key a declaration may
+ * (components/delegate/consoleShortcuts.ts) — but in node, not in a browser —
+ * and that is a statement about the difference between the two modules rather
+ * than a shortcut: the policy needs a real DOM to mean anything, while a
+ * declaration is data and pure functions over it. It is imported directly and
+ * held to the coherence its one-declaration design promises by the harness in
+ * e2e/keyboard-coherence.ts, which is where the checks themselves live — no
+ * reachable console state may let two bindings answer to one key, no gate may
+ * be declared that no state can reach or no binding reads, and no surface may
+ * advertise a key it does not answer to. The policy's dismissal key is
+ * imported alongside it, because the one key a declaration may legitimately
  * bind twice is the one the policy names.
  */
 
@@ -169,7 +194,7 @@ async function loadGuards(page: Page): Promise<void> {
   await loadModule(
     page,
     GUARDS_PATH,
-    ['ownsArrowKeys', 'shortcutAllowed', 'OVERLAY_DISMISS_KEY'],
+    ['ownsArrowKeys', 'shortcutAllowed'],
     '__guards',
   );
 }
@@ -183,6 +208,7 @@ async function loadConsoleKeys(page: Page): Promise<void> {
       'CONSOLE_KEYS',
       'CONSOLE_CHORDS',
       'CONSOLE_GROUPS',
+      'CONSOLE_SURFACE_ROWS',
       'consoleGates',
       'gateIsLive',
       'rowIsLive',
@@ -389,20 +415,12 @@ interface GateCase {
   why: string;
 }
 
-interface ConsoleGates {
-  walk: boolean;
-  commit: boolean;
-  sweep: boolean;
-  link: boolean;
-  pane: boolean;
-  views: boolean;
-}
-
 /**
  * The console's state as `consoleGates` takes it — the five inputs every gate
- * is a judgement about. The coherence case below enumerates these directly
- * rather than going through the UI, because the claim is about the
- * DECLARATION, and the state space is small enough to walk exhaustively.
+ * is a judgement about. The three tables below reach it through the page, the
+ * way the console itself does; the two coherence checks at the end of this
+ * block walk it in node, because that claim is about the DECLARATION and the
+ * state space is small enough to enumerate exhaustively.
  */
 interface ConsoleState {
   sweepList: string[];
@@ -413,19 +431,86 @@ interface ConsoleState {
 }
 
 /**
- * The declaration and the readers the coherence case calls, described by
- * SHAPE rather than imported: the module is loaded from its own source into
- * the page, so a renamed export breaks the load above rather than quietly
- * satisfying a type here.
+ * Every console state a facilitator can actually be in, enumerated through the
+ * harness (e2e/keyboard-coherence.ts) rather than here: what a state CAN be is
+ * the one thing this console knows and the harness cannot, while the product
+ * and the filtering are the harness's to own.
+ *
+ * The invariants are the console's own. `cursorTarget` is a MEMBER whenever
+ * the room is not empty, because the page falls back to the first visible row.
+ * And `watchId` may sit outside the room, because a shared `?watch=` link to a
+ * run the facets have hidden is a state this console explicitly supports (the
+ * `hiddenByFacet` branch) — one outsider is drawn, since a second would be
+ * that same case with a different id.
+ *
+ * Three runs is more room than any gate asks about — they turn on emptiness,
+ * single-versus-multiple, and membership — and the sizes are walked anyway so
+ * the enumeration cannot be the thing that decided a gate was reachable.
+ * 4 room sizes x (size + 2 watch ids) x (size or 1 cursors) x 2 panel states
+ * is 4 + 6 + 16 + 30 = 56.
  */
-interface ConsoleDeclarationApi {
-  CONSOLE_KEYS: Array<{ id: string; keys: readonly string[]; gate: string; under?: string; mount: string }>;
-  CONSOLE_CHORDS: Array<{ id: string; keys: string; gate: string }>;
-  consoleGates: (state: ConsoleState) => ConsoleGates;
-  gateIsLive: (gate: string, gates: ConsoleGates) => boolean;
-  rowIsLive: (row: { gate: string; under?: string }, gates: ConsoleGates) => boolean;
-  layerIsLive: (id: string, gates: ConsoleGates) => boolean;
-}
+const CONSOLE_WORLDS = reachableWorlds<ConsoleState>(
+  {
+    room: [[], ['r1'], ['r1', 'r2'], ['r1', 'r2', 'r3']],
+    watch: [null, 'r1', 'r2', 'r3', 'ghost'],
+    views: [false, true],
+    cursor: [null, 'r1', 'r2', 'r3'],
+  },
+  ({ room, watch, views, cursor }) => {
+    if (!Array.isArray(room)) return null;
+    if (typeof views !== 'boolean') return null;
+    if (watch !== null && typeof watch !== 'string') return null;
+    if (cursor !== null && typeof cursor !== 'string') return null;
+    const sweepList: string[] = room;
+    // The cursor is a member whenever the room is not empty, and null exactly
+    // when it is empty.
+    if (sweepList.length === 0) {
+      if (cursor !== null) return null;
+    } else if (cursor === null || !sweepList.includes(cursor)) {
+      return null;
+    }
+    if (watch !== null && watch !== 'ghost' && !sweepList.includes(watch)) return null;
+    return {
+      sweepList: [...sweepList],
+      watchId: watch,
+      viewsOpen: views,
+      cursorTarget: cursor,
+      // The page derives this from the target, so it is null exactly when the
+      // target is.
+      cursorRow: cursor === null ? null : { participant: cursor },
+    };
+  },
+  (state) =>
+    `room=[${state.sweepList.join(',')}] watch=${state.watchId ?? 'none'} views=${state.viewsOpen ? 'open' : 'shut'} cursor=${state.cursorTarget ?? 'none'}`,
+);
+
+/** The state space, pinned: an enumeration that silently shrank would make
+ *  every assertion built on it pass vacuously. */
+const STATE_COUNT = 56;
+
+/**
+ * The console's declaration, handed to the harness as the module's own exports
+ * — the readers are the shipped functions rather than a second copy of them, so
+ * a changed gate expression moves the console and these checks together.
+ *
+ * One cast is needed and it is the honest one: the harness speaks of a gate as
+ * a string, because it cannot know another manifest's vocabulary, while this
+ * module's `gateIsLive` takes the union it declares. Everything else fits
+ * without one.
+ */
+const CONSOLE_MANIFEST: KeyboardManifest<ConsoleKey, ConsoleChord, ConsoleGates, ConsoleState> = {
+  rows: CONSOLE_KEYS,
+  chords: CONSOLE_CHORDS,
+  surfaces: CONSOLE_SURFACE_ROWS,
+  gates: (state) => consoleGates(state),
+  gateIsLive: (gate, gates) => gateIsLive(gate as ShortcutGate, gates),
+  rowIsLive,
+  layerIsLive,
+  liveKeyMap,
+  liveChordMap,
+  armedChords,
+  liveShortcuts,
+};
 
 const GATE_CASES: GateCase[] = [
   {
@@ -711,7 +796,11 @@ test.describe('Facilitator console keyboard declaration', () => {
               gates: ConsoleGates,
               runs: Record<string, (() => void) | undefined>,
             ) => Record<string, () => void>;
-            armedChords: (prefix: string, gates: ConsoleGates) => Array<{ keys: string }>;
+            armedChords: (
+              prefix: string,
+              gates: ConsoleGates,
+              runs: Record<string, (() => void) | undefined>,
+            ) => Array<{ keys: string }>;
           };
         }
       ).__console;
@@ -753,10 +842,11 @@ test.describe('Facilitator console keyboard declaration', () => {
         coldMap: Object.keys(consoleApi.liveChordMap(cold, runs)),
         emptyMap: Object.keys(consoleApi.liveChordMap(empty, runs)),
         partialMap: Object.keys(consoleApi.liveChordMap(cold, partial)),
-        armedCold: consoleApi.armedChords('g', cold).map((chord) => chord.keys),
-        armedEmpty: consoleApi.armedChords('g', empty).map((chord) => chord.keys),
-        armedOtherPrefix: consoleApi.armedChords('x', cold).length,
-        armedNoPrefix: consoleApi.armedChords('', cold).length,
+        armedCold: consoleApi.armedChords('g', cold, runs).map((chord) => chord.keys),
+        armedEmpty: consoleApi.armedChords('g', empty, runs).map((chord) => chord.keys),
+        armedPartial: consoleApi.armedChords('g', cold, partial).map((chord) => chord.keys),
+        armedOtherPrefix: consoleApi.armedChords('x', cold, runs).length,
+        armedNoPrefix: consoleApi.armedChords('', cold, runs).length,
         idCount: new Set(consoleApi.CONSOLE_CHORDS.map((chord) => chord.id)).size,
         prefixes: [...new Set(consoleApi.CONSOLE_CHORDS.map((chord) => chord.keys.split(' ')[0]))],
         lengths: [...new Set(consoleApi.CONSOLE_CHORDS.map((chord) => chord.keys.split(' ').length))],
@@ -794,6 +884,10 @@ test.describe('Facilitator console keyboard declaration', () => {
     // which must not match every chord by accident.
     expect(read.armedCold).toEqual(['g i', 'g n', 'g w', 'g l', 'g v']);
     expect(read.armedEmpty).toEqual(['g v']);
+    // A chord the page supplies no behaviour for is not in the hook's map, so
+    // the chip must not offer it either: `g n` is missing here because the
+    // page would not run it, which is the same rule as a shut gate.
+    expect(read.armedPartial).toEqual(['g i', 'g w', 'g l', 'g v']);
     expect(read.armedOtherPrefix).toBe(0);
     expect(read.armedNoPrefix).toBe(0);
 
@@ -821,198 +915,133 @@ test.describe('Facilitator console keyboard declaration', () => {
     ]);
   });
 
-  test('no reachable state lets two bindings claim one key, and every gate is reachable', async ({
-    page,
-  }) => {
-    // The guards above check the declaration against a handful of named
-    // rooms and against tables written here. This one checks it against
-    // ITSELF: the state space is enumerated, and the coherence its
-    // one-declaration design promises is asserted everywhere in it, so a row
-    // added to the declaration cannot quietly collide with a row already
-    // there — which is the failure a single key map makes silent, since the
-    // later binding simply wins and the sheet goes on documenting both.
+  test('no reachable state lets two bindings claim one key, and every gate is reachable', () => {
+    // The guards above check the declaration against a handful of named rooms
+    // and against tables written here. This one checks it against ITSELF, in
+    // every state of a bounded room, so a row added to the declaration cannot
+    // quietly collide with a row already there — which is the failure a single
+    // key map makes silent, since the later binding simply wins and the sheet
+    // goes on documenting both.
     //
-    // Two claims, the ones the sheet's own honesty rests on:
+    // The MECHANISM is the harness's (e2e/keyboard-coherence.ts), shared with
+    // any other keyboard manifest in this repo — including the checks that
+    // cannot be seen from here, since two readers built from one gate
+    // predicate agree even when that predicate is the thing that is wrong.
+    // What is left in this file is what only the console can answer:
     //
-    //   1. No reachable state lets two bindings claim one key. The console
-    //      binds through three surfaces, and each is checked on its own
-    //      terms because each fails differently: the single KEY MAP (two live
-    //      rows on one key, where the second silently clobbers the first), the
-    //      ordered LAYERS (two live layers on one key, where one press closes
-    //      two things — the bug `under` exists to prevent), and the CHORD
-    //      namespace (two live chords on one sequence, which the sequence
-    //      hook's map would collapse the same way).
+    //   - Which keys may legitimately be shared. Escape is the one key that
+    //     appears more than once: the sheet closes with its own Radix
+    //     dismissal, and the panel and the pane each bind it as a layer. The
+    //     declaration resolves that two ways and both are asserted — the two
+    //     layer rows are stacked by `under`, so they are never live together,
+    //     and the third is a `primitive` row, which may share the POLICY's
+    //     dismissal key with a console binding precisely because the policy
+    //     hands that key to the open overlay before the page hears it. The key
+    //     is read from the policy module rather than typed here, so the
+    //     console's literal and the policy's constant cannot drift apart — and
+    //     the shared set is pinned exactly, because "allowed" and "needed"
+    //     are different claims and only the second says the stacking is real.
     //
-    //      Escape is the one key that legitimately appears more than once: the
-    //      sheet closes with its own Radix dismissal, and the panel and the
-    //      pane each bind it as a layer. The declaration resolves that two
-    //      ways and both are asserted here — the two layer rows are stacked by
-    //      `under`, so they are never live together, and the third is a
-    //      `primitive` row, which may share the POLICY's dismissal key with a
-    //      console binding precisely because the policy hands that key to the
-    //      open overlay before the page hears it. The dismissal key is read
-    //      from the policy module rather than typed here, so the console's
-    //      literal and the policy's constant cannot drift apart.
+    //   - Which rooms count, which is CONSOLE_WORLDS above: enumerated over
+    //     the console's real invariants rather than over every combination of
+    //     the five fields, because a guard that let impossible combinations
+    //     count would accept a gate that is only ever true somewhere the
+    //     console cannot be.
     //
-    //   2. Every declared gate is reachable from some real console state, and
-    //      read by something. A gate no state can satisfy is a documented key
-    //      nobody can ever press; a gate no binding reads is a name with no
-    //      meaning. Both are the same class of dead weight, and neither is
-    //      visible in the sheet.
-    //
-    // The state space is enumerated OVER the console's real invariants rather
-    // than over every combination of the five fields, because several
-    // combinations cannot happen and a guard that let them count would accept
-    // a gate that is only ever true somewhere the console cannot be. Two are
-    // worth naming. `cursorTarget` is never null in a room that has rows —
-    // the page falls back to the first visible row — so it is drawn from the
-    // room rather than from all six values. And `watchId` MAY sit outside the
-    // room, because a shared `?watch=` link to a run the facets have hidden is
-    // a state this console explicitly supports (that is the `hiddenByFacet`
-    // branch), so one run id outside the room is drawn as well.
-    await page.goto('about:blank');
-    await loadConsoleKeys(page);
-    await loadGuards(page);
-
-    const read = await page.evaluate(() => {
-      const api = (window as unknown as { __console: ConsoleDeclarationApi }).__console;
-      const guards = (window as unknown as { __guards: { OVERLAY_DISMISS_KEY: string } }).__guards;
-
-      // ── The reachable states ──
-      // Three runs is more room than any gate asks about — they turn on
-      // emptiness, single-versus-multiple, and membership — and the sizes
-      // below are walked anyway so the enumeration cannot be the thing that
-      // decided a gate was reachable.
-      const RUNS = ['r1', 'r2', 'r3'];
-      const states: Array<{ label: string; state: ConsoleState }> = [];
-      for (const size of [0, 1, 2, 3]) {
-        const room = RUNS.slice(0, size);
-        // Nothing watched, any row watched, or a run the room does not hold.
-        const watchIds: Array<string | null> = [null, ...room, 'ghost'];
-        // The cursor is a MEMBER whenever the room is not empty.
-        const targets: Array<string | null> = room.length === 0 ? [null] : [...room];
-        for (const watchId of watchIds) {
-          for (const cursorTarget of targets) {
-            for (const viewsOpen of [false, true]) {
-              states.push({
-                label: `room=[${room.join(',')}] watch=${watchId === null ? 'none' : watchId} views=${viewsOpen ? 'open' : 'shut'} cursor=${cursorTarget === null ? 'none' : cursorTarget}`,
-                state: {
-                  sweepList: [...room],
-                  watchId,
-                  viewsOpen,
-                  cursorTarget,
-                  // The page derives this from the target, so it is null
-                  // exactly when the target is.
-                  cursorRow: cursorTarget === null ? null : { participant: cursorTarget },
-                },
-              });
-            }
-          }
-        }
-      }
-
-      const violations: string[] = [];
-      const firstTrue: Record<string, string> = {};
-      const sharedAcrossMounts = new Set<string>();
-
-      for (const entry of states) {
-        const gates = api.consoleGates(entry.state);
-        const values = gates as unknown as Record<string, boolean>;
-        for (const name of Object.keys(values)) {
-          if (values[name] === true && firstTrue[name] === undefined) firstTrue[name] = entry.label;
-        }
-
-        const mapClaims: Record<string, string[]> = {};
-        const layerClaims: Record<string, string[]> = {};
-        const overlayKeys = new Set<string>();
-        for (const row of api.CONSOLE_KEYS) {
-          // `held` is left false — the state where a focused control yields
-          // Enter — because a yield can only REMOVE a key, so the unheld map
-          // is a superset of what can ever be bound and the conservative one
-          // to check collisions against.
-          if (row.mount === 'map' && api.rowIsLive(row, gates)) {
-            for (const key of row.keys) mapClaims[key] = [...(mapClaims[key] ?? []), row.id];
-          }
-          if (row.mount === 'layer' && api.layerIsLive(row.id, gates)) {
-            for (const key of row.keys) layerClaims[key] = [...(layerClaims[key] ?? []), row.id];
-          }
-          if ((row.mount === 'primitive' || row.mount === 'global') && api.rowIsLive(row, gates)) {
-            for (const key of row.keys) overlayKeys.add(key);
-          }
-        }
-        for (const key of Object.keys(mapClaims)) {
-          if (mapClaims[key].length > 1) {
-            violations.push(`${entry.label}: the key map binds ${key} to ${mapClaims[key].join(' and ')} at once`);
-          }
-        }
-        for (const key of Object.keys(layerClaims)) {
-          if (layerClaims[key].length > 1) {
-            violations.push(`${entry.label}: two layers both answer ${key} (${layerClaims[key].join(' and ')})`);
-          }
-        }
-        const consoleKeys = new Set([...Object.keys(mapClaims), ...Object.keys(layerClaims)]);
-        for (const key of overlayKeys) if (consoleKeys.has(key)) sharedAcrossMounts.add(key);
-
-        const chordClaims: Record<string, string[]> = {};
-        for (const chord of api.CONSOLE_CHORDS) {
-          if (api.gateIsLive(chord.gate, gates)) {
-            chordClaims[chord.keys] = [...(chordClaims[chord.keys] ?? []), chord.id];
-          }
-        }
-        for (const sequence of Object.keys(chordClaims)) {
-          if (chordClaims[sequence].length > 1) {
-            violations.push(`${entry.label}: two chords share the sequence ${sequence} (${chordClaims[sequence].join(' and ')})`);
-          }
-        }
-      }
-
-      const allKeys = new Set(api.CONSOLE_KEYS.flatMap((row) => [...row.keys]));
-      const prefixes = [...new Set(api.CONSOLE_CHORDS.map((chord) => chord.keys.split(' ')[0]))];
-      const sequences = api.CONSOLE_CHORDS.map((chord) => chord.keys);
-
-      const gateNames = Object.keys(
-        api.consoleGates({ sweepList: [], watchId: null, viewsOpen: false, cursorTarget: null, cursorRow: null }),
-      ) as Array<keyof ConsoleGates>;
-      const named = new Set<string>();
-      for (const row of api.CONSOLE_KEYS) {
-        named.add(row.gate);
-        if (row.under !== undefined) named.add(row.under);
-      }
-      for (const chord of api.CONSOLE_CHORDS) named.add(chord.gate);
-
-      return {
-        stateCount: states.length,
-        violations,
-        sharedAcrossMounts: [...sharedAcrossMounts],
-        dismissalKey: guards.OVERLAY_DISMISS_KEY,
-        // A single key that is also a chord's prefix would be armed as a
-        // namespace and fired as a command by the same press.
-        prefixClashes: prefixes.filter((prefix) => allKeys.has(prefix)),
-        // A chord that is a prefix of another chord would fire before the
-        // longer one could ever complete.
-        chordPrefixClashes: sequences.filter((sequence) =>
-          sequences.some((other) => other !== sequence && other.startsWith(`${sequence} `)),
-        ),
-        unreachable: gateNames.filter((gate) => firstTrue[gate] === undefined),
-        unread: gateNames.filter((gate) => !named.has(gate)),
-        bogus: [...named].filter((gate) => gate !== 'always' && !gateNames.includes(gate as keyof ConsoleGates)),
-      };
+    //   - One binding deliberately unimplemented: `jump-last` is in the
+    //     declaration and absent from the behaviour, which is how a page that
+    //     does not implement a chord is simulated. Nothing may keep or offer
+    //     it.
+    const report = coherence(CONSOLE_MANIFEST, CONSOLE_WORLDS, {
+      allowedSharedKeys: [OVERLAY_DISMISS_KEY],
+      behaviour: { withheld: ['jump-last'] },
     });
 
-    // The enumeration, pinned: 4 room sizes x (size + 2 watch ids) x (size or
-    // 1 cursors) x 2 panel states = 4 + 6 + 16 + 30. Pinned rather than
-    // described because an enumeration that silently shrank to nothing would
-    // make every assertion below pass vacuously.
-    expect(read.stateCount, 'every state of a bounded room is enumerated').toBe(56);
-    expect(read.violations, 'no reachable state may let two bindings claim one key').toEqual([]);
+    expect(report.worlds, 'every state of a bounded room is enumerated').toBe(STATE_COUNT);
+    expect(report.collisions, 'no reachable state may let two bindings claim one key').toEqual([]);
     expect(
-      read.sharedAcrossMounts,
-      `an overlay's own dismissal may share only the policy's dismissal key (${read.dismissalKey}) with the console's bindings`,
-    ).toEqual([read.dismissalKey]);
-    expect(read.prefixClashes, 'no single key may also be a chord prefix').toEqual([]);
-    expect(read.chordPrefixClashes, 'no chord may be a prefix of another').toEqual([]);
-    expect(read.unreachable, 'every declared gate must be reachable from some real console state').toEqual([]);
-    expect(read.unread, 'every declared gate must be read by some binding').toEqual([]);
-    expect(read.bogus, 'every gate a binding names must be a real gate').toEqual([]);
+      report.sharedKeys,
+      `an overlay's own dismissal may share only the policy's dismissal key (${OVERLAY_DISMISS_KEY}) with the console's bindings`,
+    ).toEqual([OVERLAY_DISMISS_KEY]);
+    expect(
+      report.namespace,
+      'no single key may also be a chord prefix, and no chord may be a prefix of another',
+    ).toEqual([]);
+    expect(report.gates.unreachable, 'every declared gate must be reachable from some real console state').toEqual([]);
+    expect(report.gates.unread, 'every declared gate must be read by some binding').toEqual([]);
+    expect(report.gates.bogus, 'every gate a binding names must be a real gate').toEqual([]);
+  });
+
+  test('every surface advertises, and the chip offers, exactly what is bound', () => {
+    // The same states, and the other half of the declaration's promise: not
+    // only which keys exist, but WHAT EACH SURFACE SAYS ABOUT THEM. A surface
+    // that advertises a key it does not answer to is the same lie as a sheet
+    // that documents a key nothing binds, and in front of assistive tech it is
+    // worse than silence — a screen reader announces a shortcut that then does
+    // nothing. The claims, and what each is compared against:
+    //
+    //   1. Every surface advertises exactly what it binds. `aria-keyshortcuts`
+    //      is a claim about the element it sits on, so it is compared against
+    //      the keys the console MOUNTS for that surface right now — the live
+    //      key map for its `map` rows, `layerIsLive` for its layer rows. A
+    //      shut gate binds nothing, so advertising it would be the lie; the
+    //      pane's Escape under the views panel is the case that exists today,
+    //      and it is exactly what `under` is for.
+    //
+    //      The page's own completeness is deliberately NOT this guard's job:
+    //      a row the page implements nothing for is caught by
+    //      e2e/facilitator-keys.spec.ts, which demands a visible effect of
+    //      every declared binding. Here the page is assumed to implement
+    //      everything, and the one exception is deliberate — a chord withheld
+    //      below, to prove the chip cannot offer what the hook would not run.
+    //
+    //   2. The armed-chord chip offers exactly what the hook can run. The menu
+    //      and the sequence hook's map are built from one predicate, so being
+    //      offered and being dispatchable are the same question — and the chip
+    //      shows the COMPLETING key of each destination, so two destinations
+    //      one key apart would render the same cap twice.
+    //
+    //   3. A binding the page does not implement is kept by NEITHER the hook's
+    //      map nor the chip. That one is checked by PRESENCE rather than by
+    //      agreement, because two readers built from one predicate would agree
+    //      while both kept the chord — which is the bug that change fixed. The
+    //      predicates that genuinely can drift are exercised on a manifest of
+    //      the harness's own, in e2e/keyboard-coherence.spec.ts.
+    //
+    // Every comparison is made in every reachable state, with and without a
+    // control holding the keyboard, because the held string is a claim too.
+    //
+    // WHERE THIS GUARD STOPS, since a check that cannot fail is worse than no
+    // check. Every reader in this module answers from ONE gate predicate, and
+    // that is the module's whole point — so agreement between two readers
+    // cannot catch a change to the predicate itself. That is the test above,
+    // which asks the gates directly. What this one catches is the drift a
+    // surface LIST or a menu can introduce, which is the drift nothing else
+    // could see: a surface naming a row that does not exist, or one whose
+    // mount means the console never bound it (an overlay's own dismissal, or a
+    // key bound by a component elsewhere), or the same row twice; an
+    // advertised string that stops matching what is mounted; a chord the page
+    // does not implement being kept in the hook's map or offered by the menu;
+    // two destinations completing on one key; and a yield naming a key its row
+    // does not bind. Coverage is the one thing it does not claim — a row may
+    // be advertised by no surface at all (the views panel closes on Escape
+    // without advertising it), which is a gap rather than a lie. What is
+    // enforced is honesty: a surface answers to what it says.
+    const report = coherence(CONSOLE_MANIFEST, CONSOLE_WORLDS, {
+      allowedSharedKeys: [OVERLAY_DISMISS_KEY],
+      behaviour: { withheld: ['jump-last'] },
+    });
+
+    // Pinned: a surface dropped from the declaration would otherwise stop being
+    // checked at all, and an attribute nobody writes is the silence this guard
+    // exists to prevent.
+    expect(report.surfaces.sort(), 'every surface that advertises rows is declared').toEqual([
+      'grid',
+      'pane',
+      'sheet',
+    ]);
+    expect(report.claims, 'a surface must advertise, and the chip offer, exactly what is bound').toEqual([]);
+    expect(report.unimplemented, 'a binding the page does not implement is neither kept nor offered').toEqual([]);
+    expect(report.structure, 'the declaration is shaped the way its readers assume').toEqual([]);
   });
 });
