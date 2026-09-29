@@ -34,7 +34,14 @@ const OUTER_REPO = [
 ];
 const OUTER_CONFIG = /^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+)$/;
 
-function fixtureEnv() {
+/**
+ * The environment a fixture runs in, exported because a check that runs another
+ * program in a fixture has to hand it the same one: the programs under
+ * `scripts/` are run against a sandbox, and any of these names pointing at the
+ * checkout the doctor was started in would have them read and write the real
+ * repository instead.
+ */
+export function fixtureEnv() {
   const env = { ...process.env };
   for (const key of Object.keys(env)) {
     if (OUTER_REPO.includes(key) || OUTER_CONFIG.test(key)) delete env[key];
