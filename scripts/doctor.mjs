@@ -29,9 +29,11 @@
  *     that reports on this checkout first builds those fixtures and insists each
  *     check report what it claims, so a check that can only report good news
  *     fails the run that was counting on it. That section is printed below the
- *     report, and a proof that did not hold fails the run even when every line
- *     above it passed: those lines are the evidence, and unproved evidence is
- *     not evidence.
+ *     report, one line per fixture rather than per level, because the level is a
+ *     word the states share: three eras the guards refuse all report `fail`, and
+ *     the report has to say which state each line proved. A proof that did not
+ *     hold fails the run even when every line above it passed: those lines are
+ *     the evidence, and unproved evidence is not evidence.
  *
  * The one run that skips the proofs is `--fast`, which is what a commit waits
  * for: the fixtures are dozens of processes, and a commit is not the place to
@@ -118,12 +120,22 @@ export async function doctor({ strict = false, fast = false, prove = false, root
     unproved = proof.failures;
     console.log('\nThe checks, proved against fixture checkouts\n');
     for (const result of proof.results) {
-      const held = result.failures.length === 0;
+      const held = result.failures === 0;
       const said = held
         ? `reports ${result.levels.join(', ')}`
-        : `${result.failures.length} claim${result.failures.length === 1 ? '' : 's'} did not hold`;
+        : `${result.failures} claim${result.failures === 1 ? '' : 's'} did not hold`;
       console.log(`  ${MARKS[held ? 'pass' : 'fail']} ${result.name.padEnd(width)}  ${said}`);
-      for (const line of result.failures) console.log(`${' '.repeat(width + 6)}${line}`);
+      // The level a check reports says nothing about the state that made it
+      // report: the era declared backwards, the era that never landed on this
+      // branch and the shallow clone that cannot see it all report `fail`. One
+      // line per fixture names the state behind every claimed level, so a claim
+      // is read as the thing it proved rather than as a word four states share.
+      for (const fixture of result.fixtures) {
+        const mismatch = fixture.held
+          ? ''
+          : ` — claimed ${fixture.level}, reported ${fixture.reported.level}: ${fixture.reported.detail}`;
+        console.log(`${' '.repeat(width + 6)}${fixture.level.padEnd(4)}  ${fixture.why}${mismatch}`);
+      }
     }
     console.log(
       proof.failures === 0

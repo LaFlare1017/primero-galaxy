@@ -13,6 +13,12 @@
  *
  * Every check therefore declares `proof`: the levels it claims, the fixture
  * state that makes each one happen, and why that state is the one that does.
+ * The state is kept rather than folded into the level it produced, because the
+ * level cannot be read back: that a check reports `fail` says nothing about
+ * whether it refused the era declared backwards, the era that never landed on
+ * this branch, or the shallow clone that cannot see the era — three states, one
+ * word. The result below carries them, and the report prints one line each, so
+ * the reasons are the proof and not a remark about it.
  * Three things are refused rather than tolerated:
  *
  *   - a check with no proof at all. A level nothing has tested is a claim.
@@ -69,22 +75,35 @@ const RUNNER = [
 
 function runnerProof() {
   const root = newRoot();
-  const failures = [];
+  const fixtures = [];
   try {
     for (const [what, check, level] of RUNNER) {
       const found = findingFrom(check, root, {});
-      if (found.level !== level) failures.push(`${what} reported ${found.level}, not ${level}`);
+      const held = found.level === level;
+      fixtures.push({ level, why: what, held, reported: held ? null : found });
     }
   } finally {
     discard(root);
   }
-  return { name: 'runner', levels: ['fail', 'pass'], failures, scenarios: RUNNER.length };
+  return {
+    name: 'runner',
+    levels: [...new Set(fixtures.map((fixture) => fixture.level))],
+    fixtures,
+    failures: fixtures.filter((fixture) => !fixture.held).length,
+    scenarios: RUNNER.length,
+  };
 }
 
 /**
  * Runs every check's proof. Returns one result per check plus the runner's, the
  * total number of fixtures built, and the failures — which the caller folds into
  * its verdict, because a doctor whose proof failed has not answered anything.
+ *
+ * Each result carries a record per scenario — the level it claims, the state
+ * that is supposed to make it happen, and how the check answered — because the
+ * caller prints those records: the state is what proves the level, and a level
+ * counted without the state behind it is the number this section exists to
+ * replace.
  */
 export function prove(checks) {
   const results = [];
@@ -92,27 +111,32 @@ export function prove(checks) {
   let failures = 0;
 
   for (const check of checks) {
-    const held = [];
-    const broken = [];
+    const fixtures = [];
     for (const scenario of claims(check)) {
       scenarios += 1;
       const root = scenario.repo ? newRepo() : newRoot();
       try {
         scenario.setup(root);
-        const { level, detail } = findingFrom(check, root, scenario.context ?? {});
-        if (level === scenario.level) held.push(scenario.level);
-        else broken.push(`claimed ${scenario.level} but reported ${level} — ${scenario.why} (it said: ${detail})`);
+        const found = findingFrom(check, root, scenario.context ?? {});
+        const held = found.level === scenario.level;
+        fixtures.push({ level: scenario.level, why: scenario.why, held, reported: held ? null : found });
       } finally {
         discard(root);
       }
     }
-    failures += broken.length;
-    results.push({ name: check.name, levels: [...new Set(held)], failures: broken });
+    const broken = fixtures.filter((fixture) => !fixture.held).length;
+    failures += broken;
+    results.push({
+      name: check.name,
+      levels: [...new Set(fixtures.map((fixture) => fixture.level))],
+      fixtures,
+      failures: broken,
+    });
   }
 
   const runner = runnerProof();
   scenarios += runner.scenarios;
-  failures += runner.failures.length;
+  failures += runner.failures;
   results.push(runner);
 
   return { results, scenarios, failures };
