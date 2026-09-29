@@ -33,24 +33,37 @@
  * a read-back of BOTH gates, because the two argue about this one file. Anything
  * the read-back rejects is undone, so `--fix` ends with the file repaired and
  * proven or with the file untouched — a half-repair, some rules narrowed and the
- * gate still failing, is worse than no repair at all. Both halves are themselves
- * proved on every run by the fixture below, and the other gate is read back only
+ * gate still failing, is worse than no repair at all. `--fix --dry-run` is that
+ * same plan and that same diff, shown and then not written, and the fixture below
+ * holds the two runs against each other: a preview that described a repair other
+ * than the one performed is the one thing a dry run must not be. Both halves are
+ * themselves proved on every run, as is the shared `preview` that write goes
+ * through — that fixture belongs to `scripts/ignore-file.mjs`, which is where a
+ * fault in it would reach both gates from — and the other gate is read back only
  * when its script is in this checkout: a checkout without it is told so, rather
  * than told a gate passed.
  *
  * Usage:
- *   node scripts/gitignore-gate.mjs [--fix]
+ *   node scripts/gitignore-gate.mjs [--fix [--dry-run]]
+ *
+ * `--fix --dry-run` stops after the diff: nothing is written, so there is nothing
+ * to read back, and the run says that rather than reporting a repair it did not
+ * make. It still exits non-zero, because the paths it found are still covered and
+ * a dry run that exited clean would be indistinguishable from a repair to
+ * anything scripting it. `--dry-run` on its own is refused rather than silently
+ * promoted, since a plain run already prints the report without writing.
  *
  * Exit codes: 0 clean, or every covered path was rescued and read back · 1 a
- * tracked path is covered by a rule, or no shape this gate knows rescues it · 2
- * the scan itself could not run.
+ * tracked path is covered by a rule, or no shape this gate knows rescues it, or
+ * `--dry-run` showed the diff and wrote nothing · 2 the scan itself could not
+ * run.
  */
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { appended, showDiff } from './ignore-file.mjs';
+import { appended, preview, proveItCanPreview, showDiff } from './ignore-file.mjs';
 import { isMain } from './is-main.mjs';
 
 /**
@@ -264,11 +277,14 @@ function otherGate(root) {
 
 /**
  * Rescues every covered path, or writes nothing and says why. Returns the exit
- * code: 0 only when both gates have been read back clean. `log`/`warn` exist so
- * the fixture below can run the whole thing — the plan, the write, the read-back
- * and the undo — without printing over the run it is part of.
+ * code: 0 only when both gates have been read back clean, and never 0 for a dry
+ * run, whose whole premise is that nothing was repaired. `log`/`warn` exist so
+ * the fixture below can run the whole thing — the plan, the preview, the read-back
+ * and the undo — without printing over the run it is part of, and
+ * `dryRun` stops it after the diff, which is the one case where a caller is
+ * asking to see the change without agreeing to it.
  */
-function fix(root, hits, { log = console.log, warn = console.error } = {}) {
+function fix(root, hits, { log = console.log, warn = console.error, dryRun = false } = {}) {
   const files = ignoreFiles(root);
   const original = new Map(files.map((file) => [file.path, file.contents]));
   const paths = hits.map((hit) => hit.path);
@@ -312,14 +328,10 @@ function fix(root, hits, { log = console.log, warn = console.error } = {}) {
     log(`  ${hit.path}  was covered by  ${hit.source}:${hit.line}  "${hit.pattern}"`);
     log(`    → ${rewrite}append  !${negation}`);
   }
-  log(`\n${changed.length} ignore ${changed.length === 1 ? 'file' : 'files'} would change:`);
-  for (const file of changed) {
-    const name = relative(root, file.path);
-    log(`\n${name}`);
-    log(showDiff(file.path, file.contents, name));
-  }
-
-  for (const file of changed) writeFileSync(file.path, file.contents);
+  // Shown first, then written: `preview` hands back false when the diff was all
+  // that was asked for, and the read-back below means something only about a file
+  // that was written.
+  if (!preview(changed, { log, dryRun })) return 1;
 
   // Read both gates back. Narrowing a rule changes what git ignores, which is the
   // one thing the other gate exists to have an opinion about.
@@ -366,6 +378,11 @@ function fix(root, hits, { log = console.log, warn = console.error } = {}) {
  * artifact the untracked gate has an opinion about. That write has to be undone
  * byte for byte, because a `--fix` that leaves a half-repair behind is worse
  * than one that does nothing.
+ *
+ * And the half that only shows. `--fix --dry-run` has to print the same plan and
+ * the same diff, leave the file byte for byte as it was, and be held against the
+ * write that follows it: report for report, and then the diff of the bytes that
+ * were written has to be the one it printed.
  */
 export function proveItCanFix() {
   const quiet = { log: () => {}, warn: () => {} };
@@ -405,16 +422,59 @@ export function proveItCanFix() {
     if (hits.length !== 2) {
       throw new Error(`the fix fixture planted two covered paths and the scan reported ${hits.length}`);
     }
-    // The report is read as a description of the write, so the fixture reads it.
+
+    // Asked for the diff: the plan, the diff, and the file exactly as it was. The
+    // dry run is also read as a run of its own, so it has to come back non-zero —
+    // the two paths above are still covered whatever was or was not written.
+    const before = readFileSync(join(dir, '.gitignore'), 'utf8');
+    const preview = [];
+    const asked = fix(dir, hits, { log: (line) => preview.push(line), warn: (line) => preview.push(line), dryRun: true });
+    if (asked !== 1) throw new Error('the dry run reported a repair it did not make');
+    if (readFileSync(join(dir, '.gitignore'), 'utf8') !== before) {
+      throw new Error('the dry run wrote to .gitignore');
+    }
+    const untouched = scan(dir);
+    if (untouched.hits.length !== hits.length) throw new Error('the dry run changed what the scan sees');
+    const stopped = preview.findIndex((line) => line.includes('--dry-run asked for the diff'));
+    if (stopped === -1) throw new Error(`the dry run did not say it had written nothing:\n${preview.join('\n')}`);
+    const shown = preview.slice(0, stopped);
+    // A preview is a diff and nothing else. The lines git uses to name the two
+    // blobs are dropped by `showDiff`, and a pattern that stopped matching would
+    // put them back in the middle of the text this fixture is about to compare.
+    const named = shown.join('\n').split('\n').filter((line) => line.startsWith('diff --git ') || line.startsWith('index '));
+    if (named.length > 0) {
+      throw new Error(`the preview showed the lines git names blobs with: ${named.join(' | ')}`);
+    }
+
+    // Then the write, with its whole report captured: the report is read as a
+    // description of the write, so the fixture reads it against the preview.
     const said = [];
     if (fix(dir, hits, { log: (line) => said.push(line), warn: (line) => said.push(line) }) !== 0) {
       throw new Error('the fix fixture held two covered paths and --fix did not rescue them');
     }
+    const written = readFileSync(join(dir, '.gitignore'), 'utf8');
+    if (said.slice(0, shown.length).join('\n') !== shown.join('\n')) {
+      throw new Error(
+        `the preview and the write disagree:\n--- previewed\n${shown.join('\n')}\n--- written\n${said.slice(0, shown.length).join('\n')}`,
+      );
+    }
+    // And it was a diff of the bytes that were written, which the report above
+    // cannot show on its own: a diff of some other change prints just as well. So
+    // the same diff is run against the file as it was and the file as it now is,
+    // and it has to be the text the dry run printed.
+    const kept = join(dir, '.gitignore.before');
+    writeFileSync(kept, before);
+    const performed = showDiff(kept, written, '.gitignore');
+    if (shown[shown.length - 1] !== performed) {
+      throw new Error(
+        `the diff the dry run showed is not the diff of the write that happened:\n--- previewed\n${shown[shown.length - 1]}\n--- performed\n${performed}`,
+      );
+    }
+
     const after = scan(dir);
     if (after.hits.length > 0) {
       throw new Error(`the fix left ${after.hits.map((hit) => hit.path).join(', ')} covered`);
     }
-    const written = readFileSync(join(dir, '.gitignore'), 'utf8');
     if (!written.includes('!/notes.txt')) throw new Error('a plain file rule was not rescued by a negation');
     if (written.includes('notes.txt/*')) throw new Error('a rule naming a file was globbed');
     if (!written.includes('/logs/*')) throw new Error('a rule excluding a directory was not globbed before its negation');
@@ -459,10 +519,11 @@ export function proveItCanFix() {
   }
 }
 
-function gate({ repair = false } = {}) {
+function gate({ repair = false, dryRun = false } = {}) {
   const root = git(['rev-parse', '--show-toplevel']).trim();
   proveItCanFail();
   proveItCanFix();
+  proveItCanPreview();
 
   const { tracked, hits } = scan(root);
   if (hits.length === 0) {
@@ -474,12 +535,13 @@ function gate({ repair = false } = {}) {
   for (const hit of hits) {
     console.error(`✗ ${hit.path}  (covered by ${hit.source}:${hit.line}  "${hit.pattern}")`);
   }
-  if (repair) return fix(root, hits);
+  if (repair) return fix(root, hits, { dryRun });
 
   console.error(
     `\nGitignore gate failed: ${hits.length} tracked ${hits.length === 1 ? 'path is' : 'paths are'} covered by a committed .gitignore rule.\n` +
       'Either stop tracking the path, or narrow the rule — a `!` negation for the path that belongs in the repo.\n' +
-      '`node scripts/gitignore-gate.mjs --fix` writes one, showing the diff first and reading both gates back.',
+      '`node scripts/gitignore-gate.mjs --fix` writes one, showing the diff first and reading both gates back.\n' +
+      '`node scripts/gitignore-gate.mjs --fix --dry-run` shows the same plan and diff and writes nothing.',
   );
   return 1;
 }
@@ -488,12 +550,22 @@ function gate({ repair = false } = {}) {
 // not run a gate over whatever repository the caller happens to be in.
 if (isMain(import.meta.url)) {
   const args = process.argv.slice(2);
-  const unknown = args.filter((arg) => arg !== '--fix');
+  const known = new Set(['--fix', '--dry-run']);
+  const unknown = args.filter((arg) => !known.has(arg));
   try {
     if (unknown.length > 0) {
-      throw new Error(`unrecognised argument${unknown.length === 1 ? '' : 's'}: ${unknown.join(' ')} (usage: gitignore-gate.mjs [--fix])`);
+      throw new Error(
+        `unrecognised argument${unknown.length === 1 ? '' : 's'}: ${unknown.join(' ')} (usage: gitignore-gate.mjs [--fix [--dry-run]])`,
+      );
     }
-    process.exit(gate({ repair: args.includes('--fix') }));
+    const repair = args.includes('--fix');
+    const dryRun = args.includes('--dry-run');
+    if (dryRun && !repair) {
+      throw new Error(
+        '--dry-run goes with --fix: a plain run already prints the report without writing (usage: gitignore-gate.mjs --fix --dry-run)',
+      );
+    }
+    process.exit(gate({ repair, dryRun }));
   } catch (error) {
     console.error(`✗ ${error.message}`);
     console.error('\nGitignore gate could not run — that is a failure, not a pass.');

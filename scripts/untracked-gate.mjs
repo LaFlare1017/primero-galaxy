@@ -63,7 +63,10 @@
  *
  * `--fix` is not the doctor's business, and the doctor does not call it: the
  * doctor reports, and `scripts/doctor/checks/untracked.mjs` proves the reading.
- * The writing is proved where it lives, by `proveItCanFix` below.
+ * The writing is proved where it lives, by `proveItCanFix` below, and the shared
+ * `preview` it writes through by a fixture of its own in
+ * `scripts/ignore-file.mjs` — asked for here as well, since a fault in that one
+ * function would reach this gate and the gitignore gate at once.
  *
  * Usage:
  *   node scripts/untracked-gate.mjs [--fix [--dry-run]]
@@ -78,7 +81,7 @@ import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSyn
 import { basename, dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { scan } from './gitignore-gate.mjs';
-import { appended, showDiff } from './ignore-file.mjs';
+import { appended, preview, proveItCanPreview } from './ignore-file.mjs';
 import { isMain } from './is-main.mjs';
 
 /**
@@ -398,11 +401,12 @@ const FIX_NOTE = [
 ];
 
 /**
- * Shows the diff, writes the lines, then reads the result back against both gates.
- * Returns the exit code; `log` exists so the fixture below can run the whole thing
- * — the write, the read-back and all — without printing over the run it is part of,
- * and `dryRun` stops it after the diff, which is the one case where a caller is
- * asking to see the change without agreeing to it.
+ * Writes the lines by way of `preview`, which shows the diff first, and then reads
+ * the result back against both gates. Returns the exit code; `log` exists so the
+ * fixture below can run the whole thing — the write, the read-back and all —
+ * without printing over the run it is part of, and `dryRun` stops it after the
+ * diff, which is the one case where a caller is asking to see the change without
+ * agreeing to it.
  */
 function applyFix(root, groups, { log = console.log, dryRun = false } = {}) {
   const ignore = join(root, '.gitignore');
@@ -421,20 +425,10 @@ function applyFix(root, groups, { log = console.log, dryRun = false } = {}) {
   const block = [...(known.has(FIX_NOTE[0]) ? [] : FIX_NOTE), ...missing];
   const after = appended(before, block);
 
-  log(`\n.gitignore would gain ${block.length} line${block.length === 1 ? '' : 's'}:`);
-  log(showDiff(ignore, after));
-
-  // The diff is the whole answer a dry run asked for, and the read-back is worth
-  // nothing without the write it describes — so this stops here and says which of
-  // the two things the run did.
-  if (dryRun) {
-    log('\nNothing was written: --dry-run asked for the diff, not the file.');
-    log('The read-back that goes with this write only means something about a file that was');
-    log('actually written, so this run stops here — and the paths above are still uncovered.');
-    return 1;
-  }
-
-  writeFileSync(ignore, after);
+  // Shown first, then written: `preview` hands back false when the diff was all
+  // that was asked for, and the read-back below means something only about a file
+  // that was written.
+  if (!preview([{ name: basename(ignore), path: ignore, contents: after }], { log, dryRun })) return 1;
 
   // Read back, because this is the one place here that edits a tracked file and
   // the two gates argue about this exact file: the audit has to be clean, and the
@@ -545,6 +539,7 @@ function gate({ fix = false, dryRun = false } = {}) {
   const root = git(['rev-parse', '--show-toplevel'], { cwd: process.cwd() }).trim();
   proveItCanSee();
   proveItCanFix();
+  proveItCanPreview();
 
   const { hits, groups, unaccounted } = audit(root);
 

@@ -55,6 +55,7 @@ export default {
         hint: [
           ...hits.map((hit) => `${hit.path}  (${hit.source}:${hit.line}  "${hit.pattern}")`),
           '`node scripts/gitignore-gate.mjs --fix` writes the negation this needs, showing the diff first.',
+          '`node scripts/gitignore-gate.mjs --fix --dry-run` shows the same plan and diff and writes nothing.',
         ],
       };
     }
