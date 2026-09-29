@@ -49,8 +49,13 @@ export function fixtureEnv() {
   return env;
 }
 
-/** git, in the fixture, with nothing of the outer checkout left in the way. */
-function git(args, { cwd }) {
+/**
+ * git, in the fixture, with nothing of the outer checkout left in the way.
+ * Exported because a fixture is not always one `git init`: a scenario that needs
+ * a branch, a checkout or a shallow clone asks git here, and a fixture that ran
+ * git anywhere else is how the outer checkout's environment gets back in.
+ */
+export function git(args, { cwd }) {
   const result = spawnSync('git', args, { cwd, env: fixtureEnv() });
   if (result.error) throw new Error(`could not run \`git ${args.join(' ')}\` in ${cwd}: ${result.error.message}`);
   if (result.status !== 0) {

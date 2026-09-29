@@ -45,10 +45,10 @@ function git(...args) {
   return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' }).trim();
 }
 
-/** Whether a revision is in this checkout at all — a shallow clone is missing most. */
-function present(rev) {
+/** Whether a revision is in `root` at all — a shallow clone is missing most. */
+function present(root, rev) {
   try {
-    execFileSync('git', ['cat-file', '-e', `${rev}^{commit}`], { cwd: ROOT, stdio: 'ignore' });
+    execFileSync('git', ['cat-file', '-e', `${rev}^{commit}`], { cwd: root, stdio: 'ignore' });
     return true;
   } catch {
     return false;
@@ -56,9 +56,9 @@ function present(rev) {
 }
 
 /** Whether `from` is an ancestor of `to` (git counts a commit as its own ancestor). */
-function reaches(from, to) {
+function reaches(root, from, to) {
   try {
-    execFileSync('git', ['merge-base', '--is-ancestor', from, to], { cwd: ROOT, stdio: 'ignore' });
+    execFileSync('git', ['merge-base', '--is-ancestor', from, to], { cwd: root, stdio: 'ignore' });
     return true;
   } catch {
     return false;
@@ -103,32 +103,44 @@ const ERA_LAST = '5aaffda';
  * why the CI job fetches the full history), the first has to be an ancestor of
  * the last, and the last has to be behind `HEAD`, or the number describes a line
  * of history this checkout is not on.
+ *
+ * The root and the two ends are arguments whose defaults are the constants
+ * above, and those defaults are the only ones this script uses: the doctor
+ * proves these guards by pointing them at fixture repositories instead, whose
+ * era is a range of commits it just made, and the states it has to catch are
+ * exactly these. A guard the fixtures could not ask about somewhere else would
+ * be a guard the doctor could only restate, which proves nothing.
  */
-function eraLength() {
+export function eraLength(root = ROOT, { first = ERA_FIRST, last = ERA_LAST } = {}) {
   for (const [name, rev] of [
-    ['ERA_FIRST', ERA_FIRST],
-    ['ERA_LAST', ERA_LAST],
+    ['ERA_FIRST', first],
+    ['ERA_LAST', last],
   ]) {
-    if (!present(rev)) {
+    if (!present(root, rev)) {
       throw new Error(
         `${name} (${rev}) is not in this checkout, so the era cannot be counted — ` +
           'a shallow clone has to fetch the history the era sits in (fetch-depth: 0)',
       );
     }
   }
-  if (!reaches(ERA_FIRST, ERA_LAST)) {
+  if (!reaches(root, first, last)) {
     throw new Error(
-      `ERA_FIRST (${ERA_FIRST}) is not an ancestor of ERA_LAST (${ERA_LAST}): that is not an era`,
+      `ERA_FIRST (${first}) is not an ancestor of ERA_LAST (${last}): that is not an era`,
     );
   }
-  if (!reaches(ERA_LAST, 'HEAD')) {
+  if (!reaches(root, last, 'HEAD')) {
     throw new Error(
-      `ERA_LAST (${ERA_LAST}) is not in this branch's history, so the era did not land here`,
+      `ERA_LAST (${last}) is not in this branch's history, so the era did not land here`,
     );
   }
-  const count = Number(git('rev-list', '--count', `${ERA_FIRST}^..${ERA_LAST}`));
+  const count = Number(
+    execFileSync('git', ['rev-list', '--count', `${first}^..${last}`], {
+      cwd: root,
+      encoding: 'utf8',
+    }).trim(),
+  );
   if (!Number.isInteger(count) || count <= 0) {
-    throw new Error(`the era ${ERA_FIRST}..${ERA_LAST} counted ${count} commits`);
+    throw new Error(`the era ${first}..${last} counted ${count} commits`);
   }
   return count;
 }
