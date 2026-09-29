@@ -37,6 +37,7 @@ import { tmpdir } from 'node:os';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { claimConfig, proveItCanClaim } from './local-config.mjs';
 import { isMain } from './is-main.mjs';
+import { executable, modeOf, proveItCanReadModes } from './recorded-modes.mjs';
 
 /** The tracked directory this installs, as written into the repo's config. */
 export const HOOKS_PATH = '.githooks';
@@ -105,9 +106,6 @@ export function shadowed(dir) {
     .sort();
 }
 
-/** The one mode that says git will run a file as a hook. */
-const EXECUTABLE_MODE = '100755';
-
 /**
  * Whether this filesystem records an executable bit at all. `core.fileMode` is
  * false on Windows, where a hook's bit is neither stored nor consulted, so a
@@ -118,12 +116,6 @@ function bitMatters(root) {
   // `--default` rather than a tolerant `--get`: an unset key means the
   // platform's own answer, which is the same answer the caller wants.
   return git(['config', '--default', 'true', '--get', 'core.fileMode'], { cwd: root }).trim() !== 'false';
-}
-
-/** `ls-files`/`ls-tree` lead with the mode, or print nothing for an absent path. */
-function recordedMode(output) {
-  const first = output.trim().split(/\s+/)[0] ?? '';
-  return /^\d{6}$/.test(first) ? first : null;
 }
 
 /**
@@ -145,30 +137,26 @@ function recordedMode(output) {
  * *previous* commit, and the way to fix a mode it recorded wrong is to make
  * this commit — so asking it would refuse the commit that repairs it, on behalf
  * of a checkout that commit is about to leave behind.
+ *
+ * Both modes are read by `scripts/recorded-modes.mjs`, which the doctor's `modes`
+ * check reads the same way: this asks about one path and that one asks about all
+ * of them, and the parse in between — `ls-files -s` against `ls-tree` — is not
+ * worth having twice.
  */
 export function hookProblems(root, path, { head: askHead = true } = {}) {
   const problems = [];
-  const index = recordedMode(git(['ls-files', '-s', '--', path], { cwd: root }));
-
-  let head = null;
-  if (askHead) {
-    try {
-      head = recordedMode(git(['ls-tree', 'HEAD', '--', path], { cwd: root }));
-    } catch {
-      // An unborn HEAD has no recorded mode to be wrong about.
-      head = null;
-    }
-  }
+  const index = modeOf(root, 'index', path);
+  const head = askHead ? modeOf(root, 'HEAD', path) : null;
 
   if (index === null) {
     problems.push({ detail: `${path} is not tracked, so a clone gets no hook at all`, fix: `git add ${path}` });
-  } else if (index !== EXECUTABLE_MODE) {
+  } else if (!executable(index)) {
     problems.push({
       detail: `${path} is recorded in the index as ${index}, so the next commit would ship a hook git skips`,
       fix: `git update-index --chmod=+x ${path}`,
     });
   }
-  if (head !== null && head !== EXECUTABLE_MODE) {
+  if (head !== null && !executable(head)) {
     problems.push({
       detail: `${path} is recorded in HEAD as ${head}, so a clone checks out a hook git ignores`,
       fix: `git update-index --chmod=+x ${path}   # then commit the mode change`,
@@ -239,6 +227,10 @@ export function install({ force = false, root = null } = {}) {
   // And the helper that claims the config key has to be able to *see* a value
   // already there, or it would report every key as unset and replace it.
   proveItCanClaim();
+  // And the reader of the recorded modes has to be able to *read* one, or the
+  // refusal below would wave through a hook git skips — which is the failure the
+  // whole install exists to prevent, arriving by way of its own check.
+  proveItCanReadModes();
 
   // A hook that cannot run is not a hook, and this is the one moment its owner
   // is looking: installing would otherwise print a success that nothing will

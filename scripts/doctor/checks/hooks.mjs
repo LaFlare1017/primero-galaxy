@@ -27,6 +27,11 @@
  *     through git, then plants a rule the hook has to refuse). Imported, not
  *     re-derived: a second opinion about an invariant is a second thing to keep
  *     in sync.
+ *
+ * The two recorded modes are read by `scripts/recorded-modes.mjs`, which the
+ * `modes` check beside this one reads all of them through — one reader of
+ * `ls-files -s` and `ls-tree`, and its fixture is asked for below, before either
+ * of those answers is believed.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -35,6 +40,7 @@ import { fileURLToPath } from 'node:url';
 import { checkHook } from '../../hook-check.mjs';
 import { HOOKS_PATH, activeHooksDir, hookProblems, shadowed } from '../../hooks-install.mjs';
 import { readConfig } from '../../local-config.mjs';
+import { proveItCanReadModes } from '../../recorded-modes.mjs';
 import { commit, configure, track, write, writeExecutable } from '../fixture.mjs';
 import { gitDir, show } from '../lib.mjs';
 
@@ -110,6 +116,11 @@ export default {
     },
   ],
   run(root, { ci = false, atCommit = false } = {}) {
+    // Prove the reader still reads a mode before believing what it says about
+    // this hook: a reader that answered `100644` about everything would report
+    // every hook here as one git skips, and one that answered nothing at all
+    // would report the opposite.
+    proveItCanReadModes();
     const wanted = join(root, HOOKS_PATH);
     const preCommit = join(wanted, 'pre-commit');
     if (!existsSync(preCommit)) {
