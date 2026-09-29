@@ -8,7 +8,7 @@ link handling).
 
 <!-- stats:begin copy.figures -->
 All figures are the repo's real ones, read out of it by `linkedin/stats.mjs`
-as of 2026-09-28: 27 commits in the era, 5 declared
+as of 2026-09-28: 15 commits in the era, 5 declared
 keyboards, 1,410 lines of declaration, 77 enumerated states,
 131 e2e tests in 18 files, 8 findings.
 <!-- stats:end -->
@@ -198,7 +198,7 @@ they're written to carry the slide's argument, not just its title.
 
 | Slide | Alt text |
 |---|---|
-| 1 | Dark cover: "A keyboard is data — 27 commits to make an invisible interface checkable." Footer: 5 declared keyboards, 77 states, 131 tests. |
+| 1 | Dark cover: "A keyboard is data — 15 commits to make an invisible interface checkable." Footer: 5 declared keyboards, 77 states, 131 tests. |
 | 2 | Diagram: one keyboard shortcut at the centre, with four arrows to four copies of it — the event handler, the aria string, the shortcut sheet, and the chord menu — captioned "they agreed by discipline". |
 | 3 | Diagram of three stacked panels (shortcut sheet over watch pane over the grid) with one Escape press reaching two of them, marked as the bug. |
 | 4 | Diagram: one declaration module on the left fanning out to four readers — dispatch, aria-keyshortcuts, shortcut sheet, chord menu — with behaviour as the only input from the component. |
@@ -228,7 +228,7 @@ they're written to carry the slide's argument, not just its title.
   few days apart. #5 stands alone.
 <!-- stats:begin copy.numbers -->
 - **Numbers to keep honest if you edit**: generated — run
-  `node linkedin/stats.mjs --write` rather than editing them. 27 commits in
+  `node linkedin/stats.mjs --write` rather than editing them. 15 commits in
   the era · 5 declared keyboards · 1,410 lines of
   declaration · 77 enumerated states · 131 e2e tests across
   18 files · 8 findings, of which

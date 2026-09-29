@@ -9,13 +9,13 @@
  * the repo at all, which must not be reported as disagreement with something it
  * never managed to read.
  *
- * Read last, and deliberately quiet on CI. The era count is
- * `rev-list --count ERA_FIRST^..HEAD`, so it grows by one with every commit: by
- * construction the commit carrying the refreshed assets is already behind the
- * count its own HEAD reports, and on CI the reader is always a later commit.
- * Every asset would read as drifted however carefully it was written, which is a
- * false alarm about the reader rather than about the copy. It stays the check it
- * was built as on the machine where `--write` is one command away.
+ * Read last, and read EVERYWHERE. The era the assets quote is a range between
+ * two declared commits rather than a count to `HEAD`, so a number can be right on
+ * the commit that carries it and still right on the commit after — which is what
+ * makes this checkable on CI, where the reader is always a later commit, instead
+ * of a false alarm about the reader. Its one precondition is history: the era is
+ * a git range, so a checkout that cannot see it is told that rather than told the
+ * copy drifted, and the CI job fetches the full history for this check.
  */
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -49,22 +49,19 @@ export default {
       setup: () => {},
     },
     {
-      level: 'skip',
-      why: 'on CI the era count is one behind the commit that carries it, by construction',
-      context: { ci: true },
-      setup: (root) => write(root, WRITER, 'process.exit(0);\n'),
+      level: 'fail',
+      why: 'the era is not in this checkout to be counted — a reader that cannot see the history, not copy that drifted',
+      setup: (root) =>
+        write(
+          root,
+          WRITER,
+          "console.error('ERA_LAST (5aaffda) is not in this checkout, so the era cannot be counted');\nprocess.exit(1);\n",
+        ),
     },
   ],
-  run(root, { ci = false } = {}) {
+  run(root) {
     const script = join(root, 'linkedin', 'stats.mjs');
     if (!existsSync(script)) return { level: 'skip', detail: 'no linkedin assets in this checkout' };
-
-    if (ci) {
-      return {
-        level: 'skip',
-        detail: 'not read on CI — the era count counts HEAD, so the commit carrying the assets is one behind it by construction; run it where `--write` is to hand',
-      };
-    }
 
     const result = spawnSync(process.execPath, [script], { cwd: root, encoding: 'utf8' });
     if (result.error) throw new Error(`could not run linkedin/stats.mjs: ${result.error.message}`);
@@ -77,7 +74,7 @@ export default {
       return {
         level: 'fail',
         detail: `could not run: ${first.trim()}`,
-        hint: 'it reads the repo through git, the declarations and `playwright test --list` — npm ci covers the last one',
+        hint: 'it reads the repo through git, the declarations and `playwright test --list` — npm ci covers the last one, and the era needs the history behind HEAD',
       };
     }
     return {

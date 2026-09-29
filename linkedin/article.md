@@ -1,10 +1,10 @@
-# We wrote every keyboard shortcut down four times. Here's what 27 commits taught me about interfaces you can't see.
+# We wrote every keyboard shortcut down four times. Here's what 15 commits taught me about interfaces you can't see.
 
 *My last piece covered the first 78 commits — two products, a data galaxy, and the rules that came from scars. This is the sequel: the session where the least visible interface in the app, its keyboard, became something a test could check. Same format: real numbers, real bugs, and the playbook I'd repeat.*
 
 <!-- stats:begin article.stats -->
 **The stats up front:**
-27 commits · 5 declared keyboards · 1,410 lines of declaration · 77 states enumerated · 131 e2e tests across 18 files · 4 of 5 surfaces produced a real defect on the day they were declared · 28 ways the checkers break a synthetic manifest · 1 test that passed when it should have failed
+15 commits · 5 declared keyboards · 1,410 lines of declaration · 77 states enumerated · 131 e2e tests across 18 files · 4 of 5 surfaces produced a real defect on the day they were declared · 28 ways the checkers break a synthetic manifest · 1 test that passed when it should have failed
 <!-- stats:end -->
 
 ---

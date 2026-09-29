@@ -45,17 +45,93 @@ function git(...args) {
   return execFileSync('git', args, { cwd: ROOT, encoding: 'utf8' }).trim();
 }
 
+/** Whether a revision is in this checkout at all — a shallow clone is missing most. */
+function present(rev) {
+  try {
+    execFileSync('git', ['cat-file', '-e', `${rev}^{commit}`], { cwd: ROOT, stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Whether `from` is an ancestor of `to` (git counts a commit as its own ancestor). */
+function reaches(from, to) {
+  try {
+    execFileSync('git', ['merge-base', '--is-ancestor', from, to], { cwd: ROOT, stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // What the numbers are read from
 // ---------------------------------------------------------------------------
 
 /**
- * The session these assets are about begins at the commit that declared the
- * console's keys once (RETROSPECTIVE-KEYBOARDS.md §2, row 1). Declared as the
- * FIRST commit rather than as a count, so "N commits" is what moves when the
- * work continues — which is the thing a typed `14` could not do.
+ * The era these assets are about: a RANGE, with both ends declared as commits.
+ *
+ * It begins at the commit that declared the console's keys once
+ * (RETROSPECTIVE-KEYBOARDS.md §2, row 1) and ends at the last commit that was
+ * part of that session — the galaxy page's Escape ladder, which is the commit
+ * `5 declared keyboards` and `4 of 5 surfaces` both need, and after which the
+ * article's own narrative puts the drawer fix, the repository gates and this
+ * script in a later session.
+ *
+ * Declared as commits rather than as a number, so the length is COUNTED from git
+ * instead of typed. The upper end is deliberately not `HEAD`, and that is the
+ * whole point of having two of them: counted to `HEAD` the number grew with
+ * every commit in the repository — including work that was never part of the
+ * session — so the era read as longer than it was, and an asset could never be
+ * correct on the commit that carried it, because that commit was itself inside
+ * the range. A bounded range reads the same on the commit that carries it as on
+ * the commit after, which makes it a fact about the session rather than a fact
+ * about how much has happened since.
  */
 const ERA_FIRST = '51dfd5e';
+/** The session's last commit: `Declare the galaxy page's Escape ladder`. */
+const ERA_LAST = '5aaffda';
+
+/**
+ * The era's length, counted over its two declared ends.
+ *
+ * The guards are here because a count is the one answer that looks the same when
+ * it is wrong: git refuses a range it cannot resolve at all, but counts half of
+ * one happily — a shallow clone missing the era would report a smaller era
+ * rather than no era. So both ends have to be commits in THIS checkout (which is
+ * why the CI job fetches the full history), the first has to be an ancestor of
+ * the last, and the last has to be behind `HEAD`, or the number describes a line
+ * of history this checkout is not on.
+ */
+function eraLength() {
+  for (const [name, rev] of [
+    ['ERA_FIRST', ERA_FIRST],
+    ['ERA_LAST', ERA_LAST],
+  ]) {
+    if (!present(rev)) {
+      throw new Error(
+        `${name} (${rev}) is not in this checkout, so the era cannot be counted — ` +
+          'a shallow clone has to fetch the history the era sits in (fetch-depth: 0)',
+      );
+    }
+  }
+  if (!reaches(ERA_FIRST, ERA_LAST)) {
+    throw new Error(
+      `ERA_FIRST (${ERA_FIRST}) is not an ancestor of ERA_LAST (${ERA_LAST}): that is not an era`,
+    );
+  }
+  if (!reaches(ERA_LAST, 'HEAD')) {
+    throw new Error(
+      `ERA_LAST (${ERA_LAST}) is not in this branch's history, so the era did not land here`,
+    );
+  }
+  const count = Number(git('rev-list', '--count', `${ERA_FIRST}^..${ERA_LAST}`));
+  if (!Number.isInteger(count) || count <= 0) {
+    throw new Error(`the era ${ERA_FIRST}..${ERA_LAST} counted ${count} commits`);
+  }
+  return count;
+}
 
 /** Every keyboard declaration in the app, and the surface it belongs to. */
 const DECLARATIONS = [
@@ -202,7 +278,7 @@ function ledgerRows() {
 
 /** Everything the assets are allowed to quote. */
 export function facts() {
-  const eraCommits = Number(git('rev-list', '--count', `${ERA_FIRST}^..HEAD`));
+  const eraCommits = eraLength();
   const repoCommits = Number(git('rev-list', '--count', 'HEAD'));
   const date = git('log', '-1', '--format=%cs');
 

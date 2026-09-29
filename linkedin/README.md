@@ -102,7 +102,7 @@ a phone, and the renderer will tell you when you have overrun.
 - Every number is the repo's real one, and none of them is typed: `linkedin/stats.mjs`
   reads them out of the repo (git, the declaration modules, the specs,
   `playwright --list`) and fails if any asset disagrees with what it found — this
-  line included. Right now: 27 commits in the era,
+  line included. Right now: 15 commits in the era,
   5 declared keyboards, 1,410 lines of declaration,
   77 enumerated states, 131 e2e tests in 18 files,
   4 of 5 surfaces that found a defect by declaring their keyboard,
