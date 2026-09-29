@@ -31,7 +31,8 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
+import { isMain } from '../scripts/is-main.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, '..');
@@ -617,7 +618,7 @@ async function main() {
 // Only when run as the script: render.mjs imports `facts` from here, and a
 // module that checks the assets as a side effect of being imported would make
 // the renderer's output depend on files it does not read.
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (isMain(import.meta.url)) {
   await main().catch((error) => {
     console.error(error);
     process.exit(1);
