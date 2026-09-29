@@ -37,6 +37,8 @@ npm install
 npm run dev        # http://localhost:3000
 ```
 
+New to this checkout, or the app answering 500s instead of pages? **[Running the app locally](RUNNING-LOCALLY.md)** is the step-by-step version: the exact path to `cd` into, every route, the galaxy's controls, and what to do when it breaks.
+
 - **`/`**: explainer landing page (what the galaxy is, how to read it, how to navigate), leading into the tool
 - **`/galaxy`**: the 3D galaxy itself
 
@@ -49,6 +51,7 @@ Three products live in this repo — Galaxy (`/`, `/galaxy`, `/system-map`, `/me
 Other scripts:
 
 ```bash
+npm run dev:reset  # reclaim :3000, clear .next/, start the dev server again
 npm run build      # production build
 npm run start      # serve the production build
 npm run lint       # ESLint
@@ -56,6 +59,8 @@ npm run typecheck  # tsc --noEmit
 npm run test:e2e   # Playwright E2E against a production build on :3100
 npm run doctor     # every check this checkout can run on itself, in one pass
 ```
+
+`npm run dev:reset` is the repair for a `next dev` that has been up long enough to start answering `500 Internal Server Error` on every route — a stale compile, or two dev servers sharing one `.next/`. It does the three things that fix it in the order that matters, and the order is the point: nothing is killed and nothing is cleared until a server has been found that can take their place, since a reset that stopped the running server and then found no Next.js install here would leave the checkout worse off than it found it. The kill is scoped to this checkout — a port is a machine-wide number, and the process holding `:3000` may be a dev server for something else entirely, so a process is only a candidate when its working directory is this repository's root and the walk up from the listener stops at the first process that is neither this checkout's nor part of the dev stack. What is signalled is the session, topmost first, which is what Ctrl-C in that terminal would have done. It reads the port from the `dev` script that declares it rather than repeating it, writes the new server's output to a file under the system temp directory (a log inside the repo would be one more path for the untracked gate to have an opinion about, in the one directory the command deletes), and before claiming anything it asks the app for a page — "listening" and "serving" are the two states this command exists to tell apart, and reporting a server that answers 500 as a success would be the one wrong answer available to it. `npm run dev:reset -- --dry-run` prints those steps and changes nothing, and so exits non-zero: it restarts nothing, and the state it was asked to repair is exactly as it found it.
 
 The E2E suite proves the interaction pipeline with **real browser input**: boot + 500 stars, raycast → tooltip, double-click → planet view → trajectory → reset, the full add/delete/undo/localStorage loop, and toast remaining-window hydration.
 
