@@ -9,16 +9,14 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# The store job shares ONE remote database, and it empties that database before
-# it seeds — so two of its runs at once would clear each other's rows and fail
-# in a way that reads like a store bug. The per-ref group above already
-# serialises a ref against itself; this serialises the store job against every
-# other ref, which is the only thing a single shared database can support.
-# Neon's per-branch databases would remove the constraint (and the wait) at the
-# cost of an API key and a create/drop step.
-#
-# cancel-in-progress is deliberately off: cancelling a remote run mid-wipe would
-# leave the shared database half-seeded for the run that goes next.
+# The store job runs against a Neon branch it creates for the run and drops
+# after, rather than one shared database. That is not a nicety: the gate calls
+# clearAll, so two runs sharing a database clear each other's rows and fail in a
+# way that reads like a store bug. This job used to serialise itself against
+# every other ref to prevent that, with cancel-in-progress off so a cancelled run
+# could not leave the next one a half-seeded room. A branch per run removes both
+# constraints — nothing is shared, so nothing needs serialising, and a cancelled
+# run leaves at most a branch that expires on its own.
 
 
 jobs:
@@ -107,24 +105,44 @@ jobs:
     name: Store gate (real Postgres)
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    concurrency:
-      group: ci-store-database
-      cancel-in-progress: false
-    # The store's SQL is proved on an in-process Postgres; the ADAPTER above it
-    # is not, and an in-process engine never goes near it. `neonQuery` — the
-    # HTTP driver that is the only reason a serverless function can hold a
-    # Postgres connection at all — is the one piece of the deployment path that
-    # had never been executed, so it is executed here against a real database
-    # with a real connection string.
+    # No concurrency group of its own: every run gets its own branch, so there is
+    # nothing here for two runs to collide on. The workflow's per-ref group above
+    # still cancels a superseded run of the same ref, and cancelling is now safe
+    # — the abandoned branch expires by itself rather than stranding the next run
+    # in a half-seeded room.
     #
-    # The variable is DELEGATE_STORE_TEST_URL rather than DATABASE_URL on
-    # purpose: a gate that changed substrate on the app's own configuration
-    # could be pointed at production by a deploy setting rather than by a
-    # deliberate act, and these gates call clearAll. The gate refuses any
-    # database whose name carries no ci/test/ephemeral/scratch marker, so the
-    # worst a misconfigured secret can do is fail loudly.
+    # The store's SQL is proved on an in-process Postgres; the ADAPTER above it is
+    # not, and an in-process engine never goes near it. `neonQuery` — the HTTP
+    # driver that is the only reason a serverless function can hold a Postgres
+    # connection at all — is the one piece of the deployment path a local run
+    # cannot execute, so it is executed here against a real database.
+    #
+    # Three secrets, and what each is for:
+    #   NEON_API_KEY           a Neon API key. It authorises three management
+    #                          calls and reaches no gate.
+    #   NEON_PROJECT_ID        the project these branches live in.
+    #   NEON_PARENT_BRANCH_ID  a branch kept EMPTY for CI to branch from. Named
+    #                          rather than defaulted to the project's default
+    #                          branch because a branch copies its parent's state:
+    #                          branching from a default branch that holds a real
+    #                          room would hand the gate somebody's schema.
+    #
+    # The gate still reads DELEGATE_STORE_TEST_URL and not DATABASE_URL, and the
+    # URL is built here rather than stored — a gate that changed substrate on the
+    # app's own configuration could be pointed at production by a deploy setting
+    # rather than by a deliberate act, and these gates call clearAll.
     env:
-      DELEGATE_STORE_TEST_URL: ${{ secrets.DELEGATE_STORE_TEST_URL }}
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+      NEON_PARENT_BRANCH_ID: ${{ secrets.NEON_PARENT_BRANCH_ID }}
+      # One branch per run attempt. The name is what somebody sees in the Neon
+      # console when a run leaves one behind, so it carries the run it came from
+      # and nothing else. The URL starts EMPTY and is filled in below by the step
+      # that resolves this branch — which is also what the remote leg's condition
+      # asks about, so a run that could not get a URI skips the leg rather than
+      # running it against nothing.
+      BRANCH_NAME: ci-${{ github.run_id }}-${{ github.run_attempt }}
+      DELEGATE_STORE_TEST_URL: ''
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -137,6 +155,94 @@ jobs:
       # provide them, which is what the doctor's delegate check reports.
       - run: npm --prefix delegate ci
       - run: npm --prefix delegate run build
+
+      # ── the database, created for this run and destroyed by it ──────────
+      #
+      # Every response is checked by its HTTP status rather than left to
+      # errexit, for the same reason the gate step reads PIPESTATUS: the shell
+      # GitHub runs is not the shell a reader runs this in, and a correctness
+      # claim should not rest on which one that is. A failed create is a loud
+      # exit rather than an empty variable, because an empty variable is exactly
+      # what the last step treats as "the remote leg did not run".
+      - name: Create a Neon branch for this run
+        if: env.NEON_API_KEY != ''
+        run: |
+          # expires_at is the backstop that makes cancelling safe: GitHub does
+          # not run the later steps of a cancelled job, so a cancelled run never
+          # reaches the delete below. Six hours is far longer than this gate
+          # needs and short enough that an abandoned branch costs nothing; Neon
+          # caps it at 30 days and refuses a time in the past.
+          #
+          # Spelled for BSD date first and GNU second so the step can also be run
+          # by hand on a laptop when a branch needs chasing — and the emptiness
+          # check is the part that matters: a branch created with an empty or
+          # unparseable expiry does not fail, it simply never cleans itself up,
+          # which is exactly the leak this line exists to prevent. So a clock that
+          # cannot produce a time refuses the whole run.
+          expires=$(date -u -v+6H +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d '+6 hours' +%Y-%m-%dT%H:%M:%SZ)
+          if [ -z "$expires" ]; then
+            echo "::error title=Store gate::could not compute an expiry for $BRANCH_NAME — refusing to create a branch that cannot delete itself"
+            exit 1
+          fi
+          code=$(curl -sS -o /tmp/branch.json -w '%{http_code}' -X POST \
+            "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches" \
+            -H "Authorization: Bearer $NEON_API_KEY" \
+            -H 'Content-Type: application/json' \
+            -d "{\"endpoints\":[{\"type\":\"read_write\"}],\"branch\":{\"name\":\"$BRANCH_NAME\",\"parent_id\":\"$NEON_PARENT_BRANCH_ID\",\"expires_at\":\"$expires\"}}" \
+            || true)
+          if [ "$code" != "201" ] && [ "$code" != "200" ]; then
+            echo "::error title=Store gate::creating branch $BRANCH_NAME returned HTTP $code: $(cat /tmp/branch.json)"
+            exit 1
+          fi
+          branch_id=$(jq -r '.branch.id // empty' /tmp/branch.json)
+          if [ -z "$branch_id" ]; then
+            echo "::error title=Store gate::Neon returned no branch id: $(cat /tmp/branch.json)"
+            exit 1
+          fi
+          echo "BRANCH_ID=$branch_id" >> "$GITHUB_ENV"
+          echo "created branch $BRANCH_NAME ($branch_id), expiring $expires"
+          # The branch is created asynchronously: its compute starts in `init`
+          # and the response says `pending_state: ready`. Querying it before it
+          # is ready fails in a way that reads like a broken driver, so wait for
+          # the state rather than sleep and hope. The LIST endpoint is the one
+          # whose response shape is not in question here.
+          for attempt in $(seq 1 60); do
+            state=$(curl -sS "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches" \
+              -H "Authorization: Bearer $NEON_API_KEY" \
+              | jq -r --arg id "$branch_id" '.branches[] | select(.id == $id) | .current_state' || true)
+            if [ "$state" = "ready" ]; then echo "branch ready after $attempt attempt(s)"; break; fi
+            if [ "$attempt" = "60" ]; then
+              echo "::error title=Store gate::branch $BRANCH_NAME never became ready (last state: ${state:-absent})"
+              exit 1
+            fi
+            sleep 2
+          done
+      - name: Resolve this branch's connection URI
+        if: env.NEON_API_KEY != ''
+        run: |
+          code=$(curl -sS -o /tmp/uri.json -w '%{http_code}' --get \
+            "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/connection_uri" \
+            -H "Authorization: Bearer $NEON_API_KEY" \
+            --data-urlencode "branch_id=$BRANCH_ID" \
+            || true)
+          if [ "$code" != "200" ]; then
+            echo "::error title=Store gate::resolving a connection URI for $BRANCH_NAME returned HTTP $code: $(cat /tmp/uri.json)"
+            exit 1
+          fi
+          uri=$(jq -r '.uri // empty' /tmp/uri.json)
+          if [ -z "$uri" ]; then
+            echo "::error title=Store gate::Neon returned no connection URI: $(cat /tmp/uri.json)"
+            exit 1
+          fi
+          # The URI carries a database password. Mask it before it goes near a
+          # log, and name the database by host and name only — the same redaction
+          # the reset tool's plan uses, for the same reason: a plan that names the
+          # wrong database is worse than one that names none, and one that prints
+          # a password has printed it to whoever reads the log.
+          echo "::add-mask::$(printf '%s' "$uri" | sed -E 's#^[a-z]+://[^:]*:([^@]*)@.*#\1#')"
+          echo "store gate database: $(printf '%s' "$uri" | sed -E 's#://[^:]*:[^@]*@#://#')"
+          echo "DELEGATE_STORE_TEST_URL=$uri" >> "$GITHUB_ENV"
+
       # The in-process leg FIRST, and unconditionally: it is the leg that can
       # prove the one check a shared database cannot — the guard that refuses a
       # `delegate_rows` table this store did not create, which needs an engine
@@ -166,27 +272,58 @@ jobs:
       # catch.
       - name: Store gate over the Neon serverless driver
         if: env.DELEGATE_STORE_TEST_URL != ''
+        env:
+          # The gate refuses a database whose name carries no ci/test/ephemeral/
+          # scratch marker, which is the right rule for a person pointing a
+          # destructive tool at a URL they typed. This database is a branch this
+          # run created a minute ago and drops a minute from now, so ownership
+          # is a stronger guarantee than a name — and the branch's database name
+          # is whatever the CI parent branch was created with, which is not ours
+          # to choose. The guard stays armed for the local path, where the URL
+          # is a human's to name.
+          DELEGATE_STORE_TEST_ALLOW_ANY: '1'
         run: |
           node delegate/dist/store/test-store-backends.js 2>&1 | tee /tmp/store-gate-remote.log
           status=${PIPESTATUS[0]}
           if [ "$status" -ne 0 ]; then echo "::error title=Store gate::the gate failed over the Neon driver (exit $status)"; exit "$status"; fi
           grep -q "postgres leg on remote postgres" /tmp/store-gate-remote.log \
             || { echo "::error title=Store gate::the remote leg did not report a remote engine — it ran on something else, so the driver is untested"; exit 1; }
-      # An empty secret has two meanings and they are not the same severity. A
+      # ── and the branch goes away with it ─────────────────────────────────
+      - name: Drop this run's branch
+        # `always()` so a failing gate still cleans up after itself, and the
+        # BRANCH_ID test so a run that never got that far does not try to delete
+        # an empty path. The expiry set at creation is the backstop for the one
+        # case this cannot cover: a cancelled job, whose later steps never run.
+        if: always() && env.NEON_API_KEY != '' && env.BRANCH_ID != ''
+        run: |
+          code=$(curl -sS -o /tmp/drop.json -w '%{http_code}' -X DELETE \
+            "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$BRANCH_ID" \
+            -H "Authorization: Bearer $NEON_API_KEY" \
+            || true)
+          if [ "$code" = "200" ] || [ "$code" = "204" ]; then
+            echo "dropped branch $BRANCH_NAME ($BRANCH_ID)"
+          else
+            # A warning, not a failure: the gate has already answered, and this
+            # branch deletes itself at the time the create step chose. Failing the
+            # run over untidiness would bury the verdict that matters.
+            echo "::warning title=Store gate::could not drop branch $BRANCH_NAME (HTTP $code) — it expires on its own: $(cat /tmp/drop.json)"
+          fi
+      # No connection URI has two meanings and they are not the same severity. A
       # FORK pull request gets no secrets from GitHub, so the remote leg cannot
       # run there and saying so is the whole job; every other event — a
-      # same-repository pull request, a push to main — is supposed to have the
-      # secret, and one that does not is a misconfiguration that would leave
-      # the driver untested behind a green tick. So it fails, and it says which
-      # of the two happened.
+      # same-repository pull request, a push to main — is supposed to get a
+      # branch, and one that did not is a misconfiguration that would leave the
+      # driver untested behind a green tick. Keyed on the URI rather than on the
+      # secret so that a failed create is reported as the failure it is, instead
+      # of reading as a run that never had credentials.
       - name: Say whether the remote leg ran
         if: always() && env.DELEGATE_STORE_TEST_URL == ''
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.head.repo.fork }}" = "true" ]; then
-            echo "::notice title=Store gate::DELEGATE_STORE_TEST_URL is empty — expected on a fork pull request, where GitHub passes no secrets. The remote leg did not run; the in-process one did."
+            echo "::notice title=Store gate::no Neon API key on a fork pull request — GitHub passes no secrets, so the remote leg did not run. The in-process one did."
             exit 0
           fi
-          echo "::error title=Store gate::DELEGATE_STORE_TEST_URL is empty on ${{ github.event_name }}, and this is not a fork pull request, so the store gate ran on its in-process engine only. The serverless driver is the one piece an in-process engine cannot execute, and it is now untested rather than assumed. Set the repository secret (delegate/README.md#the-store-gate-against-a-real-database)."
+          echo "::error title=Store gate::no connection URI for a per-run branch on ${{ github.event_name }}, so the store gate ran on its in-process engine only. The serverless driver is the one piece an in-process engine cannot execute, and it is now untested rather than assumed. Check NEON_API_KEY, NEON_PROJECT_ID and NEON_PARENT_BRANCH_ID, and the create step's own output above (delegate/README.md#the-store-gate-against-a-real-database)."
           exit 1
 
   e2e:

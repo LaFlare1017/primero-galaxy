@@ -150,12 +150,30 @@ The same assertions, over the real driver. Three things about that variable are 
 
 One check cannot run against a shared database: the guard that refuses a `delegate_rows` table this store did not create, because the table it plants is named the same as the store's own. That is why the CI job runs the in-process leg **first and unconditionally** — a remote-only run would skip exactly the check that matters most about running against somebody's database.
 
-CI runs both legs in the `store` job, against the `DELEGATE_STORE_TEST_URL` repository secret — the in-process leg with the variable cleared at the step, so it is in-process whatever the job's environment says. Two rules keep the remote leg from being green without having run:
+CI runs both legs in the `store` job, and the remote leg gets a database of its own: each run **creates a Neon branch, runs the gate against it, and drops it**. Three repository secrets, and what each is for:
+
+| secret | what it is |
+|---|---|
+| `NEON_API_KEY` | a Neon API key. It authorises three management calls and reaches no gate. |
+| `NEON_PROJECT_ID` | the project those branches live in. |
+| `NEON_PARENT_BRANCH_ID` | a branch kept **empty** for CI to branch from (`br-…`). |
+
+The parent is named rather than defaulted to the project's default branch because a branch copies its parent's state: branching from a default branch holding a real room would hand the gate somebody's schema, and the run would fail on the store's own `delegate_rows` guard for a reason that has nothing to do with the driver.
+
+A branch per run is what removed the queue. The job used to serialise itself against every other ref (`ci-store-database`, `cancel-in-progress: false`) because two runs sharing one database clear each other's rows and fail in a way that reads like a store bug, and cancelling mid-wipe left the next run a half-seeded room. With nothing shared there is nothing to serialise, so the group is gone and a superseded run is cancelled like any other.
+
+Three details of the branch's life are load-bearing:
+
+- It is created with `expires_at`, six hours out. GitHub does not run the later steps of a **cancelled** job, so a cancelled run never reaches the delete step; the expiry is what makes that safe. A step that cannot compute one refuses the run rather than creating a branch that quietly never cleans itself up.
+- The job waits for the branch's `current_state` to be `ready` before resolving a connection string. A branch is created asynchronously, and querying its compute too early fails in a way that reads like a broken driver.
+- The drop step is a belt to those braces: it runs even when the gate fails, and a drop that fails **warns** rather than failing a run whose verdict has already been reported.
+
+The gate still reads `DELEGATE_STORE_TEST_URL`, and the job still sets that variable to empty at the in-process leg so it is in-process whatever the job's environment says. Two rules keep the remote leg from being green without having run:
 
 - The leg **asserts** the gate reported a remote engine. A gate that fell back to PGlite passes every check it makes while testing the wrong substrate, which is the one outcome this job exists to prevent.
-- An **empty secret fails the job**, except on a fork pull request, where GitHub passes no secrets and a notice says the leg did not run. Every other event — a same-repository pull request, a push to `main` — is supposed to have the secret, and one that does not leaves the driver untested behind a green tick.
+- **No connection URI fails the job**, except on a fork pull request, where GitHub passes no secrets and a notice says the leg did not run. It is keyed on the URI rather than on the API key so that a failed create is reported as the failure it is, instead of reading as a run that never had credentials.
 
-The job shares that one database and empties it before it seeds, so its runs are serialised against every other ref (`ci-store-database`, `cancel-in-progress: false`): two of them at once would clear each other's rows and fail in a way that reads like a store bug.
+One override is set for the remote leg: `DELEGATE_STORE_TEST_ALLOW_ANY=1`. The guard that refuses a database whose name carries no `ci`/`test` marker exists to stop a person pointing a destructive tool at a URL they typed, and the branch's database name is whatever the CI parent was created with — not ours to choose. A branch this run created a minute ago and drops a minute from now is disposable by **ownership**, which is a stronger guarantee than a name, and the guard stays armed for the local path above.
 
 One coupling to know before bumping the driver. This workspace and the app are installed separately (CI runs `npm ci` and `npm --prefix delegate ci`), and both declare `@neondatabase/serverless` — the workspace because `neonQuery` imports it and the gate compiles and runs from `delegate/dist`, the app because that is what a deployed function runs. Two installs means two copies on disk, and Node resolves an import from the file's own directory upward, so the app's copy of `postgres-store.ts` picks up **this** workspace's `node_modules` first. The two ranges therefore have to move together: a root bump alone would leave the deployed function quietly on the older driver.
 
