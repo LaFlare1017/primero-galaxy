@@ -8,9 +8,9 @@ link handling).
 
 <!-- stats:begin copy.figures -->
 All figures are the repo's real ones, read out of it by `linkedin/stats.mjs`
-as of 2026-09-28: 15 commits in the era, 5 declared
+as of 2026-09-29: 15 commits in the era, 5 declared
 keyboards, 1,410 lines of declaration, 77 enumerated states,
-131 e2e tests in 18 files, 8 findings.
+132 e2e tests in 19 files, 8 findings.
 <!-- stats:end -->
 
 ---
@@ -31,7 +31,7 @@ shortcut sheet that documents it, and the little menu that offers it mid-chord.
 Four copies that agreed by discipline, and nothing that could tell when they
 stopped.
 
-By the end: one declaration per surface, read by all four. Five surfaces, 1,410 lines of declaration, 77 enumerated states, 131 tests.
+By the end: one declaration per surface, read by all four. Five surfaces, 1,410 lines of declaration, 77 enumerated states, 132 tests.
 
 Four lessons, each bought with a real bug:
 
@@ -198,7 +198,7 @@ they're written to carry the slide's argument, not just its title.
 
 | Slide | Alt text |
 |---|---|
-| 1 | Dark cover: "A keyboard is data — 15 commits to make an invisible interface checkable." Footer: 5 declared keyboards, 77 states, 131 tests. |
+| 1 | Dark cover: "A keyboard is data — 15 commits to make an invisible interface checkable." Footer: 5 declared keyboards, 77 states, 132 tests. |
 | 2 | Diagram: one keyboard shortcut at the centre, with four arrows to four copies of it — the event handler, the aria string, the shortcut sheet, and the chord menu — captioned "they agreed by discipline". |
 | 3 | Diagram of three stacked panels (shortcut sheet over watch pane over the grid) with one Escape press reaching two of them, marked as the bug. |
 | 4 | Diagram: one declaration module on the left fanning out to four readers — dispatch, aria-keyshortcuts, shortcut sheet, chord menu — with behaviour as the only input from the component. |
@@ -230,8 +230,8 @@ they're written to carry the slide's argument, not just its title.
 - **Numbers to keep honest if you edit**: generated — run
   `node linkedin/stats.mjs --write` rather than editing them. 15 commits in
   the era · 5 declared keyboards · 1,410 lines of
-  declaration · 77 enumerated states · 131 e2e tests across
-  18 files · 8 findings, of which
+  declaration · 77 enumerated states · 132 e2e tests across
+  19 files · 8 findings, of which
   4 of 5 surfaces found theirs by declaring ·
   28 ways the checkers' own spec breaks a synthetic manifest ·
   6 tests holding the checkers to that standard.
