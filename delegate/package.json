@@ -8,7 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "seed:base": "node dist/seed/build-base.js",
-    "test": "node dist/seed/test-balance.js && node dist/seed/test-defects.js && node dist/runtime/test-contract-integrity.js && node dist/runtime/test-week3-gate.js && node dist/scoring/test-smoke-scenarios.js && node dist/scoring/test-s5-cold-run.js && node dist/report/test-readout.js && node dist/alpha/test-reset-store.js && node dist/store/test-store-backends.js",
+    "test": "node dist/seed/test-balance.js && node dist/seed/test-defects.js && node dist/runtime/test-contract-integrity.js && node dist/runtime/test-week3-gate.js && node dist/scoring/test-smoke-scenarios.js && node dist/scoring/test-s5-cold-run.js && node dist/report/test-readout.js && node dist/alpha/test-reset-store.js && node dist/store/test-store-backends.js && node dist/runtime/test-registry-rehydrate.js",
     "test:gate": "node dist/seed/test-balance.js",
     "test:defects": "node dist/seed/test-defects.js",
     "test:week3": "node dist/runtime/test-week3-gate.js",
@@ -19,15 +19,16 @@
     "test:http": "node dist/api/test-http-smoke.js",
     "test:readout": "node dist/report/test-readout.js",
     "test:reset": "node dist/alpha/test-reset-store.js",
+    "test:store": "node dist/store/test-store-backends.js",
+    "test:cold": "node dist/runtime/test-registry-rehydrate.js",
     "alpha:reset": "node dist/alpha/reset-cohort.js",
     "alpha:preflight": "node dist/alpha/preflight.js",
-    "alpha:readout": "node dist/alpha/readout-cli.js",
-    "test:store": "node dist/store/test-store-backends.js"
+    "alpha:readout": "node dist/alpha/readout-cli.js"
   },
   "devDependencies": {
-    "typescript": "^5.4.5",
+    "@electric-sql/pglite": "^0.5.8",
     "@types/node": "^20.12.7",
-    "@electric-sql/pglite": "^0.5.8"
+    "typescript": "^5.4.5"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0"
