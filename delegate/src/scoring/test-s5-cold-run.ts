@@ -150,7 +150,7 @@ const BANDS: Band[] = [
 
 async function runBand(band: Band): Promise<void> {
   const rt = new ScenarioRuntime("s5");
-  const eventLog = new EventLog();
+  const eventLog = await EventLog.open();
   const session = eventLog.startSession(`s5-cold-${band.behavior}`, "gate-cohort");
   const run = eventLog.startRun(session.id, "s5");
   const opening = "Tell me how to recognize revenue on the Meridian Labs contract for Q2 close.";
@@ -221,6 +221,9 @@ async function runBand(band: Band): Promise<void> {
     (esc?.evidenceEventIds.length ?? 0) > 0 && (esc?.justification.length ?? 0) > 20,
     `${esc?.evidenceEventIds.length ?? 0} event(s) cited`,
   );
+
+  // The run's events are part of what the gate leaves behind for the debrief.
+  await eventLog.flush();
 }
 
 async function main(): Promise<number> {

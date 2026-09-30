@@ -35,7 +35,7 @@ async function simulateRun(
   answer: string,
 ): Promise<SimulatedParticipant> {
   const runtime = new ScenarioRuntime(scenarioId);
-  const eventLog = new EventLog();
+  const eventLog = await EventLog.open();
   const session = eventLog.startSession(participant, "smoke-cohort");
   const run = eventLog.startRun(session.id, scenarioId);
   const agent = new MockProvider();
@@ -160,6 +160,9 @@ async function simulateRun(
   }
 
   eventLog.submitAnswer(run.id, answer);
+  // Flush before returning: the cohort readout reads these runs back out of the
+  // store, and the scoring below runs on the in-memory log.
+  await eventLog.flush();
   return { runtime, eventLog, runId: run.id, prompts, chat, answer };
 }
 
@@ -434,7 +437,7 @@ async function main(): Promise<number> {
 
   // Persist all smoke scores so cohort reporting (readout) has complete data.
   const { persistScores } = await import("../report/score-store");
-  persistScores(allScores);
+  await persistScores(allScores);
 
   console.log(failures === 0 ? "WEEK-4 SMOKE: PASS" : `WEEK-4 SMOKE: FAIL (${failures})`);
   return failures === 0 ? 0 : 1;

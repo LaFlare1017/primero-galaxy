@@ -332,7 +332,7 @@ async function runScenario(
   const firstRequestIndex = provider.capturedRequests.length;
   const runtime = new ScenarioRuntime(id);
   currentScenarioRuntime = runtime;
-  const eventLog = new EventLog();
+  const eventLog = await EventLog.open();
   const session = eventLog.startSession("live-harness", "live-harness");
   const run = eventLog.startRun(session.id, id);
 
@@ -412,7 +412,8 @@ async function runScenario(
       scores.every((s) => s.evidenceEventIds.length > 0),
     scores.map((s) => `${s.dimension}=${s.value}/${s.max} ev:${s.evidenceEventIds.length}`).join(", "),
   );
-  persistScores(scores);
+  await persistScores(scores);
+  await eventLog.flush();
   console.log(`  usage: ${totalCalls} model calls, ${totalTokens} output tokens → scores persisted`);
   return provider.capturedRequests.length - firstRequestIndex;
 }
