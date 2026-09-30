@@ -8,7 +8,7 @@ link handling).
 
 <!-- stats:begin copy.figures -->
 All figures are the repo's real ones, read out of it by `linkedin/stats.mjs`
-as of 2026-09-29: 15 commits in the era, 5 declared
+as of 2026-09-30: 15 commits in the era, 5 declared
 keyboards, 1,410 lines of declaration, 77 enumerated states,
 132 e2e tests in 19 files, 8 findings.
 <!-- stats:end -->
