@@ -9,6 +9,18 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# The store job shares ONE remote database, and it empties that database before
+# it seeds — so two of its runs at once would clear each other's rows and fail
+# in a way that reads like a store bug. The per-ref group above already
+# serialises a ref against itself; this serialises the store job against every
+# other ref, which is the only thing a single shared database can support.
+# Neon's per-branch databases would remove the constraint (and the wait) at the
+# cost of an API key and a create/drop step.
+#
+# cancel-in-progress is deliberately off: cancelling a remote run mid-wipe would
+# leave the shared database half-seeded for the run that goes next.
+
+
 jobs:
   checks:
     name: Lint, typecheck, build
@@ -50,6 +62,92 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run build
+
+  store:
+    name: Store gate (real Postgres)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: ci-store-database
+      cancel-in-progress: false
+    # The store's SQL is proved on an in-process Postgres; the ADAPTER above it
+    # is not, and an in-process engine never goes near it. `neonQuery` — the
+    # HTTP driver that is the only reason a serverless function can hold a
+    # Postgres connection at all — is the one piece of the deployment path that
+    # had never been executed, so it is executed here against a real database
+    # with a real connection string.
+    #
+    # The variable is DELEGATE_STORE_TEST_URL rather than DATABASE_URL on
+    # purpose: a gate that changed substrate on the app's own configuration
+    # could be pointed at production by a deploy setting rather than by a
+    # deliberate act, and these gates call clearAll. The gate refuses any
+    # database whose name carries no ci/test/ephemeral/scratch marker, so the
+    # worst a misconfigured secret can do is fail loudly.
+    env:
+      DELEGATE_STORE_TEST_URL: ${{ secrets.DELEGATE_STORE_TEST_URL }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # The gates are TypeScript compiled to delegate/dist, and that build needs
+      # the nested workspace's own dependencies — the root install does not
+      # provide them, which is what the doctor's delegate check reports.
+      - run: npm --prefix delegate ci
+      - run: npm --prefix delegate run build
+      # The in-process leg FIRST, and unconditionally: it is the leg that can
+      # prove the one check a shared database cannot — the guard that refuses a
+      # `delegate_rows` table this store did not create, which needs an engine
+      # it may create and drop a table in. A remote-only run would skip exactly
+      # the check that matters most about running against somebody's database.
+      #
+      # The variable is CLEARED here, at the step, and that is not tidiness. It
+      # is set at the job, so without this the "in-process" leg read it too and
+      # ran against Neon — testing the SQL twice, over one shared database, and
+      # never once against the engine that costs nothing and needs no secret.
+      # The gate picks its substrate from this variable and nothing else, so an
+      # empty value is how a step says which one it means.
+      - name: Store gate on an in-process Postgres
+        env:
+          DELEGATE_STORE_TEST_URL: ''
+        run: node delegate/dist/store/test-store-backends.js
+      # Then the same gate, same assertions, over the serverless driver.
+      #
+      # Two things here are not style. The gate's exit status is read out of
+      # the PIPELINE rather than trusted to errexit: piped into `tee`, a failing
+      # gate reports `tee`'s status — zero — and this step would go green having
+      # proved nothing (and `set -e` is not something to hang a correctness
+      # claim on, since the shell GitHub picks is not the shell a reader runs
+      # this in). And the engine line is ASSERTED rather than read: a gate that
+      # fell back to the in-process engine passes every check it makes while
+      # testing the wrong substrate, which is the one outcome this job exists to
+      # catch.
+      - name: Store gate over the Neon serverless driver
+        if: env.DELEGATE_STORE_TEST_URL != ''
+        run: |
+          node delegate/dist/store/test-store-backends.js 2>&1 | tee /tmp/store-gate-remote.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then echo "::error title=Store gate::the gate failed over the Neon driver (exit $status)"; exit "$status"; fi
+          grep -q "postgres leg on remote postgres" /tmp/store-gate-remote.log \
+            || { echo "::error title=Store gate::the remote leg did not report a remote engine — it ran on something else, so the driver is untested"; exit 1; }
+      # An empty secret has two meanings and they are not the same severity. A
+      # FORK pull request gets no secrets from GitHub, so the remote leg cannot
+      # run there and saying so is the whole job; every other event — a
+      # same-repository pull request, a push to main — is supposed to have the
+      # secret, and one that does not is a misconfiguration that would leave
+      # the driver untested behind a green tick. So it fails, and it says which
+      # of the two happened.
+      - name: Say whether the remote leg ran
+        if: always() && env.DELEGATE_STORE_TEST_URL == ''
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.head.repo.fork }}" = "true" ]; then
+            echo "::notice title=Store gate::DELEGATE_STORE_TEST_URL is empty — expected on a fork pull request, where GitHub passes no secrets. The remote leg did not run; the in-process one did."
+            exit 0
+          fi
+          echo "::error title=Store gate::DELEGATE_STORE_TEST_URL is empty on ${{ github.event_name }}, and this is not a fork pull request, so the store gate ran on its in-process engine only. The serverless driver is the one piece an in-process engine cannot execute, and it is now untested rather than assumed. Set the repository secret (delegate/README.md#the-store-gate-against-a-real-database)."
+          exit 1
 
   e2e:
     name: E2E (Playwright)
