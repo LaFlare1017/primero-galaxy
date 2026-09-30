@@ -34,7 +34,8 @@
 
 import { existsSync, readdirSync, statSync, readFileSync } from "fs";
 import { join } from "path";
-import { resolveDelegateRoot, dataDir } from "../paths";
+import { resolveDelegateRoot } from "../paths";
+import { openStore } from "../store/store";
 import { SCENARIO_ORDER, loadManifest, loadChecklist, loadDebrief } from "../scoring/scenario-loader";
 import { spawnSync } from "child_process";
 
@@ -98,22 +99,41 @@ async function main(): Promise<void> {
 
   // ── C3: store state (checked BEFORE C2 — the gate suites seed cohort
   // data, so a post-gate check would always read dirty) ──
-  const data = dataDir();
-  const sessionsPath = join(data, "sessions.json");
+  // Read through the store, not off the filesystem. A `sessions.json` that is
+  // not there used to mean "pristine" and still does on a laptop, but a
+  // deployment keeps its rows in a database, where the file is never there —
+  // so the file-reading version reported a full workshop room as pristine,
+  // which is the one answer a preflight must never give about the state of the
+  // room. An unreadable store is still its own answer rather than a zero.
   let sessionCount = 0;
-  if (existsSync(sessionsPath)) {
-    try {
-      const parsed: unknown = JSON.parse(readFileSync(sessionsPath, "utf8"));
-      if (Array.isArray(parsed)) sessionCount = parsed.length;
-    } catch {
-      sessionCount = -1; // unreadable store
-    }
+  let storeKind = "file";
+  let storeDetail = "";
+  try {
+    const store = await openStore();
+    storeKind = store.kind;
+    sessionCount = (await store.read("sessions")).length;
+  } catch (error) {
+    sessionCount = -1;
+    storeDetail = (error as Error).message.split("\n")[0] ?? "";
   }
   if (sessionCount === 0) {
-    check("C2", "Store pristine", true, "delegate/data has 0 sessions");
-  } else if (sessionCount < 0) {      check("C2", "Store pristine", false, "delegate/data/sessions.json is unreadable (corrupt JSON?)", "npm run alpha:reset -- --yes  (archives then wipes)");
+    check("C2", "Store pristine", true, `the ${storeKind} store has 0 sessions`);
+  } else if (sessionCount < 0) {
+    check(
+      "C2",
+      "Store pristine",
+      false,
+      `the ${storeKind} store could not be read (${storeDetail})`,
+      "npm run alpha:reset -- --yes  (archives then wipes)",
+    );
   } else {
-    check("C2", "Store pristine", false, `${sessionCount} session(s) in the store from previous runs/smoke tests`, "npm run alpha:reset -- --yes");
+    check(
+      "C2",
+      "Store pristine",
+      false,
+      `${sessionCount} session(s) in the ${storeKind} store from previous runs/smoke tests`,
+      "npm run alpha:reset -- --yes",
+    );
   }
 
   // ── C2: gate suites (run AFTER the C3 read — they seed cohort data) ──
