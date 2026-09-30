@@ -345,6 +345,37 @@ async function parity(root: string): Promise<void> {
   await shuffled.clear("events");
   await postgres.clear("events");
 
+  // 4b. A table holding SOME orderable rows and some not. Check 4 plants rows
+  //     written out of order, but every one of them has a numeric id, so both
+  //     backends took their numeric path and the case where the two paths
+  //     DISAGREE was never planted. It is reachable by hand — the store's files
+  //     are documented as readable mid-workshop, and this is a documented
+  //     swap-in point — and it disagreed: the file store returned the file's own
+  //     order because not every row qualified, while Postgres's
+  //     `(case when id is not null then id end) asc nulls last, seq asc` put the
+  //     numeric ids first. On `sess-a, 9, sess-b, 2` that was `sess-a, 9,
+  //     sess-b, 2` against `2, 9, sess-a, sess-b`.
+  process.env.DELEGATE_DATA_DIR = join(root, "files-mixed-ids");
+  const mixedFiles = fileStore();
+  const mixedRows = [
+    { id: "sess-a", note: "no numeric id, written first" },
+    { id: 9, note: "numeric id 9, written second" },
+    { id: "sess-b", note: "no numeric id, written third" },
+    { id: 2, note: "numeric id 2, written fourth" },
+  ];
+  await mixedFiles.upsert("events", mixedRows as unknown as Row[], byId);
+  await postgres.upsert("events", mixedRows as unknown as Row[], byId);
+  const mixedFileIds = await mixedFiles.read("events");
+  const mixedPgIds = await postgres.read("events");
+  check(
+    "a table of both orderable and unorderable rows reads the same on both backends",
+    JSON.stringify(mixedFileIds.map((r) => r.id)) === JSON.stringify(mixedPgIds.map((r) => r.id)) &&
+      JSON.stringify(mixedFileIds.map((r) => r.id)) === JSON.stringify([2, 9, "sess-a", "sess-b"]),
+    `files: ${JSON.stringify(mixedFileIds.map((r) => r.id))}, postgres: ${JSON.stringify(mixedPgIds.map((r) => r.id))} — numeric ids first in id order, the rest in the order written`,
+  );
+  await mixedFiles.clear("events");
+  await postgres.clear("events");
+
   // 5. A different engine, later, against the same files. This is the whole
   //    reason the store exists, so it is checked on its own rather than as a
   //    footnote: a serverless invocation is not the process that wrote the row.

@@ -69,6 +69,21 @@ export interface Store {
 /** Rows are keyed by their `id`, which is what the event-log tables have always used. */
 export const byId: KeyOf = (row) => String(row.id);
 
+/**
+ * Whether this row has an id the backends can ORDER BY numerically.
+ *
+ * One predicate, read by both backends, because the two orderings have to agree
+ * and two copies of "what counts as orderable" is a way for them to stop: the
+ * file store decides in JS whether to sort, and Postgres decides in SQL from the
+ * `id` COLUMN this same predicate fills. A row the file store calls orderable
+ * and the column does not is a table the two read in different orders.
+ *
+ * Only the events table has one — sessions and runs carry string ids and scores
+ * carry none, which is why those two are read in insertion order instead.
+ */
+export const isOrderable = (row: Row): boolean =>
+  typeof row.id === "number" && Number.isFinite(row.id as number);
+
 /** Scores are keyed by the pair that makes them unique: one run, one dimension. */
 export const byRunAndDimension: KeyOf = (row) => `${String(row.runId)}:${String(row.dimension)}`;
 

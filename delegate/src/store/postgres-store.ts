@@ -25,7 +25,7 @@
  * for exactly that reason — the SQL underneath it is all this file.
  */
 
-import type { Row, Store, TableName } from "./store";
+import { isOrderable, type Row, type Store, type TableName } from "./store";
 // Type-only, so the driver is still not loaded until a Postgres store is
 // actually asked for — and so the adapter below is checked against the real
 // driver's types rather than a hand-written guess at them. A driver upgrade
@@ -67,8 +67,6 @@ const DDL: string[] = [
  * caller cannot tell which backend it is reading.
  */
 const ORDER = "(case when id is not null then id end) asc nulls last, seq asc";
-
-const isOrderable = (row: Row): boolean => typeof row.id === "number" && Number.isFinite(row.id as number);
 
 /** The columns this store's table is defined by, in the order it declares them. */
 const COLUMNS = ["seq", "table_name", "key", "id", "body"];

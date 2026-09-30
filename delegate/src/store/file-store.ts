@@ -18,7 +18,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import { dataDir } from "../paths";
-import { TABLES, type Row, type Store, type TableName } from "./store";
+import { TABLES, isOrderable, type Row, type Store, type TableName } from "./store";
 
 /** The directory exists on demand: a fresh checkout, or one just reset, has no `data/`. */
 function ensureDir(dir: string): void {
@@ -37,11 +37,38 @@ function ensureDir(dir: string): void {
  * exists: the log writes a renumbered event in the position it held in the
  * batch, so a file can hold id 9 ahead of id 2. Reading it back as written is
  * how the event log could hand a scorer a transcript out of order.
+ *
+ * A table holding SOME orderable rows and some not is the third case, and it
+ * used to be read one way here and another in SQL: this returned the file's own
+ * order because not EVERY row qualified, while Postgres's
+ * `(case when id is not null then id end) asc nulls last, seq asc` put the
+ * numeric ids first and the rest after them. On a planted table holding
+ * `sess-a, 9, sess-b, 2` the files answered in that order and Postgres answered
+ * `2, 9, sess-a, sess-b` — the two backends disagreeing, which is the one thing
+ * this function exists to make impossible. Nothing in the app writes such a
+ * table (every table it writes is all-orderable or all-not), so this was a hole
+ * in a promise rather than a live wrong answer; but the store is a documented
+ * swap-in point and its files are documented as hand-readable mid-workshop, so
+ * the promise is now kept for every row shape rather than the ones we expect.
  */
 function inReadOrder<T extends Row>(rows: T[]): T[] {
   if (rows.length === 0) return rows;
-  if (!rows.every((row) => typeof row.id === "number" && Number.isFinite(row.id as number))) return rows;
-  return [...rows].sort((a, b) => (a.id as number) - (b.id as number));
+  const orderable = rows.filter(isOrderable).sort((a, b) => (a.id as number) - (b.id as number));
+  if (orderable.length === rows.length) {
+    return [...rows].sort((a, b) => (a.id as number) - (b.id as number));
+  }
+  if (orderable.length === 0) return rows;
+  // Mixed: the orderable rows in id order, then the rest in the order they were
+  // written — `nulls last, seq asc` read from the other end.
+  const mixed: T[] = [];
+  let next = 0;
+  for (const row of rows) {
+    if (isOrderable(row)) mixed.push(orderable[next++] as T);
+  }
+  for (const row of rows) {
+    if (!isOrderable(row)) mixed.push(row);
+  }
+  return mixed;
 }
 
 function readTable<T extends Row>(dir: string, table: TableName): T[] {
