@@ -23,6 +23,14 @@ export interface ChatMessage {
   /** Tool calls shown as collapsed rows in the UI. */
   toolCalls?: Array<{ tool: string; args: unknown; summary: string }>;
   ts: string;
+  /**
+   * The event this message was rebuilt from, when it came from the log.
+   *
+   * Ids, not timestamps, are what the log actually orders by, and a turn's
+   * tool calls are the events between one message and the next — so this is
+   * what makes that boundary exact. See `threadFromEvents`.
+   */
+  eventId?: number;
 }
 
 export interface AgentTurnResult {

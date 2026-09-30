@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { EventLog } from "@/delegate/src/runtime/events";
-import { readThreadFromEvents } from "@/delegate/src/runtime/history";
+import { threadFromEvents, toolCallsForTurn } from "@/delegate/src/runtime/history";
 import { loadManifest, loadDebrief, slugForId } from "@/delegate/src/scoring/scenario-loader";
 import { errorResponse, MAX_ID_CHARS } from "@/delegate/src/api/validate";
 import { dataDir } from "@/delegate/src/paths";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 /**
  * GET /api/delegate/run/[runId]/state
  * → { sessionId, scenarioId, startedAt, submittedAt?, detected?, verdict?,
- *     debriefNote?, manifest, messages: [{role, content, toolCalls?, ts}] }
+ *     debriefNote?, manifest, messages: [{role, content, toolCalls?, ts, eventId?}] }
  *
  * The read side of `?run=` restore (the URL-state audit's opportunities 1+2):
  * the participant screen carries the open run in the URL, and on refresh or
@@ -74,30 +74,33 @@ export async function GET(_req: Request, ctx: { params: Promise<{ runId: string 
         debrief.split("## What was planted")[1]?.split("##")[0]?.trim().slice(0, 1200) ?? "";
     }
 
-    const thread = await readThreadFromEvents(runId);
+    // The SAME log as `events` above, deliberately. Rebuilding the thread
+    // through readThreadFromEvents would open a second log and read the events
+    // table a second time, and the two reads land at different moments: a
+    // request that straddles a participant's turn flush would then show the
+    // reply (from the newer read) with its tool calls filtered against the
+    // older one — a transcript that silently loses the turn's evidence. One
+    // snapshot cannot disagree with itself, and on Postgres it is one round
+    // trip instead of two.
+    const thread = threadFromEvents(eventLog.eventsForRun(runId), runId);
     const messages = thread.map((message, index) => {
       let toolCalls: Array<{ tool: string; args?: Record<string, unknown>; summary?: string }> | undefined;
       if (message.role === "assistant") {
-        // Window of events since the previous thread message (user prompt
-        // that produced this turn): the tool calls of this turn.
-        const windowStart = index > 0 ? thread[index - 1].ts : "";
-        toolCalls = events
-          .filter(
-            (e) =>
-              e.type === "tool_call" &&
-              e.ts <= message.ts &&
-              (!windowStart || e.ts > windowStart),
-          )
-          .map((e) => ({
-            tool: String(e.payload.tool ?? ""),
-            args: e.payload.args as Record<string, unknown> | undefined,
-            summary: typeof e.payload.summary === "string" ? e.payload.summary : undefined,
-          }));
+        // The events this turn produced, between the prompt that started it
+        // and its own response — bounded by ID, and scoped to this run. See
+        // `toolCallsForTurn`, which is where the bound is explained and gated.
+        const lower = index > 0 ? (thread[index - 1].eventId ?? 0) : 0;
+        const upper = message.eventId ?? Number.MAX_SAFE_INTEGER;
+        toolCalls = toolCallsForTurn(events, runId, lower, upper);
       }
       return {
         role: message.role,
         content: message.content,
         ts: message.ts,
+        // Carried through for the same reason the window above uses it: a
+        // consumer rebuilding the transcript needs the same boundary this
+        // route drew, and it cannot recover one from a millisecond timestamp.
+        eventId: message.eventId,
         toolCalls,
       };
     });

@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { resolveRuntime } from "@/delegate/src/runtime/registry";
 import { makeProvider, DEFAULT_BUDGET } from "@/delegate/src/runtime/agent";
 import { EventLog } from "@/delegate/src/runtime/events";
+// History: rebuild prior turns from the event log (prompt_sent/agent_response
+// pairs), out of the log this request already opened.
+import { threadFromEvents } from "@/delegate/src/runtime/history";
 import {
   readJsonBody,
   requireString,
@@ -81,7 +84,10 @@ export async function POST(req: Request) {
     log.log(runId, "prompt_sent", "participant", { text: message, authorizedPost: authorizePostEntryIds?.length ?? 0 });
 
     const provider = makeProvider(process.env.DELEGATE_AGENT ?? "auto");
-    const history = await loadHistory(runId);
+    // From the log this turn already has open, not a second read of the same
+    // table: the history the model is given must come from the same snapshot
+    // as the run row it is about to write beside.
+    const history = threadFromEvents(log.eventsForRun(runId), runId);
 
     const turn = await provider.runTurn(
       message,
@@ -134,10 +140,4 @@ export async function POST(req: Request) {
   } finally {
     await eventLog?.flush();
   }
-}
-
-// History: rebuild prior turns from the event log (prompt_sent/agent_response pairs).
-import { readThreadFromEvents } from "@/delegate/src/runtime/history";
-async function loadHistory(runId: string) {
-  return readThreadFromEvents(runId);
 }

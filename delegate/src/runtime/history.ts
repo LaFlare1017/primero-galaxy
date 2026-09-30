@@ -3,25 +3,39 @@
  * carry context. Alternating prompt_sent / agent_response events become
  * ChatMessage[]; the current user message is appended by the caller.
  *
- * Async since the log is: reading the store is a round trip, and this opens its
- * own log rather than being handed the caller's — a chat turn's history is
- * read before the turn is logged, so sharing would only hide a read behind a
- * write. The store is a parameter anyway, which is how the tests give it one.
+ * `threadFromEvents` is the pure form, over rows the caller already holds, and
+ * it exists because of a race the two call sites could otherwise not see. Both
+ * the chat route and the state route were reading the event log TWICE per
+ * request: once through their own `EventLog.open()` and once more inside here,
+ * each read landing at a different moment. A request that straddles a flush
+ * then builds its transcript from the newer read and filters its tool calls
+ * against the older one — so the participant sees the reply with its tool calls
+ * silently missing, which is the pane's "2 tool calls" summary never rendering.
+ * One snapshot cannot disagree with itself, so both call sites pass the log
+ * they opened and neither reads the store twice.
+ *
+ * Each message also carries the ID of the event it was rebuilt from, and that
+ * is not bookkeeping. `ts` has millisecond resolution and several events in a
+ * turn routinely land inside the same millisecond, so a window drawn on
+ * timestamps puts a boundary through the middle of a turn's tool calls — the
+ * transcript then renders the reply with the first tool call missing, and which
+ * side of the boundary a given event falls on changes from run to run with
+ * nothing about the code changing. Ids are what the append-only log actually
+ * orders by, so the same window drawn on ids is exact.
  */
 
-import { EventLog } from "./events";
+import { EventLog, type DelegateEvent } from "./events";
 import type { ChatMessage } from "./agent";
 import type { Store } from "../store/store";
 
-export async function readThreadFromEvents(runId: string, store?: Store): Promise<ChatMessage[]> {
-  const log = await EventLog.open(store);
-  const events = log.eventsForRun(runId);
+/** The transcript of one run, from event rows the caller has already read. */
+export function threadFromEvents(events: DelegateEvent[], runId: string): ChatMessage[] {
   const messages: ChatMessage[] = [];
   for (const e of events) {
     if (e.type === "prompt_sent") {
-      messages.push({ role: "user", content: String(e.payload.text ?? ""), ts: e.ts });
+      messages.push({ role: "user", content: String(e.payload.text ?? ""), ts: e.ts, eventId: e.id });
     } else if (e.type === "agent_response") {
-      messages.push({ role: "assistant", content: String(e.payload.text ?? ""), ts: e.ts });
+      messages.push({ role: "assistant", content: String(e.payload.text ?? ""), ts: e.ts, eventId: e.id });
     }
   }
   // Drop the trailing prompt_sent — the caller sends it as the new message.
@@ -29,4 +43,47 @@ export async function readThreadFromEvents(runId: string, store?: Store): Promis
     messages.pop();
   }
   return messages;
+}
+
+/**
+ * The tool calls one turn made: the `tool_call` events between the message
+ * before it and its own event.
+ *
+ * The bound is drawn on event IDS. `ts` is millisecond-resolution and a turn
+ * routinely logs its prompt and a tool call inside the same millisecond, so a
+ * timestamp window puts its lower bound exactly on a tool call and drops it —
+ * the transcript then renders the reply with one call where the agent made
+ * two, on some runs and not others, which is a bug whose cause is where the
+ * clock happened to tick. Ids are what the append-only log orders by.
+ *
+ * Scoped to one run, because the events table holds every run's rows and the
+ * previous timestamp form compared them all against one run's window.
+ */
+export function toolCallsForTurn(
+  events: DelegateEvent[],
+  runId: string,
+  lowerId: number,
+  upperId: number,
+): Array<{ tool: string; args?: Record<string, unknown>; summary?: string }> {
+  return events
+    .filter((e) => e.runId === runId && e.type === "tool_call" && e.id > lowerId && e.id <= upperId)
+    .map((e) => ({
+      tool: String(e.payload.tool ?? ""),
+      args: e.payload.args as Record<string, unknown> | undefined,
+      summary: typeof e.payload.summary === "string" ? e.payload.summary : undefined,
+    }));
+}
+
+/**
+ * Open a log and read the thread from it.
+ *
+ * Async since the log is: reading the store is a round trip, and this opens its
+ * own log rather than being handed the caller's — a chat turn's history is
+ * read before the turn is logged, so sharing would only hide a read behind a
+ * write. Callers that HAVE a log should pass `log.eventsForRun(runId)` to
+ * `threadFromEvents` instead; this is for the ones that do not.
+ */
+export async function readThreadFromEvents(runId: string, store?: Store): Promise<ChatMessage[]> {
+  const log = await EventLog.open(store);
+  return threadFromEvents(log.eventsForRun(runId), runId);
 }
