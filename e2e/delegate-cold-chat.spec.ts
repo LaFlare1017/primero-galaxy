@@ -65,6 +65,7 @@ interface TurnResponse {
 }
 
 interface StoredEvent {
+  id: number;
   runId: string;
   type: string;
   ts: string;
@@ -182,7 +183,13 @@ test.describe('Delegate cold process (chat)', () => {
       const replies = events.filter((e) => e.type === 'agent_response');
       expect(prompts.length, 'both prompts are in the store').toBeGreaterThanOrEqual(2);
       expect(replies.length, 'both replies are in the store').toBeGreaterThanOrEqual(2);
-      expect(prompts[0].ts < (replies[0]?.ts ?? ''), 'events are in append order').toBe(true);
+      // Append order is asserted on event IDs, not on `ts`. The log's ids are
+      // the order it was written in; `ts` has millisecond resolution, so a
+      // prompt and its reply can share a timestamp and a `ts` comparison would
+      // call that out of order — the same tie that used to drop tool calls out
+      // of a turn's window. A live model turn takes seconds, so this was never
+      // observed to fail, but it is asserting order with the wrong instrument.
+      expect(prompts[0].id < (replies[0]?.id ?? 0), 'events are in append order').toBe(true);
       // The cold turn logged at least one real tool call, which is the part of
       // the turn that is only reachable through the scenario-gated runtime the
       // cold process had to rebuild.
