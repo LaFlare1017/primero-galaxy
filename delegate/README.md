@@ -179,7 +179,7 @@ One coupling to know before bumping the driver. This workspace and the app are i
 
 ### Week-6 alpha kit
 
-Everything needed to run the three-person alpha (scenarios 1 + 3, individually) — see `docs/alpha-run-of-show.md` (facilitator card) and `docs/alpha-dry-run.md` (rehearsal checklist):
+Everything needed to run the three-person alpha (scenarios 1 + 3, individually) — see `docs/alpha-run-of-show.md` (facilitator card) and `docs/alpha-dry-run.md` (rehearsal checklist). For the alpha as a **deployed** room — the Neon database, the deployment's environment variables, and the reset/readout operations on the day — see [`../RUNNING-THE-WORKSHOP.md`](../RUNNING-THE-WORKSHOP.md):
 
 ```bash
 npm run alpha:preflight -- --url http://127.0.0.1:3000   # environment checks; C6 probes the live server + tool gating; C6e catches a clobbered dev .next

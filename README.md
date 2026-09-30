@@ -37,7 +37,7 @@ npm install
 npm run dev        # http://localhost:3000
 ```
 
-New to this checkout, or the app answering 500s instead of pages? **[Running the app locally](RUNNING-LOCALLY.md)** is the step-by-step version: the exact path to `cd` into, every route, the galaxy's controls, and what to do when it breaks.
+New to this checkout, or the app answering 500s instead of pages? **[Running the app locally](RUNNING-LOCALLY.md)** is the step-by-step version: the exact path to `cd` into, every route, the galaxy's controls, and what to do when it breaks. Standing the workshop up anywhere but a laptop — the Neon database, the environment variables, resetting the room between participants, reading the archive back — is **[RUNNING-THE-WORKSHOP.md](RUNNING-THE-WORKSHOP.md)**.
 
 - **`/`**: explainer landing page (what the galaxy is, how to read it, how to navigate), leading into the tool
 - **`/galaxy`**: the 3D galaxy itself
