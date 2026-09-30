@@ -10,7 +10,7 @@ link handling).
 All figures are the repo's real ones, read out of it by `linkedin/stats.mjs`
 as of 2026-09-30: 15 commits in the era, 5 declared
 keyboards, 1,410 lines of declaration, 77 enumerated states,
-133 e2e tests in 20 files, 8 findings.
+133 e2e tests in 23 files, 8 findings.
 <!-- stats:end -->
 
 ---
@@ -231,7 +231,7 @@ they're written to carry the slide's argument, not just its title.
   `node linkedin/stats.mjs --write` rather than editing them. 15 commits in
   the era · 5 declared keyboards · 1,410 lines of
   declaration · 77 enumerated states · 133 e2e tests across
-  20 files · 8 findings, of which
+  23 files · 8 findings, of which
   4 of 5 surfaces found theirs by declaring ·
   28 ways the checkers' own spec breaks a synthetic manifest ·
   6 tests holding the checkers to that standard.

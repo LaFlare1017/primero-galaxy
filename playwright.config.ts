@@ -27,7 +27,26 @@ export default defineConfig({
   timeout: 150_000,
   expect: { timeout: 20_000 },
   fullyParallel: false,
-  workers: 1,
+  // Playwright parallelises by FILE, so one file is always one worker. The
+  // galaxy specs were a single 22-test file and took 15 minutes for that
+  // reason alone; they are four files now, so this number can finally be
+  // above 1.
+  //
+  // It stays 1 by default because thirteen of the suite's specs share ONE
+  // store: they seed participants into the room `globalSetup` empties, and
+  // then reason about it as a whole — the first and last row, the count in the
+  // sweep's `N of M`, what a status facet leaves visible. Two of those files
+  // running at once would put each other's rows in the room, and the failures
+  // would read as console bugs (the same shape global-setup.ts documents).
+  // Raising this to run the whole suite at once needs per-spec isolation
+  // first — a store per worker — not just a bigger number.
+  //
+  // `E2E_WORKERS=2` runs the galaxy files concurrently, which IS safe: each
+  // Playwright test gets its own browser context, so their localStorage and
+  // sessionStorage are separate and they touch no shared room. That is how the
+  // galaxy specs get their speed back without endangering the facilitator
+  // ones, and the CI e2e job passes it.
+  workers: Number(process.env.E2E_WORKERS ?? 1),
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI
     ? [
