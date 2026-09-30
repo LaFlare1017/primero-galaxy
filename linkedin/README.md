@@ -104,7 +104,7 @@ a phone, and the renderer will tell you when you have overrun.
   `playwright --list`) and fails if any asset disagrees with what it found — this
   line included. Right now: 15 commits in the era,
   5 declared keyboards, 1,410 lines of declaration,
-  77 enumerated states, 132 e2e tests in 19 files,
+  77 enumerated states, 133 e2e tests in 20 files,
   4 of 5 surfaces that found a defect by declaring their keyboard,
   28 ways the checkers' own spec breaks a synthetic manifest, and
   6 tests holding the checkers to that same standard.

@@ -344,9 +344,18 @@ jobs:
       # itself, so no separate server step is needed here. CI=1 enables the
       # config's retries (2) and the JSON reporter that feeds the flaky
       # report below.
+      #
+      # ANTHROPIC_API_KEY is set on this STEP, not the job, because exactly one
+      # spec reads it: e2e/delegate-cold-chat.spec.ts, which skips without it.
+      # It needs the real agent rather than the mock — a mock answers from the
+      # prompt text, so it cannot show whether a restarted process actually
+      # recovered the conversation, which is the whole point of that spec. Scoped
+      # to the step so no other test, and nothing the build touches, can reach
+      # the key.
       - run: npm run test:e2e
         env:
           CI: '1'
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       # A flaky test PASSES under retries, so failure-gated artifacts never
       # show it. Parse the JSON report, write the flaky table into the job
       # summary, and expose flaky_count as a step output.
