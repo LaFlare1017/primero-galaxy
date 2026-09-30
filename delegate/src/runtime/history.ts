@@ -75,6 +75,45 @@ export function toolCallsForTurn(
 }
 
 /**
+ * Whether the agent still owes this run a turn, read off the LAST event in
+ * append order.
+ *
+ * Lives here rather than in the facilitator route because it is the same
+ * question `toolCallsForTurn` answers — "which events belong to this turn?" —
+ * and it had the same answer for a while: lastness by `ts`. `ts` has
+ * millisecond resolution and a fast turn logs its prompt, its tool calls and
+ * its response inside one millisecond. A strict `e.ts > last.ts` therefore
+ * keeps the FIRST of the tied events, so a turn that finished reads as
+ * `prompt_sent` and the facilitator's grid reports a participant whose agent
+ * already answered as still working.
+ *
+ * Ids are what the append-only log orders by, and `events` arrives in id order,
+ * so the last matching event in the array IS the last one written.
+ *
+ * The staleness question inside is a real wall-clock one — how long since the
+ * agent last did anything — so that stays on `ts`, which is what it should be.
+ */
+const AGENT_TURN_EVENTS = new Set(["prompt_sent", "agent_response", "tool_call"]);
+
+/** A turn older than this is stalled, not working: the budget guard caps 120s. */
+export const AGENT_STALE_AFTER_MS = 130_000;
+
+export function agentWorkingForRun(
+  events: Array<{ id: number; runId: string; ts: string; type: string }>,
+  runId: string,
+): boolean {
+  let last: { ts: string; type: string } | undefined;
+  for (const e of events) {
+    if (e.runId !== runId) continue;
+    if (AGENT_TURN_EVENTS.has(e.type)) last = e;
+  }
+  if (!last) return false;
+  if (last.type === "prompt_sent") return true;
+  if (last.type === "tool_call") return Date.now() - new Date(last.ts).getTime() < AGENT_STALE_AFTER_MS;
+  return false;
+}
+
+/**
  * Open a log and read the thread from it.
  *
  * Async since the log is: reading the store is a round trip, and this opens its

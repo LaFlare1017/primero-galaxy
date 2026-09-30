@@ -28,7 +28,7 @@
  * CI job on Linux as well as on a laptop. Wired into `npm test`.
  */
 
-import { threadFromEvents, toolCallsForTurn } from "./history";
+import { threadFromEvents, toolCallsForTurn, agentWorkingForRun, AGENT_STALE_AFTER_MS } from "./history";
 import type { DelegateEvent, EventType, EventActor } from "./events";
 import { ignoreClosedPipe } from "../print";
 
@@ -148,6 +148,82 @@ function main(): number {
     "a turn that called no tools attributes none",
     windowFor(bare, "run-f", 1).calls.length === 0,
     "0 calls, and the message still renders",
+  );
+
+  // ── The grid's "is the agent working" derivation ──────────────────────────
+  //
+  // Same question, same wrong answer for a while. The facilitator's live grid
+  // derives each row's status from the run's LATEST agent-turn event, and it
+  // found that latest by `e.ts > last.ts`. Strict `>` on a tie keeps the FIRST
+  // of the tied events, so a turn that finished inside one millisecond reads
+  // as `prompt_sent` — the grid reports a participant whose agent already
+  // answered as still working, and keeps doing so until some later event moves
+  // the timestamp along. A stale row on the one screen the whole room watches.
+  //
+  // The old form is run against the same rows below and must report the
+  // opposite answer, so this cannot pass on a derivation that only agrees by
+  // accident on a clock that happened to tick between events.
+  const gridTurn = [
+    ev("run-g", "prompt_sent", at, { text: "go" }, "participant"),
+    ev("run-g", "tool_call", at, { tool: "get_bank_feed" }),
+    ev("run-g", "tool_call", at, { tool: "query_gl" }),
+    ev("run-g", "agent_response", at, { text: "done" }),
+  ];
+  const tiedMs = gridTurn.filter((e) => e.ts === at).length;
+  const oldWorking = (() => {
+    let last: { ts: string; type: string } | undefined;
+    for (const e of gridTurn) {
+      if (e.runId !== "run-g") continue;
+      if (e.type === "prompt_sent" || e.type === "agent_response" || e.type === "tool_call") {
+        if (!last || e.ts > last.ts) last = e;
+      }
+    }
+    if (!last) return false;
+    if (last.type === "prompt_sent") return true;
+    if (last.type === "tool_call") return Date.now() - new Date(last.ts).getTime() < AGENT_STALE_AFTER_MS;
+    return false;
+  })();
+  check(
+    "a turn that answered inside one millisecond is not reported as working",
+    tiedMs === 4 && agentWorkingForRun(gridTurn, "run-g") === false,
+    `${tiedMs} events share ${at}, last in append order is agent_response → working=${agentWorkingForRun(gridTurn, "run-g")}`,
+  );
+  check(
+    "…and the timestamp ordering it replaced says working, which is the bug",
+    oldWorking === true && agentWorkingForRun(gridTurn, "run-g") === false,
+    `ts ordering reports working=${oldWorking}, id ordering working=${agentWorkingForRun(gridTurn, "run-g")} — the difference this check exists for`,
+  );
+
+  // The three states the grid actually distinguishes, with timestamps that do
+  // NOT tie — so this pins the derivation's intent and not just the tie.
+  // The two staleness cases are relative to the real clock, so their tool_call
+  // timestamps are relative to it too: one just now (mid-turn, the agent is
+  // working), one long ago (stalled). Pinning these to `at` would test the
+  // clock rather than the derivation, and would pass or fail by the hour.
+  const now = new Date().toISOString();
+  const longAgo = new Date(Date.now() - AGENT_STALE_AFTER_MS - 60_000).toISOString();
+  const answered = [ev("run-h", "prompt_sent", at, {}, "participant"), ev("run-h", "agent_response", now, { text: "done" })];
+  const owed = [ev("run-i", "prompt_sent", at, {}, "participant")];
+  const midTurn = [ev("run-j", "prompt_sent", at, {}, "participant"), ev("run-j", "tool_call", now, { tool: "get_bank_feed" })];
+  const stalled = [ev("run-k", "prompt_sent", longAgo, {}, "participant"), ev("run-k", "tool_call", longAgo, { tool: "get_bank_feed" })];
+  check(
+    "the three grid states stay distinct: answered idle, prompt owed, tool mid-turn",
+    agentWorkingForRun(answered, "run-h") === false &&
+      agentWorkingForRun(owed, "run-i") === true &&
+      agentWorkingForRun(midTurn, "run-j") === true &&
+      agentWorkingForRun(stalled, "run-k") === false,
+    `answered=${agentWorkingForRun(answered, "run-h")} owed=${agentWorkingForRun(owed, "run-i")} mid=${agentWorkingForRun(midTurn, "run-j")} stalled=${agentWorkingForRun(stalled, "run-k")} (the tool-call staleness window is a real wall-clock question, so it stays on ts)`,
+  );
+
+  // Another run's events must not decide this one's row.
+  const twoRuns = [
+    ev("run-l", "prompt_sent", at, {}, "participant"),
+    ev("run-m", "agent_response", "2026-09-30T17:40:20.000Z", { text: "done" }),
+  ];
+  check(
+    "another run's events never decide this run's row",
+    agentWorkingForRun(twoRuns, "run-l") === true && agentWorkingForRun(twoRuns, "run-m") === false,
+    `run-l working=${agentWorkingForRun(twoRuns, "run-l")}, run-m working=${agentWorkingForRun(twoRuns, "run-m")}`,
   );
 
   console.log(failures === 0 ? "\nall transcript checks passed" : `\n${failures} transcript check(s) FAILED`);

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { EventLog } from "@/delegate/src/runtime/events";
+import { agentWorkingForRun } from "@/delegate/src/runtime/history";
 import { readScores } from "@/delegate/src/report/score-store";
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
@@ -20,24 +21,15 @@ export const dynamic = "force-dynamic";
  * Agent-working derivation (event-sourced, nothing inferred): a run's latest
  * agent-turn event decides. prompt_sent with no later agent_response → the
  * agent owes a turn; a tool_call within the last window → mid-turn. The
- * budget guard caps a turn at 120s, so an older tool_call is a stalled turn,
- * not activity. agent_response as the latest → turn complete, idle.
+ * budget guard caps a turn at 120s, so an older tool_call is a stalled turn, * not activity. agent_response as the latest → turn complete, idle.
+ *
+ * The derivation lives in `history.ts`, beside the transcript's turn windowing:
+ * it is the same question, and it had the same answer for a while — lastness by
+ * `ts`, which ties on a fast turn. The route imports it so there is one
+ * implementation and it is the one the gate covers.
  */
-const AGENT_STALE_AFTER_MS = 130_000;
 
-function agentWorkingForRun(events: Array<{ runId: string; ts: string; type: string }>, runId: string): boolean {
-  let last: { ts: string; type: string } | undefined;
-  for (const e of events) {
-    if (e.runId !== runId) continue;
-    if (e.type === "prompt_sent" || e.type === "agent_response" || e.type === "tool_call") {
-      if (!last || e.ts > last.ts) last = e;
-    }
-  }
-  if (!last) return false;
-  if (last.type === "prompt_sent") return true;
-  if (last.type === "tool_call") return Date.now() - new Date(last.ts).getTime() < AGENT_STALE_AFTER_MS;
-  return false;
-}
+
 export async function GET() {
   const eventLog = await EventLog.open();
   const { sessions, runs, events } = eventLog.all();
