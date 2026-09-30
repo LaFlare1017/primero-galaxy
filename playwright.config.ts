@@ -14,6 +14,14 @@ import { defineConfig } from '@playwright/test';
  */
 export default defineConfig({
   testDir: './e2e',
+  // Empties the suite's scratch store on every run, INCLUDING one that reuses a
+  // server someone else started. That is the whole reason it is not in the
+  // webServer command below: Playwright skips that command when it reuses a
+  // server, so a clear living there leaves the room carrying every row of every
+  // previous run — which is how nine facilitator specs failed here with a
+  // shifting set, the grid's 200-row window hiding freshly seeded rows and the
+  // walk tests racing it. See e2e/global-setup.ts.
+  globalSetup: './e2e/global-setup.ts',
   // Headroom for slow teardown: closing the browser context in software
   // WebGL can outlast a 90s budget on a loaded machine.
   timeout: 150_000,
@@ -43,27 +51,39 @@ export default defineConfig({
     trace: process.env.CI ? 'on-all-retries' : 'retain-on-failure',
   },
   webServer: {
-    command:
-      'rm -rf .next-e2e/delegate-data && NEXT_E2E_DIST_DIR=.next-e2e npm run build && NEXT_E2E_DIST_DIR=.next-e2e npm run start -- -p 3100',
+    // No `rm -rf` here on purpose — the suite's store is emptied by the
+    // globalSetup above, which runs whether or not this command does. Leaving
+    // the clear in two places would make it possible to move one and not the
+    // other, which is the bug being fixed.
+    command: 'NEXT_E2E_DIST_DIR=.next-e2e npm run build && NEXT_E2E_DIST_DIR=.next-e2e npm run start -- -p 3100',
     url: 'http://localhost:3100',
     // The suite owns its own workshop store. The delegate API reads these
     // JSON files fresh on every request and its data dir is overridable
     // (delegate/src/paths.ts exists for exactly this), so the server is
-    // pointed at a scratch dir under the ignored .next-e2e/ — cleared here —
-    // and a run starts with an empty room holding only the rows the run
-    // itself seeded. That is what lets the console cap what it renders (see
-    // GRID_WINDOW in app/delegate/facilitator/page.tsx) without ever hiding
-    // a spec's own row. Before this, the suite wrote into delegate/data/,
-    // the store a facilitator opens in dev: 2651 accumulated runs, most of
-    // them seeded by e2e, sitting past the grid's first page — real
-    // participants the console no longer renders, and specs looking for a
+    // pointed at a scratch dir under the ignored .next-e2e/ — emptied by
+    // globalSetup — and a run starts with an empty room holding only the rows
+    // the run itself seeded. That is what lets the console cap what it renders
+    // (see GRID_WINDOW in app/delegate/facilitator/page.tsx) without ever
+    // hiding a spec's own row. Before this, the suite wrote into
+    // delegate/data/, the store a facilitator opens in dev: 2651 accumulated
+    // runs, most of them seeded by e2e, sitting past the grid's first page —
+    // real participants the console no longer renders, and specs looking for a
     // row they had just created.
-    //
-    // reuseExistingServer serves the store of the server you started, not
-    // the suite's. A workshop-sized one will hide seeded rows behind the
-    // window: run the suite's own server (or alpha:reset) for a clean room.
     env: { DELEGATE_DATA_DIR: '.next-e2e/delegate-data' },
-    reuseExistingServer: !process.env.CI,
+    // OPT-IN, and the default used to be "yes, reuse whatever is on :3100".
+    // That inherited two things nobody could see: the build that server was
+    // started from (so a run could test code hours older than the source tree,
+    // failing as behaviour rather than as setup), and its store — which, for a
+    // server started without this suite's DELEGATE_DATA_DIR, is
+    // delegate/data/ itself, the room a facilitator opens in dev. Reuse is
+    // worth it for local iteration, so it is one env var away:
+    //
+    //   E2E_REUSE=1 npm run test:e2e
+    //
+    // …and only against a server started the way this config starts one. With
+    // reuse off, a port that is already in use fails immediately and says so,
+    // which is a better outcome than nine timeouts an hour later.
+    reuseExistingServer: process.env.E2E_REUSE === '1',
     timeout: 300_000,
   },
 });

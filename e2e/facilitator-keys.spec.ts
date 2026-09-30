@@ -39,24 +39,67 @@ interface Room {
    * grid renders one page at a time (GRID_WINDOW) and the walk is not clipped
    * by that. An effect that asked the SCREEN where the last row was would call
    * a four-hundred-row room two hundred rows long.
+   *
+   * NAMES, and only names: a room is shared with every other spec in the run,
+   * so a label is not an identity. delegate-run-resume.spec.ts stamps one
+   * label across its six tests, and a full run ends holding six sessions
+   * called `E2E Resume <STAMP>` — which is why nothing here may locate a row
+   * by name (see `watch` and `position`).
    */
   order: string[];
   /** The participant the cursor is on, or null on a cold console. */
   cursor: string | null;
   /** The participant the watch pane is mirroring, or null when it is shut. */
   pane: string | null;
+  /**
+   * Where the pane says it is in the room it is sweeping — `[at, total]`,
+   * 1-based, off the transport's own indicator. The sweep's truth is the
+   * console's own count because the sweep IS the console's: it steps over
+   * the rows IT is holding, in the order IT holds them, and a list rebuilt
+   * here from a second request to the same endpoint is only a guess at those
+   * rows. A guess is good enough to read a participant off the screen and
+   * not good enough to name its neighbour, its first, or its last — which is
+   * what the sweep exercises below were doing, and how they failed.
+   */
+  position: [number, number] | null;
+  /**
+   * The run the pane is mirroring, as the URL names it. A run id, so it stays
+   * unambiguous in a room of repeated participant labels.
+   */
+  watch: string | null;
 }
 
 const STAMP = Date.now().toString(36).slice(-5);
 
 const rows = (page: Page) => page.locator('tbody tr');
 const pane = (page: Page) => page.locator('section[aria-label^="Watching run for"]');
+/** The transport's `N of M` — where the pane counts itself in the sweep. */
+const counter = (page: Page) => pane(page).getByText(/^\d+ of \d+$/);
 const panel = (page: Page) => page.locator('[data-radix-popper-content-wrapper] [data-state="open"]');
 const sheet = (page: Page) => page.getByRole('dialog', { name: 'Keyboard shortcuts' });
 const palette = (page: Page) => page.getByPlaceholder('Type a command or search…');
 const actions = (page: Page) => page.locator('[role="status"][aria-label="Console action"]');
 const sheetTrigger = (page: Page) => page.getByRole('button', { name: /for all$/ });
 const viewsTrigger = (page: Page) => page.getByRole('button', { name: 'Views', exact: true });
+
+/**
+ * Where the pane counts itself, read out of the pane rather than recomputed.
+ * Found by its shape (`N of M`) inside the transport, not by a title or a
+ * test id, because this is the one number the sweep is *about* — the one a
+ * facilitator reads — and a hook that had to be kept in step with the app
+ * would be a second thing to keep in step with it.
+ */
+async function position(page: Page): Promise<[number, number] | null> {
+  return page.evaluate(() => {
+    const mirror = document.querySelector('section[aria-label^="Watching run for"]');
+    if (mirror === null) return null;
+    const span = Array.from(mirror.querySelectorAll('span')).find((el) =>
+      /^\d+ of \d+$/.test(el.textContent?.trim() ?? ''),
+    );
+    const digits = (span?.textContent ?? '').match(/\d+/g) ?? [];
+    return digits.length === 2 ? ([Number(digits[0]), Number(digits[1])] as [number, number]) : null;
+  });
+}
 
 /** The room as the console is showing it, read without waiting for anything. */
 async function room(page: Page): Promise<Room> {
@@ -70,7 +113,12 @@ async function room(page: Page): Promise<Room> {
       pane: label === null ? null : label.replace('Watching run for ', ''),
     };
   });
-  return { ...shown, order: (await apiRoom(page)).map((row) => row.participant) };
+  return {
+    ...shown,
+    position: await position(page),
+    order: (await apiRoom(page)).map((row) => row.participant),
+    watch: new URL(page.url()).searchParams.get('watch'),
+  };
 }
 
 /** The room as the API reports it, in the grid's own default order. */
@@ -102,6 +150,11 @@ async function watchAt(page: Page, index: number): Promise<void> {
   const target = (await apiRoom(page))[index];
   await page.goto(`/delegate/facilitator?watch=${target.runId}`);
   await expect(pane(page)).toBeVisible({ timeout: 15_000 });
+  // And the place it counts itself in the room. The pane mounts before the
+  // console's first poll fills the grid, so the indicator arrives a tick
+  // later — and a sweep step that starts from a place the pane has not
+  // published yet has no place to step from.
+  await expect(counter(page)).toBeVisible({ timeout: 15_000 });
 }
 
 const last = (names: readonly string[]) => names[names.length - 1];
@@ -130,23 +183,46 @@ const EXERCISES: Record<string, Exercise<Room>> = {
   'sweep-step': {
     prepare: async (page) => watchAt(page, 1),
     effect: async (page, before, key) => {
-      // One row along the displayed room, wrapping at the ends — which is what
-      // the transport's indicator counts.
+      // One row along the displayed room, wrapping at the ends — counted by
+      // the transport's own indicator, which is the count it shows the
+      // facilitator and the list it actually steps over.
+      //
+      // It used to be derived here instead: indexOf(before.pane) into a room
+      // read from the API, then assert the aria-label of the row that came
+      // out. That is unsound in a room the whole suite shares, because a
+      // participant label is not an identity — delegate-run-resume.spec.ts
+      // stamps ONE label across its six tests, so indexOf returned the first
+      // of six identical rows and named a neighbour of a row nobody was
+      // watching. The console's own count cannot have that bug: it is the
+      // sweep, read back.
+      expect(before.position, 'the pane counted its place before the key').not.toBeNull();
+      const [at, total] = before.position as [number, number];
+      expect(total, 'a room of one row has no neighbour to step to').toBeGreaterThan(1);
       const step = key === 'ArrowRight' ? 1 : -1;
-      const at = before.order.indexOf(before.pane ?? '');
-      const expected = before.order[(at + step + before.order.length) % before.order.length];
-      await expect(pane(page)).toHaveAttribute('aria-label', `Watching run for ${expected}`, {
-        timeout: 10_000,
-      });
+      const expected = ((at - 1 + step + total) % total) + 1;
+      await expect.poll(() => position(page), { timeout: 10_000 }).toEqual([expected, total]);
+      // The count moved; a DIFFERENT run is being mirrored. Names cannot say
+      // this — six rows can share one — so the run id does.
+      await expect
+        .poll(() => new URL(page.url()).searchParams.get('watch'), { timeout: 10_000 })
+        .not.toBe(before.watch);
     },
   },
   'sweep-jump': {
     prepare: async (page) => watchAt(page, 1),
     effect: async (page, before, key) => {
-      const expected = key === 'End' ? last(before.order) : before.order[0];
-      await expect(pane(page)).toHaveAttribute('aria-label', `Watching run for ${expected}`, {
-        timeout: 10_000,
-      });
+      // The two ends of the SAME displayed sweep, counted by the pane that
+      // sweeps it. The ends are the console's to name: they are the ends of
+      // the list it is holding — which in a long room is not even the last
+      // row on the screen, the grid showing a page at a time.
+      expect(before.position, 'the pane counted its place before the key').not.toBeNull();
+      const [, total] = before.position as [number, number];
+      expect(total, 'a room of one row has no far end to jump to').toBeGreaterThan(1);
+      const expected = key === 'End' ? total : 1;
+      await expect.poll(() => position(page), { timeout: 10_000 }).toEqual([expected, total]);
+      await expect
+        .poll(() => new URL(page.url()).searchParams.get('watch'), { timeout: 10_000 })
+        .not.toBe(before.watch);
     },
   },
   'dismiss-pane': {
