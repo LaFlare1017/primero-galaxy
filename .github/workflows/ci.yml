@@ -63,6 +63,46 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
 
+  delegate:
+    name: Delegate gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The workspace's own suite, on a Linux runner, which is the only place most
+    # of it had ever been executed. It was a local-only gate: nine files behind
+    # `npm test` in delegate/, none of which CI ran, so a change that broke the
+    # scenario contract, the scorer, the readout or the reset tool merged on the
+    # strength of a build and a browser suite that never load them.
+    #
+    # Deliberately hermetic — no secrets, no database, and no root install. The
+    # workspace declares everything it imports, so `npm ci` here is the whole
+    # dependency graph; the `store` job is the one that needs a database, and
+    # DELEGATE_STORE_TEST_URL is cleared rather than merely absent so this job
+    # can never be the thing that empties a shared Neon project, however it is
+    # configured. That also means no concurrency group of its own: nothing here
+    # is shared with another run.
+    #
+    # It does write to the checkout — the week-4 smoke gate seeds cohort data
+    # into delegate/data/ so the readout has something to read — which is
+    # harmless on a throwaway runner and is why this job runs the suite rather
+    # than any single gate of it.
+    env:
+      DELEGATE_STORE_TEST_URL: ''
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          # This job never installs the root, so the root lockfile would cache
+          # the wrong graph.
+          cache-dependency-path: delegate/package-lock.json
+      - run: npm --prefix delegate ci
+      # The gates are TypeScript compiled to delegate/dist, and the script is
+      # `node dist/…` — so a build failure here is a gate failure, not a
+      # separate concern to notice later.
+      - run: npm --prefix delegate run build
+      - run: npm --prefix delegate test
+
   store:
     name: Store gate (real Postgres)
     runs-on: ubuntu-latest
