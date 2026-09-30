@@ -40,7 +40,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ runId: string 
       return NextResponse.json({ error: "invalid run id" }, { status: 400 });
     }
 
-    const eventLog = new EventLog();
+    const eventLog = await EventLog.open();
     const { runs, events } = eventLog.all();
     const run = runs.find((r) => r.id === runId);
     if (!run) return NextResponse.json({ error: `unknown run ${runId}` }, { status: 404 });
@@ -74,7 +74,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ runId: string 
         debrief.split("## What was planted")[1]?.split("##")[0]?.trim().slice(0, 1200) ?? "";
     }
 
-    const thread = readThreadFromEvents(runId);
+    const thread = await readThreadFromEvents(runId);
     const messages = thread.map((message, index) => {
       let toolCalls: Array<{ tool: string; args?: Record<string, unknown>; summary?: string }> | undefined;
       if (message.role === "assistant") {

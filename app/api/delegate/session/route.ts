@@ -29,6 +29,10 @@ export const dynamic = "force-dynamic";
  * participant, so scenario transitions must not spawn a new session row.
  */
 export async function POST(req: Request) {
+  // Declared out here so the finally below can flush a run that was started and
+  // then failed on: the store is opened lazily, so a request that fails
+  // validation never pays for a connection.
+  let eventLog: EventLog | null = null;
   try {
     const body = await readJsonBody(req);
     const participantLabel = requireString(body, "participantLabel", MAX_LABEL_CHARS);
@@ -38,7 +42,7 @@ export async function POST(req: Request) {
       "workshop-1";
     const scenarioId = requireScenarioId(body);
 
-    const eventLog = new EventLog();
+    eventLog = await EventLog.open();
     // Cohort identity: request body > DELEGATE_COHORT_ID (set on the server
     // process for a workshop/alpha) > default. The alpha run-of-show names
     // its cohort (alpha-w6) via this env var so the readout groups correctly.
@@ -76,6 +80,11 @@ export async function POST(req: Request) {
   } catch (err) {
     const { status, body: errBody } = errorResponse(err);
     return NextResponse.json(errBody, { status });
+  } finally {
+    // What this request started is durable whether or not the request
+    // succeeded — a participant who got a 500 still has a run row, so the
+    // facilitator grid is not silently missing them.
+    await eventLog?.flush();
   }
 }
 

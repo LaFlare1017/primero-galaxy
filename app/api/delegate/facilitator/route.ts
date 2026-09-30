@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { EventLog } from "@/delegate/src/runtime/events";
+import { readScores } from "@/delegate/src/report/score-store";
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { dataDir } from "@/delegate/src/paths";
@@ -38,11 +39,11 @@ function agentWorkingForRun(events: Array<{ runId: string; ts: string; type: str
   return false;
 }
 export async function GET() {
-  const eventLog = new EventLog();
+  const eventLog = await EventLog.open();
   const { sessions, runs, events } = eventLog.all();
-  const scoresPath = join(dataDir(), "scores.json");
-  const scores: Array<{ runId: string; dimension: string; value: number; max: number; flaggedBehavior?: string }> =
-    existsSync(scoresPath) ? JSON.parse(readFileSync(scoresPath, "utf8")) : [];
+  // Through the store, not off the filesystem: the grid reads scores from
+  // wherever they were written, which on a deployment is not this process.
+  const scores = await readScores();
 
   const rows = sessions.map((session) => {
     const sessionRuns = runs.filter((r) => r.sessionId === session.id);
