@@ -69,7 +69,7 @@ Substrate volume: **3,058 JEs · 767 invoices · 1,431 bank lines · 222 account
 |---|---|
 | `state.ts` | `ScenarioRuntime`: read-only window on the shared defect-mode ledger, scenario-gated tool availability, record-opening telemetry, propose/post gating (authorization lives in runtime state — the agent can never self-authorize) |
 | `agent.ts` | One agent, one system prompt, one tool set. Direct Anthropic messages API with tool use (no framework) + deterministic honest-average mock for keyless runs |
-| `events.ts` | Event log (prompt_sent, agent_response, tool_call, record_opened, answer_drafted/submitted, post_authorized) persisted as JSON |
+| `events.ts` | Event log (prompt_sent, agent_response, tool_call, record_opened, answer_drafted/submitted, post_authorized) persisted through the store seam (`src/store/`), flushed once per request |
 | `history.ts` | Rebuilds chat history from events for multi-turn context |
 | `registry.ts` | Per-process run→runtime map (restart resilience documented) |
 | `meridian-doc.ts` | The contract text `read_document` serves |
@@ -89,9 +89,9 @@ Substrate volume: **3,058 JEs · 767 invoices · 1,431 bank lines · 222 account
 | Module | Role |
 |---|---|
 | `readout.ts` | One-page cohort readout (§8): five-axis profile, three headline numbers, preventers-vs-detectors, flagged behaviors as counts. Individual attribution structurally excluded and tested |
-| `score-store.ts` | Single writer for `data/scores.json` |
+| `score-store.ts` | Single writer for the `scores` table — `data/scores.json`, or Postgres |
 | `test-readout.ts` | Readout aggregation + §8 no-attribution test |
-| `src/alpha/` | **Week-6 alpha kit**: `reset-cohort.ts` (store reset — workshop archive+wipe with manifest, `--target e2e` wipes the suite's scratch store, dry run by default), `preflight.ts` (C1–C7 environment checks incl. live server probe, tool-gating verification, C6e chunk-integrity detection of a clobbered dev `.next`, and C7 live-chat verification of which agent the server process is actually running), `readout-cli.ts` (readout from live store or archive) |
+| `src/alpha/` | **Week-6 alpha kit**: `reset-cohort.ts` (store reset through the store seam, so a database deployment resets too — workshop archive+wipe with manifest, `--target e2e` wipes the suite's scratch store, dry run by default), `preflight.ts` (C1–C7 environment checks incl. live server probe, tool-gating verification, C6e chunk-integrity detection of a clobbered dev `.next`, and C7 live-chat verification of which agent the server process is actually running), `readout-cli.ts` (readout from live store or archive) |
 
 **Web UI (root Next.js app)**
 
@@ -113,7 +113,7 @@ Substrate volume: **3,058 JEs · 767 invoices · 1,431 bank lines · 222 account
 - **Seed data uses synthetic years 2025–2026** with March 2026 as the close period.
 - **Scenario 2's variance was re-engineered to hit $4,182 exactly.** The handoff's "$4,182 variance on a CAD 12,600 charge" is arithmetically impossible with its own rates (12,600 × the 0.021 rate spread = $264.60). The mechanic is unchanged; the charge is CAD 139,400 at 0.769 (3/15) vs 0.739 (3/31) → variance exactly $4,182.00. Flagged, like the seed window.
 - **Scenario 3's summary story is data-matched.** The genuine Q1 professional-services step-up is calibrated (~$30K/mo) so the 6100 summary line shows ~$386K QoQ (real ~$94K + the $280K reclass merged), and the learner brief quotes the real computed opex delta (~$570K). The brief must match what participants actually see in the tool.
-- **JSON stores instead of Postgres.** `data/{sessions,runs,events,scores}.json` for v1; the writer interface is the swap-in point for Postgres.
+- **JSON stores instead of Postgres.** Resolved: the four tables live behind `delegate/src/store/`, and `DELEGATE_STORE=postgres` (with a `DATABASE_URL`) swaps in the Postgres backend for a deployment, where a function's filesystem is neither writable nor shared with its neighbour. Unset — every laptop run, the CLI tools, the E2E suite — is still `data/{sessions,runs,events,scores}.json`, and the merge rules, event renumbering and score keying sit above the seam so both backends answer identically (`npm run test:store` plays the same workshop against both and compares the rows, on an in-process engine by default and against a **real** database when `DELEGATE_STORE_TEST_URL` is set — see above, because the driver is the one piece an in-process engine cannot exercise). The alpha kit reads through it too, so a deployed room is reset and inspected by the same commands: `alpha/reset-cohort.ts` archives a database's rows into the same four-file archive the readout already reads, and `alpha/preflight.ts`'s C2 asks the store rather than the filesystem — the file-reading version called a full room pristine, because on a database the file is never there. One thing the swap deliberately leaves alone: a run's `ScenarioRuntime` is rebuilt from the run row on a process that has not seen it (`resolveRuntime`), which is exact for the tool gate and the ledger but starts its per-run `openRecords` empty — harmless because the one scorer that reads them is already an `||` over the event log.
 - **In-memory runtime registry.** A server restart mid-scenario rebuilds the runtime from the run record; open-record telemetry accumulated before the restart is lost (event log survives).
 
 ## Run it
@@ -130,7 +130,34 @@ npm run test:contract    # three Meridian copies in sync (sections, terms, prose
 npm run test:s5          # scenario-5 cold-run vs the FINALIZED contract: agent honesty + 3-band scorer + copy sync
 npm run test:live        # s1+s3+s5 through the real Anthropic provider path (replay mode without a key)
 npm run test:http        # all six scenarios through the LIVE HTTP API + hardening negatives (needs the dev server)
+npm run test:store       # the store gate: the same workshop against JSON files AND a real Postgres engine, compared row by row
+npm run test:cold        # a runtime that is not in memory: what a deployment resolves from the run row
 ```
+
+#### The store gate against a real database
+
+`npm run test:store` proves the store's **SQL** on an in-process Postgres (PGlite), which costs nothing and needs no database. It cannot prove the **adapter** above it — `neonQuery`, the HTTP driver that is the only reason a serverless function can hold a Postgres connection at all — because an in-process engine never goes near it. So the engine is a parameter:
+
+```bash
+DELEGATE_STORE_TEST_URL='postgres://…@ep-…-pooler.neon.tech/delegate-ci' npm run test:store
+```
+
+The same assertions, over the real driver. Three things about that variable are deliberate:
+
+- It is **not** `DATABASE_URL`. A gate that changed substrate on the app's own configuration could be pointed at production by a deploy setting rather than by a deliberate act, and these gates call `clearAll`.
+- The gate **refuses** any database whose name carries no `ci`/`test`/`ephemeral`/`scratch` marker, and names the database it was about to write to. `DELEGATE_STORE_TEST_ALLOW_ANY=1` overrides it for the person who is certain.
+- A shared database is emptied **once per run**, at the start, by a named call the gate makes in the open — not by opening an engine, because the gate opens a *second* engine half way through to prove that rows outlive the connection that wrote them, and a wipe there would empty the subject of its own check. The gate asserts it started empty and prints what the previous run left behind.
+
+One check cannot run against a shared database: the guard that refuses a `delegate_rows` table this store did not create, because the table it plants is named the same as the store's own. That is why the CI job runs the in-process leg **first and unconditionally** — a remote-only run would skip exactly the check that matters most about running against somebody's database.
+
+CI runs both legs in the `store` job, against the `DELEGATE_STORE_TEST_URL` repository secret — the in-process leg with the variable cleared at the step, so it is in-process whatever the job's environment says. Two rules keep the remote leg from being green without having run:
+
+- The leg **asserts** the gate reported a remote engine. A gate that fell back to PGlite passes every check it makes while testing the wrong substrate, which is the one outcome this job exists to prevent.
+- An **empty secret fails the job**, except on a fork pull request, where GitHub passes no secrets and a notice says the leg did not run. Every other event — a same-repository pull request, a push to `main` — is supposed to have the secret, and one that does not leaves the driver untested behind a green tick.
+
+The job shares that one database and empties it before it seeds, so its runs are serialised against every other ref (`ci-store-database`, `cancel-in-progress: false`): two of them at once would clear each other's rows and fail in a way that reads like a store bug.
+
+One coupling to know before bumping the driver. This workspace and the app are installed separately (CI runs `npm ci` and `npm --prefix delegate ci`), and both declare `@neondatabase/serverless` — the workspace because `neonQuery` imports it and the gate compiles and runs from `delegate/dist`, the app because that is what a deployed function runs. Two installs means two copies on disk, and Node resolves an import from the file's own directory upward, so the app's copy of `postgres-store.ts` picks up **this** workspace's `node_modules` first. The two ranges therefore have to move together: a root bump alone would leave the deployed function quietly on the older driver.
 
 ### Week-6 alpha kit
 
@@ -149,9 +176,9 @@ npm run alpha:reset -- --target all --dry-run            # both stores, planned
 npm run alpha:readout -- <cohortId> [archiveDir]         # one-page cohort readout → docs/readout-<cohortId>.md
 ```
 
-The reset covers **two stores**, and the only difference between them is what happens to the rows. The **workshop room** (`delegate/data/`) archives **everything** (sessions, runs, events, scores) with a row-count manifest *before* wiping — alpha data is rubric-rewrite raw material and is never destroyed. The **suite's scratch store** (`.next-e2e/delegate-data`, the `DELEGATE_DATA_DIR` `playwright.config.ts` sets) is wiped outright: it is regenerated with the build the suite runs against and belongs to no participant, so a reset that archived it would be a reset nobody runs. The readout works from the live store *or* any reset archive, so a post-alpha reset loses nothing. Store state: `delegate/data/{sessions,runs,events,scores}.json`; the facilitator grid and scorers read them fresh per request, so a file-level reset is a complete reset — a running server picks the empty store up on its next request. In-memory runtimes go with it: they are per-process and keyed by runId, so a reset invalidates every run id handed out before it — which is exactly the stale `?watch=` link the facilitator console self-heals, and why a reset belongs *between* participants, never during one.
+The reset covers **two stores**, and the only difference between them is what happens to the rows. The **workshop room** archives **everything** (sessions, runs, events, scores) with a row-count manifest *before* wiping — alpha data is rubric-rewrite raw material and is never destroyed. The **suite's scratch store** (`.next-e2e/delegate-data`, the `DELEGATE_DATA_DIR` `playwright.config.ts` sets) is wiped outright: it is regenerated with the build the suite runs against and belongs to no participant, so a reset that archived it would be a reset nobody runs. The readout works from the live store *or* any reset archive, so a post-alpha reset loses nothing. **Both targets go through the store seam, so a deployment is reset by the same command**: with `DELEGATE_STORE=postgres` the rows come from and go back to the database, and the archive is the same four JSON files either way — which is the point, because the archive is already an interchange format (`alpha:readout <cohortId> <dir>` reads one by pointing the file store at it), so a database's rows become a directory the existing tools read with no code that knows where they came from. The archive is a **local** directory whichever store the rows came from: the snapshot belongs on the machine that will read it, and a reset run from a laptop is how a deployed room is reset between participants. The facilitator grid and scorers read the store fresh per request, so a reset is complete — a running server picks the empty store up on its next request. In-memory runtimes go with it: a rebuilt one is `resolveRuntime`'s job across a process boundary, and a reset invalidates every run id handed out before it — which is exactly the stale `?watch=` link the facilitator console self-heals, and why a reset belongs *between* participants, never during one.
 
-An unconfirmed invocation is a **dry run**: nothing is touched without `--yes`, and the plan prints either way, so the command is safe to run blind. `DELEGATE_DATA_DIR` (which the suite sets, and which points this tool at a scratch store in tests) is honoured by both targets; if it names one directory for both, that directory is reset once, with the workshop's archive-then-wipe. A store that does not exist resets as a no-op rather than an error, so the second reset in a row is fine. From the repo root the same tool is `npm run reset:delegate -- --target e2e` (the root script builds the CLI first). `src/alpha/test-reset-store.ts` (`npm run test:reset`) holds the two claims that make it safe: a dry run changes nothing, and the workshop reset moves every row into the archive before wiping.
+An unconfirmed invocation is a **dry run**: nothing is touched without `--yes`, and the plan prints either way, so the command is safe to run blind. On a database the plan names **which** one — host and database, never the password — because a reset run from a laptop against the wrong `DATABASE_URL` is otherwise invisible until it is done. `DELEGATE_DATA_DIR` (which the suite sets, and which points this tool at a scratch store in tests) is honoured by both file targets; if it names one directory for both, that directory is reset once, with the workshop's archive-then-wipe, and the same is true of a database named by both. A store that does not exist resets as a no-op rather than an error, so the second reset in a row is fine. From the repo root the same tool is `npm run reset:delegate -- --target e2e` (the root script builds the CLI first). `src/alpha/test-reset-store.ts` (`npm run test:reset`) holds the claims that make it safe, each proved by planting the state that must trigger it and against **both** backends: a dry run changes nothing (including no DELETE on a database), the workshop reset moves every row into the archive before wiping, the archive is re-read and counted so a short one refuses instead of resetting — with the partial directory removed rather than left where the next readout would misread it — and the two refusals that matter: `DELEGATE_STORE=postgres` with no `DATABASE_URL`, and `--target e2e` against a database, which is a no-op rather than a wipe of the wrong room.
 
 ### Live Anthropic runs
 
