@@ -994,19 +994,26 @@ test('a hydrated toast keeps only its remaining window (no fresh duration)', asy
   await waitForApp(page);
 
   // Seed a user star + an "added" toast whose window is already mostly gone.
-  // After the reload it must auto-dismiss in the ~4s that remain, not a
-  // fresh full window from hydration.
-  await page.evaluate(
-    ({ star, ms }) => {
+  //
+  // The remaining window has to be wide enough to survive THIS test's own
+  // setup. A reload plus a WebGL mount costs ~2-5s, and the window is running
+  // from the moment the seed is written, so a narrow one expires before the
+  // first assertion is even reached — which is how this test came to fail only
+  // in isolation, where the mount is slowest. 9s leaves ~3x headroom over the
+  // measured mount while still being half a fresh window, which is the whole
+  // point: the dismissal below must land near 9s, not 12s.
+  const remainingMs = 9000;
+  const createdAt = await page.evaluate(
+    ({ star, ms, remaining }) => {
       localStorage.setItem('primero-galaxy:user-stars', JSON.stringify([star]));
+      const createdAt = Date.now() - (ms - remaining);
       sessionStorage.setItem(
         'primero-galaxy:pending-toasts',
-        JSON.stringify([
-          { id: 't-remaining', kind: 'added', star, createdAt: Date.now() - (ms - 4000) },
-        ])
+        JSON.stringify([{ id: 't-remaining', kind: 'added', star, createdAt }])
       );
+      return createdAt;
     },
-    { star: makeSeedStar(), ms: TOAST_DURATION_MS }
+    { star: makeSeedStar(), ms: TOAST_DURATION_MS, remaining: remainingMs }
   );
 
   await page.reload();
@@ -1024,11 +1031,32 @@ test('a hydrated toast keeps only its remaining window (no fresh duration)', asy
 
   // The toast survives the reload (still inside its window)…
   const toast = page.getByText('Your company is here.');
-  await expect(toast).toBeVisible({ timeout: 5000 });
+  await expect(toast).toBeVisible({ timeout: 10_000 });
 
-  // …but its timer only has the ~4s remaining: it auto-dismisses well before
-  // a fresh full window post-hydration would have elapsed.
-  await expect(toast).toBeHidden({ timeout: 5000 });
+  // …but its timer only has the remaining window. Read the store rather than
+  // the DOM: the toast has a 350ms exit animation, so "hidden" is a later and
+  // blurrier signal than the dismissal this is actually about. The store drops
+  // it at createdAt + TOAST_DURATION_MS — measured across reloads, dismissal
+  // lands within ~1s of that deadline, so the slack below is a real bound and
+  // not a machine-speed guess.
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => ((window.__galaxy as GalaxyHandle).store.getState().toasts ?? []).length),
+      { timeout: 20_000, intervals: [50] }
+    )
+    .toBe(0);
+
+  const dismissedAt = Date.now();
+  const deadline = createdAt + TOAST_DURATION_MS;
+  // It waited out the remaining window: dismissed no earlier than the deadline
+  // (a 250ms floor in ToastStack can shave the last sliver)…
+  expect(dismissedAt).toBeGreaterThanOrEqual(deadline - 250);
+  // …and no later than a fresh window would allow. A hydration that reset the
+  // timer would dismiss a full TOAST_DURATION_MS after the reload, which is at
+  // least `remainingMs` later than the deadline, so this bound cannot be met by
+  // the bug it guards against.
+  expect(dismissedAt).toBeLessThan(deadline + (TOAST_DURATION_MS - remainingMs) - 1000);
 
   // Dismissal purged the pending entry from sessionStorage too.
   const pending = await page.evaluate(() => {
