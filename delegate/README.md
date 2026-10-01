@@ -150,17 +150,25 @@ The same assertions, over the real driver. Three things about that variable are 
 
 One check cannot run against a shared database: the guard that refuses a `delegate_rows` table this store did not create, because the table it plants is named the same as the store's own. That is why the CI job runs the in-process leg **first and unconditionally** — a remote-only run would skip exactly the check that matters most about running against somebody's database.
 
-CI runs both legs in the `store` job, and the remote leg gets a database of its own: each run **creates a Neon branch, runs the gate against it, and drops it**. Three repository secrets, and what each is for:
+CI runs both legs in the `store` job, and the remote leg gets a database of its own: each run **creates a Neon branch, runs the gate against it, and drops it**.
 
-| secret | what it is |
+**One repository secret is needed. The other two the job used to need, it settles for itself.**
+
+| variable | what it is |
 |---|---|
-| `NEON_API_KEY` | a Neon API key. It authorises three management calls and reaches no gate. |
-| `NEON_PROJECT_ID` | the project those branches live in. |
-| `NEON_PARENT_BRANCH_ID` | a branch kept **empty** for CI to branch from (`br-…`). |
+| `NEON_API_KEY` | a Neon API key. It authorises the management calls and reaches no gate. **Required.** |
+| `NEON_PROJECT_ID` | the project these branches live in. Optional — found or created by name. |
+| `NEON_PARENT_BRANCH_ID` | a branch kept **empty** for CI to branch from (`br-…`). Optional — found or created. |
+
+The first step of the job runs `scripts/neon-secrets.mjs --resolve`, which prints the two ids for `$GITHUB_ENV`. It makes **no call at all** when both are already set, so a repository that has them behaves exactly as it did before; when they are absent it finds the project and the branch by name, or creates each once. So the first run needs the key alone and the hundredth reuses what the first one made.
+
+That step is skipped by the same `NEON_API_KEY != ''` condition as the rest of the remote leg, which is what makes a **fork** pull request safe: GitHub passes it no secrets, so nothing is ever created for one.
+
+The key cannot be minted by a job. It is a credential, so creating one means handling an account password — that one step stays a person's. The two ids are not credentials; they are addresses, and a job holding the key can find or create them. That is the whole difference between one manual step and three.
 
 The parent is named rather than defaulted to the project's default branch because a branch copies its parent's state: branching from a default branch holding a real room would hand the gate somebody's schema, and the run would fail on the store's own `delegate_rows` guard for a reason that has nothing to do with the driver.
 
-All three are set by one command, which creates the project and the empty branch only if they are not already there:
+To set all three as repository secrets instead — useful when you want the project pinned and visible rather than looked up by name — one command does it, creating the project and the empty branch only if they are not already there:
 
 ```bash
 NEON_API_KEY=… npm run secrets:neon -- --apply

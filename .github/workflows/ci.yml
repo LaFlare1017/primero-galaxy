@@ -117,15 +117,25 @@ jobs:
     # connection at all — is the one piece of the deployment path a local run
     # cannot execute, so it is executed here against a real database.
     #
-    # Three secrets, and what each is for:
-    #   NEON_API_KEY           a Neon API key. It authorises three management
+    # One secret is needed, and the two ids it used to need alongside it are
+    # settled by the job itself:
+    #   NEON_API_KEY           a Neon API key. It authorises the management
     #                          calls and reaches no gate.
-    #   NEON_PROJECT_ID        the project these branches live in.
-    #   NEON_PARENT_BRANCH_ID  a branch kept EMPTY for CI to branch from. Named
-    #                          rather than defaulted to the project's default
-    #                          branch because a branch copies its parent's state:
+    #   NEON_PROJECT_ID        optional. The project these branches live in; the
+    #                          resolve step finds or creates one by name when it
+    #                          is not set.
+    #   NEON_PARENT_BRANCH_ID  optional. A branch kept EMPTY for CI to branch
+    #                          from (br-…). Also found or created. Named rather
+    #                          than defaulted to the project's default branch
+    #                          because a branch copies its parent's state:
     #                          branching from a default branch that holds a real
     #                          room would hand the gate somebody's schema.
+    #
+    # A key cannot be minted by a job — it is a credential, so creating one means
+    # handling an account password — which is why that one is still a person. The
+    # two ids are not credentials: they are addresses, and a job that knows the
+    # key can find or create them. That is the whole difference between one
+    # manual step and three.
     #
     # The gate still reads DELEGATE_STORE_TEST_URL and not DATABASE_URL, and the
     # URL is built here rather than stored — a gate that changed substrate on the
@@ -155,6 +165,23 @@ jobs:
       # provide them, which is what the doctor's delegate check reports.
       - run: npm --prefix delegate ci
       - run: npm --prefix delegate run build
+
+      # ── the addresses, settled before anything is created ───────────────
+      #
+      # Prints the two ids as KEY=value for $GITHUB_ENV and makes NO call when
+      # both are already set, so a repository that has them behaves exactly as it
+      # did before this step existed. When they are absent it finds the project
+      # and the branch by name, or creates each once — so a first run needs only
+      # the key, and a hundredth run reuses what the first one made.
+      #
+      # The step runs this repository's own code with the key in its
+      # environment, which the gate steps already do, so it introduces no new
+      # exposure. A FORK pull request is the case worth naming: GitHub passes it
+      # no secrets at all, so NEON_API_KEY is empty, this step is skipped by the
+      # same condition as the ones below it, and nothing is ever created for one.
+      - name: Resolve the Neon project and parent branch
+        if: env.NEON_API_KEY != ''
+        run: node scripts/neon-secrets.mjs --resolve >> "$GITHUB_ENV"
 
       # ── the database, created for this run and destroyed by it ──────────
       #

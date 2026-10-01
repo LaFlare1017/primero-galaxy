@@ -117,6 +117,60 @@ export async function ensureParentBranch(ctx, projectId) {
   return { branch: made.branch, created: true };
 }
 
+/**
+ * The two ids the store CI job branches from, from wherever they can be had.
+ *
+ * This is the whole of the job's setup, and it is the same decision
+ * `--apply` makes — reached from two directions so the two cannot drift. An id
+ * that is already in the environment is used as it is and NO call is made,
+ * which is what keeps a repository that has both secrets behaving exactly as it
+ * did before this existed. Otherwise the project and the branch are found, or
+ * made once, by name.
+ *
+ * Returns `made` describing what it had to create, so the caller can say so.
+ * Refuses rather than returning an empty id, because an empty id downstream is
+ * read by the job as "the remote leg did not run" — a quiet skip where a loud
+ * failure belongs.
+ */
+export async function resolveIds({ apiKey, projectId, parentBranchId }, fetchImpl = fetch) {
+  const needProject = !projectId;
+  const needBranch = !parentBranchId;
+  if (!needProject && !needBranch) {
+    return { projectId, parentBranchId, made: { project: false, branch: false }, calls: 0 };
+  }
+  if (!apiKey) {
+    throw new Error(
+      'NEON_PROJECT_ID and NEON_PARENT_BRANCH_ID are not both set, and NEON_API_KEY is not\n' +
+        '  in the environment, so the missing one cannot be created. The key is a credential\n' +
+        '  a person has to mint at console.neon.tech — this program will not create one.',
+    );
+  }
+  let calls = 0;
+  const ctx = {
+    apiKey,
+    method: 'GET',
+    fetchImpl: (...args) => {
+      calls += 1;
+      return fetchImpl(...args);
+    },
+  };
+  // Each id is settled on its own, because a repository can be half configured:
+  // resolving a missing branch must not look a project up BY NAME and answer
+  // with a different one than the id already in its environment says.
+  const { project, created: madeProject } = needProject
+    ? await ensureProject(ctx)
+    : { project: { id: projectId }, created: false };
+  const { branch, created: madeBranch } = needBranch
+    ? await ensureParentBranch(ctx, project.id)
+    : { branch: { id: parentBranchId }, created: false };
+  return {
+    projectId: project.id,
+    parentBranchId: branch.id,
+    made: { project: madeProject, branch: madeBranch },
+    calls,
+  };
+}
+
 /** Everything `gh secret set` needs, and nothing that could leak the key. */
 export function secretsFor({ apiKey, projectId, parentBranchId }) {
   return [
@@ -158,6 +212,44 @@ export function preflight({ apiKey, repo, argv }) {
   return { repo: repo ?? 'LaFlare1017/primero-galaxy', wantsApply: argv.includes('--apply') };
 }
 
+/**
+ * What `--resolve` produces: the two lines the job appends to `$GITHUB_ENV`,
+ * and the sentence a person reads.
+ *
+ * Returned rather than printed so the self-test can hold the exact contract. The
+ * job redirects this program's stdout straight into `$GITHUB_ENV`, where a stray
+ * line becomes an environment variable nothing reads, and a secret printed by
+ * accident becomes one every later step can see. So this returns the ids and
+ * nothing else, and the note is kept well away from them.
+ */
+export async function resolveFor(env = process.env, fetchImpl = fetch) {
+  const resolved = await resolveIds(
+    {
+      apiKey: (env.NEON_API_KEY ?? '').trim(),
+      projectId: (env.NEON_PROJECT_ID ?? '').trim(),
+      parentBranchId: (env.NEON_PARENT_BRANCH_ID ?? '').trim(),
+    },
+    fetchImpl,
+  );
+  const calls = `${resolved.calls} API call${resolved.calls === 1 ? '' : 's'}`;
+  return {
+    note:
+      `${resolved.made.project ? 'created' : 'reusing'} project ${PROJECT_NAME}; ` +
+      `${resolved.made.branch ? 'created' : 'reusing'} branch ${PARENT_BRANCH_NAME} — ${calls}`,
+    lines: [
+      `NEON_PROJECT_ID=${resolved.projectId}`,
+      `NEON_PARENT_BRANCH_ID=${resolved.parentBranchId}`,
+    ],
+  };
+}
+
+async function resolveMode() {
+  const { note, lines } = await resolveFor();
+  console.error(`  ${note}`);
+  for (const line of lines) console.log(line);
+  return 0;
+}
+
 async function main(argv) {
   if (argv.includes('--help')) {
     console.log(`Provision the Neon secrets the store CI job needs.
@@ -166,12 +258,18 @@ async function main(argv) {
   NEON_API_KEY=… npm run secrets:neon -- --apply
                                        create/reuse the project and empty parent branch,
                                        then set the three repository secrets
+  node scripts/neon-secrets.mjs --resolve
+                                       what CI runs: print NEON_PROJECT_ID and
+                                       NEON_PARENT_BRANCH_ID for $GITHUB_ENV, finding or
+                                       creating each unless both are already set
   npm run secrets:neon -- --self-test  check the decision logic against a stub, writing nothing
 
 The API key is read from NEON_API_KEY, never from the command line. It is not
 minted here: make one at console.neon.tech → Account Settings → API keys.`);
     return 0;
   }
+
+  if (argv.includes('--resolve')) return resolveMode();
 
   const apiKey = (process.env.NEON_API_KEY ?? '').trim();
   const { repo, wantsApply } = preflight({ apiKey, repo: process.env.NEON_REPO, argv });
@@ -377,6 +475,102 @@ function selfTest() {
       dryOk = false;
     }
     check('the default run needs no key, because it calls nothing', dryOk, 'preflight passed with an empty argv');
+
+    // ── what CI asks: resolve the two ids from whatever is to hand ─────────
+    const recorder = () => {
+      const seen = [];
+      const stubFetch = async (url, init = {}) => {
+        const method = init.method ?? 'GET';
+        const path = url.replace(API, '');
+        seen.push(`${method} ${path}`);
+        // Every id is already present, so nothing this stub is asked to do
+        // creates anything: the question each check asks is which calls were
+        // made, not what came back.
+        const body = path === '/projects'
+          ? { projects: [project] }
+          : path.endsWith('/branches')
+            ? { branches: [branch] }
+            : {};
+        return { ok: true, status: 200, text: async () => JSON.stringify(body) };
+      };
+      return { seen, stubFetch };
+    };
+
+    let settled = null;
+    {
+      const { seen, stubFetch } = recorder();
+      settled = await resolveIds(
+        { apiKey: 'k', projectId: 'proj-1', parentBranchId: 'br-1' },
+        stubFetch,
+      );
+      check(
+        'two ids already set are used as they are, with no call at all',
+        settled.calls === 0 && seen.length === 0 && settled.projectId === 'proj-1',
+        `${seen.length} call(s): ${seen.join(', ') || 'none'}`,
+      );
+    }
+
+    {
+      const { seen, stubFetch } = recorder();
+      settled = await resolveIds({ apiKey: 'k', projectId: '', parentBranchId: '' }, stubFetch);
+      check(
+        'no ids set means the project and branch are found or made, from the key alone',
+        settled.projectId === 'proj-1' &&
+          settled.parentBranchId === 'br-1' &&
+          settled.calls === 2 &&
+          !settled.made.project &&
+          !settled.made.branch,
+        `${settled.calls} call(s): ${seen.join(', ')}`,
+      );
+    }
+
+    {
+      // The half-configured case, and the one that would be easy to get wrong.
+      const { seen, stubFetch } = recorder();
+      settled = await resolveIds(
+        { apiKey: 'k', projectId: 'proj-CONFIGURED', parentBranchId: '' },
+        stubFetch,
+      );
+      check(
+        'a configured project id is kept, and only the branch is looked up under it',
+        settled.projectId === 'proj-CONFIGURED' &&
+          seen.length === 1 &&
+          seen[0] === 'GET /projects/proj-CONFIGURED/branches',
+        `looked up ${seen.join(', ') || 'nothing'}`,
+      );
+    }
+
+    {
+      let refused = '(nothing thrown)';
+      try {
+        await resolveIds({ apiKey: '', projectId: '', parentBranchId: '' }, async () => {
+          throw new Error('a call was made with no key');
+        });
+      } catch (error) {
+        refused = error.message;
+      }
+      check(
+        'nothing to hand and no key is a refusal, not an empty id',
+        refused.includes('NEON_API_KEY') && refused.includes('console.neon.tech'),
+        refused.split('\n')[0],
+      );
+    }
+
+    {
+      // The contract the CI job depends on: stdout is appended to $GITHUB_ENV,
+      // so it must be the two ids and NOTHING else — not the note, not a warning.
+      const { seen, stubFetch } = recorder();
+      const out = await resolveFor({ NEON_API_KEY: 'k' }, stubFetch);
+      check(
+        'what the job appends to $GITHUB_ENV is the two ids and nothing else',
+        out.lines.length === 2 &&
+          out.lines[0] === 'NEON_PROJECT_ID=proj-1' &&
+          out.lines[1] === 'NEON_PARENT_BRANCH_ID=br-1' &&
+          !out.lines.some((line) => line.includes(' ')) &&
+          !out.note.startsWith('NEON_'),
+        `${out.lines.length} line(s): ${out.lines.join(' | ')}`,
+      );
+    }
 
     console.log(failures === 0 ? '\nall neon-secret checks passed' : `\n${failures} neon-secret check(s) FAILED`);
     return failures === 0 ? 0 : 1;
