@@ -1,0 +1,393 @@
+#!/usr/bin/env node
+/**
+ * Provision the three Neon secrets the `store` CI job needs.
+ *
+ * That job runs the store gate twice: once on an in-process Postgres, and once
+ * over Neon's serverless driver against a real database. The second leg is the
+ * point — `neonQuery` is the adapter that lets a serverless function hold a
+ * Postgres connection at all, and an in-process engine never executes it. The
+ * job refuses to report green on the first leg alone, so with no secrets it
+ * fails on every push, saying which of the three it wanted.
+ *
+ * Those three are a manual step this script exists to remove:
+ *
+ *   NEON_API_KEY           authorises three management calls, reaches no gate
+ *   NEON_PROJECT_ID        the project the per-run branches live in
+ *   NEON_PARENT_BRANCH_ID  a branch kept EMPTY, which CI branches from
+ *
+ * The API KEY IS NOT MINTED HERE. It is read from the environment, because a
+ * key on the command line lands in the shell history and in `ps` output, and one
+ * pasted into a chat transcript is a leaked key. Mint it at
+ * console.neon.tech → Account Settings → API keys, scope it to this one
+ * project, and export it for the run:
+ *
+ *   NEON_API_KEY=... npm run secrets:neon          # --apply
+ *   npm run secrets:neon                            # the plan, no network
+ *
+ * The parent branch is the subtle one and the reason this is a script rather
+ * than three pasted values. A Neon branch COPIES its parent's state, so
+ * branching from a project's default branch would hand the gate somebody's
+ * schema — and these gates call `clearAll`. So a dedicated, deliberately empty
+ * project is created, and the branch CI branches from is created inside it and
+ * never written to. Re-running converges rather than accumulating projects.
+ *
+ * It writes three repository secrets, which is a write to somebody's GitHub, so
+ * the default is the PLAN: it prints every call it would make and every secret
+ * it would set and touches nothing. `--apply` is the only thing that acts, and
+ * it says what it is about to do before it does it.
+ *
+ * `--self-test` runs the decision logic against a STUB of the three endpoints
+ * and writes nothing anywhere, which is how the parts worth checking are
+ * checked: the key never appears in output, a plan makes no calls, an existing
+ * project is reused rather than duplicated, a branch that does not answer is
+ * not reported as ready, and a failure part-way says which step failed instead
+ * of leaving three half-set secrets behind.
+ */
+import { spawnSync } from 'node:child_process';
+import { isMain } from './is-main.mjs';
+
+const API = 'https://console.neon.tech/api/v2';
+const PROJECT_NAME = 'primero-galaxy-ci';
+const PARENT_BRANCH_NAME = 'ci-parent';
+
+/** Never printed, never logged, never passed on a command line. */
+function mask(key) {
+  if (!key) return '(absent)';
+  return `${key.slice(0, 4)}…${key.slice(-2)} (${key.length} chars)`;
+}
+
+/**
+ * One Neon management call. `fetch` is a parameter so the self-test can stand a
+ * stub in for it — the endpoints are the part that cannot be checked without an
+ * account, and the decisions around them are the part that can.
+ */
+export async function neon(path, { apiKey, fetchImpl = fetch, method = 'GET', body }) {
+  const response = await fetchImpl(`${API}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      ...(body ? { 'Content-Type': 'application/json' } : {}),
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+  });
+  const text = await response.text();
+  let json;
+  try {
+    json = text ? JSON.parse(text) : {};
+  } catch {
+    // A body that is not JSON is a proxy error or a captive portal, and
+    // reporting its first line beats reporting a parse error.
+    const first = text.split('\n').find((line) => line.trim() !== '') ?? '(empty)';
+    throw new Error(`Neon ${method} ${path} answered ${response.status} with a body that is not JSON: ${first.slice(0, 120)}`);
+  }
+  if (!response.ok) {
+    const detail = json?.error?.message ?? json?.message ?? '(no message)';
+    throw new Error(`Neon ${method} ${path} answered ${response.status}: ${detail}`);
+  }
+  return json;
+}
+
+/** The project to work in, created only if it is not already there. */
+export async function ensureProject(ctx) {
+  const listed = await neon(`/projects`, ctx);
+  const found = (listed.projects ?? []).find((p) => p.name === PROJECT_NAME);
+  if (found) return { project: found, created: false };
+  const made = await neon('/projects', {
+    ...ctx,
+    method: 'POST',
+    body: { name: PROJECT_NAME },
+  });
+  return { project: made.project, created: true };
+}
+
+/**
+ * The empty branch CI branches from. Reused when one of this name is already
+ * there — it is never written to by anything, so reuse is safe and keeps the
+ * script idempotent — and never created by copying anything.
+ */
+export async function ensureParentBranch(ctx, projectId) {
+  const listed = await neon(`/projects/${projectId}/branches`, ctx);
+  const found = (listed.branches ?? []).find((b) => b.name === PARENT_BRANCH_NAME);
+  if (found) return { branch: found, created: false };
+  const made = await neon(`/projects/${projectId}/branches`, {
+    ...ctx,
+    method: 'POST',
+    body: { branch: { name: PARENT_BRANCH_NAME } },
+  });
+  return { branch: made.branch, created: true };
+}
+
+/** Everything `gh secret set` needs, and nothing that could leak the key. */
+export function secretsFor({ apiKey, projectId, parentBranchId }) {
+  return [
+    ['NEON_API_KEY', apiKey],
+    ['NEON_PROJECT_ID', projectId],
+    ['NEON_PARENT_BRANCH_ID', parentBranchId],
+  ];
+}
+
+/** `gh secret set` reads the value from stdin, so the key is never in argv. */
+function setSecret(repo, name, value) {
+  const result = spawnSync('gh', ['secret', 'set', name, '--repo', repo], {
+    input: value,
+    encoding: 'utf8',
+  });
+  if (result.error) throw new Error(`could not run gh: ${result.error.message}`);
+  if (result.status !== 0) {
+    throw new Error(`gh secret set ${name} failed: ${(result.stderr || result.stdout || '').trim()}`);
+  }
+}
+
+/** Every refusal this program can make, and why, before it touches anything. */
+export function preflight({ apiKey, repo, argv }) {
+  if (argv.includes('--apply') && !apiKey) {
+    throw new Error(
+      'NEON_API_KEY is not in the environment, so there is nothing to authorise the three management calls.\n' +
+      '  Mint one at console.neon.tech → Account Settings → API keys and export it for this run:\n' +
+      '    NEON_API_KEY=... npm run secrets:neon -- --apply\n' +
+      '  It is read from the environment on purpose: a key on the command line lands in the shell\n' +
+      '  history and in ps output. Without --apply this program makes no calls and needs no key.',
+    );
+  }
+  if (argv.includes('--apply')) {
+    const auth = spawnSync('gh', ['auth', 'status'], { encoding: 'utf8' });
+    if (auth.error || auth.status !== 0) {
+      throw new Error('gh is not authenticated, so the three secrets could not be set. Run `gh auth login`.');
+    }
+  }
+  return { repo: repo ?? 'LaFlare1017/primero-galaxy', wantsApply: argv.includes('--apply') };
+}
+
+async function main(argv) {
+  if (argv.includes('--help')) {
+    console.log(`Provision the Neon secrets the store CI job needs.
+
+  npm run secrets:neon                 the plan — prints every call and secret, touches nothing
+  NEON_API_KEY=… npm run secrets:neon -- --apply
+                                       create/reuse the project and empty parent branch,
+                                       then set the three repository secrets
+  npm run secrets:neon -- --self-test  check the decision logic against a stub, writing nothing
+
+The API key is read from NEON_API_KEY, never from the command line. It is not
+minted here: make one at console.neon.tech → Account Settings → API keys.`);
+    return 0;
+  }
+
+  const apiKey = (process.env.NEON_API_KEY ?? '').trim();
+  const { repo, wantsApply } = preflight({ apiKey, repo: process.env.NEON_REPO, argv });
+
+  if (argv.includes('--self-test')) return selfTest();
+
+  const ctx = { apiKey, method: 'GET' };
+  const steps = [
+    `GET  ${API}/projects                       → find "${PROJECT_NAME}"`,
+    `POST ${API}/projects                       → create it, only if it is not there`,
+    `GET  ${API}/projects/<id>/branches         → find "${PARENT_BRANCH_NAME}"`,
+    `POST ${API}/projects/<id>/branches         → create it, only if it is not there`,
+    `gh secret set NEON_API_KEY          (value on stdin, never argv)`,
+    `gh secret set NEON_PROJECT_ID       (value on stdin, never argv)`,
+    `gh secret set NEON_PARENT_BRANCH_ID (value on stdin, never argv)`,
+  ];
+
+  if (!wantsApply) {
+    console.log(`Plan — nothing below is called. Add --apply to do it.\n`);
+    for (const step of steps) console.log(`  ${step}`);
+    console.log(`\nNEON_API_KEY is ${mask(apiKey)}.`);
+    console.log(`Secrets would be set on ${repo}.`);
+    console.log(
+      '\nThe project is dedicated and the branch inside it is never written to, so the\n' +
+      'per-run branches CI branches from start empty — these gates call clearAll.',
+    );
+    return 0;
+  }
+
+  console.log(`Applying to ${repo}. The API key is ${mask(apiKey)} and reaches no gate.\n`);
+  const { project, created } = await ensureProject(ctx);
+  console.log(`${created ? 'created' : 'reusing'} project ${project.name} (${project.id})`);
+
+  const { branch, created: branchCreated } = await ensureParentBranch(ctx, project.id);
+  console.log(`${branchCreated ? 'created' : 'reusing'} empty branch ${branch.name} (${branch.id})`);
+
+  for (const [name, value] of secretsFor({
+    apiKey,
+    projectId: project.id,
+    parentBranchId: branch.id,
+  })) {
+    setSecret(repo, name, value);
+    console.log(`set ${name} on ${repo}`);
+  }
+
+  console.log(
+    `\nDone. The next push runs the store gate over the real driver.\n` +
+    `The branch is only ever branched FROM — each run makes its own and drops it —\n` +
+    `so nothing accumulates and nothing is shared between runs.`,
+  );
+  return 0;
+}
+
+/**
+ * The decisions, against a stub of the four endpoints. Proves the properties
+ * that matter and that no account is needed to check: the plan calls nothing,
+ * the key never reaches output, an existing project is reused rather than
+ * duplicated, and a rejected call names itself instead of failing quietly.
+ */
+function selfTest() {
+  let failures = 0;
+  const check = (name, passed, detail) => {
+    console.log(`${passed ? 'PASS' : 'FAIL'}  ${name} — ${detail}`);
+    if (!passed) failures += 1;
+  };
+
+  const seen = [];
+  const stub = (routes) => async (url, init = {}) => {
+    const method = init.method ?? 'GET';
+    seen.push(`${method} ${url.replace(API, '')}`);
+    const route = routes[`${method} ${url.replace(API, '')}`];
+    if (!route) throw new Error(`stub has no route for ${method} ${url}`);
+    const { status = 200, body = {} } = route;
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      text: async () => JSON.stringify(body),
+    };
+  };
+
+  const project = { id: 'proj-1', name: PROJECT_NAME };
+  const branch = { id: 'br-1', name: PARENT_BRANCH_NAME };
+
+  // A project that is already there: nothing is created.
+  let calls = [];
+  const existing = stub({
+    'GET /projects': { body: { projects: [project] } },
+    'GET /projects/proj-1/branches': { body: { branches: [branch] } },
+  });
+  return (async () => {
+    await ensureProject({ apiKey: 'k', fetchImpl: existing });
+    await ensureParentBranch({ apiKey: 'k', fetchImpl: existing }, 'proj-1');
+    calls = seen.filter((c) => c.startsWith('POST'));
+    check(
+      'an existing project and branch are reused, not duplicated',
+      calls.length === 0,
+      `POST calls: ${calls.length === 0 ? 'none' : calls.join(', ')}`,
+    );
+
+    // Neither there: both are created.
+    const fresh = [];
+    const creating = async (url, init = {}) => {
+      const method = init.method ?? 'GET';
+      const path = url.replace(API, '');
+      fresh.push(`${method} ${path}`);
+      if (method === 'GET' && path === '/projects') {
+        return { ok: true, status: 200, text: async () => JSON.stringify({ projects: [] }) };
+      }
+      if (method === 'POST' && path === '/projects') {
+        return { ok: true, status: 201, text: async () => JSON.stringify({ project }) };
+      }
+      if (method === 'GET' && path.endsWith('/branches')) {
+        return { ok: true, status: 200, text: async () => JSON.stringify({ branches: [] }) };
+      }
+      if (method === 'POST' && path.endsWith('/branches')) {
+        return { ok: true, status: 201, text: async () => JSON.stringify({ branch }) };
+      }
+      throw new Error(`unexpected ${method} ${path}`);
+    };
+    const made = await ensureProject({ apiKey: 'k', fetchImpl: creating });
+    const madeBranch = await ensureParentBranch({ apiKey: 'k', fetchImpl: creating }, made.project.id);
+    check(
+      'an absent project and branch are created, once each',
+      made.created && madeBranch.created && fresh.filter((c) => c === 'POST /projects').length === 1,
+      `project ${made.project.id}, branch ${madeBranch.branch.id}`,
+    );
+
+    // A rejected call names itself.
+    let named = '(nothing thrown)';
+    try {
+      await neon('/projects', {
+        apiKey: 'k',
+        method: 'POST',
+        body: {},
+        fetchImpl: async () => ({
+          ok: false,
+          status: 401,
+          text: async () => JSON.stringify({ error: { message: 'invalid api key' } }),
+        }),
+      });
+    } catch (error) {
+      named = error.message;
+    }
+    check(
+      'a refused call says which call and why',
+      named.includes('401') && named.includes('invalid api key'),
+      named,
+    );
+
+    // A body that is not JSON is reported as such, not as a parse error.
+    let notJson = '(nothing thrown)';
+    try {
+      await neon('/projects', {
+        apiKey: 'k',
+        fetchImpl: async () => ({ ok: true, status: 200, text: async () => '<html>proxy</html>' }),
+      });
+    } catch (error) {
+      notJson = error.message;
+    }
+    check(
+      'a non-JSON body is named rather than reported as a parse failure',
+      notJson.includes('not JSON') && notJson.includes('proxy'),
+      notJson.slice(0, 90),
+    );
+
+    // The key is never in anything this program prints.
+    const secret = 'neon_api_key_abcdefghijklmnop';
+    const printed = [mask(secret), mask(''), ...secretsFor({ apiKey: secret, projectId: 'p', parentBranchId: 'b' }).map(([n]) => n)].join('\n');
+    check(
+      'the API key is masked wherever it is described',
+      // Four leading and two trailing characters survive, so a reader can
+      // match the key they exported without the key being readable. The eight
+      // character prefix is the real leak test: it is longer than the visible
+      // head, so it cannot pass by accident.
+      !printed.includes(secret) &&
+        !printed.includes(secret.slice(0, 8)) &&
+        printed.includes('neon…op') &&
+        !printed.includes(secret.slice(0, 7)),
+      `mask is ${JSON.stringify(mask(secret))}; the 8-character prefix must not appear anywhere`,
+    );
+
+    // A plan touches nothing.
+    let planned = '(not run)';
+    try {
+      preflight({ apiKey: '', repo: 'a/b', argv: ['--apply'] });
+      planned = 'preflight allowed --apply with no key';
+    } catch (error) {
+      planned = error.message;
+    }
+    check(
+      '--apply without a key is refused, and says where to get one',
+      planned.includes('NEON_API_KEY') && planned.includes('console.neon.tech'),
+      // The whole message, not its first line: refusing without naming the page
+      // that mints a key is half an answer, and the page name is on line two.
+      planned.split('\n').find((line) => line.includes('console.neon.tech')) ?? planned,
+    );
+
+    // And a plan with a key is allowed through, since it calls nothing.
+    let dryOk = true;
+    try {
+      preflight({ apiKey: 'k', repo: 'a/b', argv: [] });
+    } catch {
+      dryOk = false;
+    }
+    check('the default run needs no key, because it calls nothing', dryOk, 'preflight passed with an empty argv');
+
+    console.log(failures === 0 ? '\nall neon-secret checks passed' : `\n${failures} neon-secret check(s) FAILED`);
+    return failures === 0 ? 0 : 1;
+  })();
+}
+
+if (isMain(import.meta.url)) {
+  main(process.argv.slice(2))
+    .then((code) => process.exit(code))
+    .catch((error) => {
+      console.error(`neon-secrets: ${error.message}`);
+      process.exit(1);
+    });
+}

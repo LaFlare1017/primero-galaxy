@@ -160,6 +160,14 @@ CI runs both legs in the `store` job, and the remote leg gets a database of its 
 
 The parent is named rather than defaulted to the project's default branch because a branch copies its parent's state: branching from a default branch holding a real room would hand the gate somebody's schema, and the run would fail on the store's own `delegate_rows` guard for a reason that has nothing to do with the driver.
 
+All three are set by one command, which creates the project and the empty branch only if they are not already there:
+
+```bash
+NEON_API_KEY=… npm run secrets:neon -- --apply
+```
+
+Without `--apply` it prints the plan and touches nothing, so it is safe to run to see what it would do. The key is read from the environment rather than a flag because a key on a command line lands in the shell history and in `ps` output; `gh secret set` reads each value from stdin, so it never appears in a command line either. Mint a key at **console.neon.tech → Account Settings → API keys** — the script will not do that for you, since it would mean handling your account password. `npm run secrets:neon -- --self-test` checks the decisions it makes around those calls without an account and without writing anything.
+
 A branch per run is what removed the queue. The job used to serialise itself against every other ref (`ci-store-database`, `cancel-in-progress: false`) because two runs sharing one database clear each other's rows and fail in a way that reads like a store bug, and cancelling mid-wipe left the next run a half-seeded room. With nothing shared there is nothing to serialise, so the group is gone and a superseded run is cancelled like any other.
 
 Three details of the branch's life are load-bearing:
