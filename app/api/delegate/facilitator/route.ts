@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { EventLog } from "@/delegate/src/runtime/events";
+import { EventLog, latestRunFor } from "@/delegate/src/runtime/events";
 import { agentWorkingForRun } from "@/delegate/src/runtime/history";
 import { readScores } from "@/delegate/src/report/score-store";
 import { readFileSync, existsSync } from "fs";
@@ -38,8 +38,12 @@ export async function GET() {
   const scores = await readScores();
 
   const rows = sessions.map((session) => {
-    const sessionRuns = runs.filter((r) => r.sessionId === session.id);
-    const current = sessionRuns[sessionRuns.length - 1];
+    // The participant's CURRENT run is the one that started last — found by its
+    // own `startedAt`, not by its position in the store's insertion order. See
+    // `latestRunFor`: on a deployment where two runs' flushes interleave, the
+    // positional pick returned the OLDER run, and every field on this row was
+    // then about the wrong one.
+    const current = latestRunFor(runs, session.id);
     const runScore = current ? scores.filter((s) => s.runId === current.id) : [];
     const interception = runScore.find((s) => s.dimension === "error_interception");
     const flagged = runScore.find((s) => s.flaggedBehavior)?.flaggedBehavior;

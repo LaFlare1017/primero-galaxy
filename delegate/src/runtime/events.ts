@@ -72,6 +72,38 @@ export interface DelegateSession {
  */
 const newId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+/**
+ * The run a session is currently on: the one that started last.
+ *
+ * Found by the run's OWN `startedAt`, never by its position in the array the
+ * store handed back. That order is insertion order — `seq` in SQL, the file's
+ * own order otherwise — and insertion order is a storage artifact, not a fact
+ * about the participant. It diverges from start order whenever two runs'
+ * flushes interleave: a session POST starts a run with no guard against
+ * another in flight, and on a deployment each invocation flushes on its own, so
+ * the run stamped earlier can be INSERTED after the one stamped later and so
+ * take the higher `seq`. A positional pick then returns the older run, and
+ * everything derived from it — scenario, elapsed clock, submitted status,
+ * detection, the copy-run-link URL — is about the wrong run.
+ *
+ * The tie-break is the id rather than the position, because `startedAt` has
+ * millisecond resolution and two runs can share a millisecond. The id is
+ * `run-<epochms>-<random>`, so the comparison is deterministic and identical on
+ * both backends — a positional tie-break would be whatever the storage did.
+ */
+export function latestRunFor(runs: ScenarioRun[], sessionId: string): ScenarioRun | undefined {
+  let latest: ScenarioRun | undefined;
+  for (const run of runs) {
+    if (run.sessionId !== sessionId) continue;
+    if (!latest || run.startedAt > latest.startedAt) {
+      latest = run;
+    } else if (run.startedAt === latest.startedAt && run.id > latest.id) {
+      latest = run;
+    }
+  }
+  return latest;
+}
+
 export class EventLog {
   private events: DelegateEvent[] = [];
   private runs: ScenarioRun[] = [];

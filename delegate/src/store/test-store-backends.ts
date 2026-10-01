@@ -50,7 +50,7 @@
 import { mkdtempSync, rmSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { EventLog } from "../runtime/events";
+import { EventLog, latestRunFor, type ScenarioRun } from "../runtime/events";
 import { persistScores, readScores } from "../report/score-store";
 import type { Score } from "../scoring/scorers";
 import { fileStore } from "./file-store";
@@ -375,6 +375,54 @@ async function parity(root: string): Promise<void> {
   );
   await mixedFiles.clear("events");
   await postgres.clear("events");
+
+  // 4c. A caller must pick the LATEST RUN by the run's own key, not by its
+  //     position in what the store handed back. This is the store-order
+  //     distrust that check 4b is the mechanism for, aimed at a real caller:
+  //     the facilitator grid derives a whole row — scenario, elapsed clock,
+  //     submitted status, detection, and the copy-run-link URL — from
+  //     `sessionRuns[sessionRuns.length - 1]`, which is a POSITION in an
+  //     insertion-ordered list. Insertion order is a storage artifact: two runs
+  //     started seconds apart whose flushes interleave give the EARLIER run the
+  //     higher `seq`, and the grid then showed the participant on the scenario
+  //     they had already left.
+  //
+  //     The rows are planted in the wrong order on purpose, and the assertion is
+  //     that the key-based derivation and the positional one DISAGREE — so this
+  //     fails if `latestRunFor` ever reaches for the array again.
+  const interleaved = [
+    { id: "run-1700000002000-bbbbbb", sessionId: "sess-order", scenarioId: "s5", startedAt: "2026-09-30T10:00:02.000Z" },
+    { id: "run-1700000000000-aaaaaa", sessionId: "sess-order", scenarioId: "s1", startedAt: "2026-09-30T10:00:00.000Z" },
+  ];
+  const byPosition = interleaved.filter((r) => r.sessionId === "sess-order").slice(-1)[0];
+  const byKey = latestRunFor(interleaved as unknown as ScenarioRun[], "sess-order");
+  check(
+    "the latest run is found by its startedAt, not by its position in the store's order",
+    byPosition?.scenarioId === "s1" && byKey?.scenarioId === "s5",
+    `position picks ${byPosition?.scenarioId} (started first), the key picks ${byKey?.scenarioId} (started last) — the grid derives its whole row from this`,
+  );
+  check(
+    "…and it agrees whichever order the store returned those rows in",
+    latestRunFor([...interleaved].reverse() as unknown as ScenarioRun[], "sess-order")?.id === byKey?.id &&
+      latestRunFor(interleaved as unknown as ScenarioRun[], "sess-order")?.id === byKey?.id,
+    "a positional pick would flip when the store's order did; this one cannot",
+  );
+  check(
+    "two runs sharing a millisecond are separated by id, not by position",
+    latestRunFor(
+      [
+        { id: "run-1700000000000-aaaaaa", sessionId: "sess-tie", scenarioId: "s1", startedAt: "2026-09-30T10:00:00.000Z" },
+        { id: "run-1700000000000-bbbbbb", sessionId: "sess-tie", scenarioId: "s2", startedAt: "2026-09-30T10:00:00.000Z" },
+      ] as unknown as ScenarioRun[],
+      "sess-tie",
+    )?.id === "run-1700000000000-bbbbbb",
+    "startedAt ties on a millisecond, so the id decides — deterministically, on either backend",
+  );
+  check(
+    "a session with no runs has no current run, rather than the last one in the table",
+    latestRunFor(interleaved as unknown as ScenarioRun[], "sess-nobody") === undefined,
+    "another session's runs are not this session's current run",
+  );
 
   // 5. A different engine, later, against the same files. This is the whole
   //    reason the store exists, so it is checked on its own rather than as a
