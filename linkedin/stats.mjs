@@ -292,7 +292,15 @@ function ledgerRows() {
 export function facts() {
   const eraCommits = eraLength();
   const repoCommits = Number(git('rev-list', '--count', 'HEAD'));
-  const date = git('log', '-1', '--format=%cs');
+  // The date the numbers were read is the date of the last commit that actually
+  // CHANGED something — so merges are skipped. `git log -1` alone reads
+  // whatever HEAD is, and on a pull request that is GitHub's synthetic merge
+  // commit, dated at the moment the run started: this check then reported
+  // "1 quoted number disagrees" on a pull request whose numbers had not moved,
+  // and only after UTC midnight, which is the worst possible way for a copy
+  // check to fail. The pack's claim is about a commit's content, so it takes a
+  // commit's date.
+  const date = git('log', '-1', '--no-merges', '--format=%cs');
 
   const declaredKeyboards = DECLARATIONS.length;
   const declarationLines = sum(DECLARATIONS.map((file) => lineCount(read(file))));
