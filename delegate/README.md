@@ -174,7 +174,16 @@ To set all three as repository secrets instead — useful when you want the proj
 NEON_API_KEY=… npm run secrets:neon -- --apply
 ```
 
-Without `--apply` it prints the plan and touches nothing, so it is safe to run to see what it would do. The key is read from the environment rather than a flag because a key on a command line lands in the shell history and in `ps` output; `gh secret set` reads each value from stdin, so it never appears in a command line either. Mint a key at **console.neon.tech → Account Settings → API keys** — the script will not do that for you, since it would mean handling your account password. `npm run secrets:neon -- --self-test` checks the decisions it makes around those calls without an account and without writing anything.
+Without `--apply` it prints the plan and touches nothing, so it is safe to run to see what it would do. The key is read from the environment rather than a flag because a key on a command line lands in the shell history and in `ps` output; `gh secret set` reads each value from stdin, so it never appears in a command line either. Mint a key at **console.neon.tech → Account Settings → API keys** — the script will not do that for you, since it would mean handling your account password.
+
+Two modes check it without an account, and both are run by the repo doctor on every commit, so a script that stops working says so at the commit that broke it rather than at the next push that needs an account:
+
+```bash
+npm run secrets:neon -- --self-test      # the decisions, against a stubbed fetch
+npm run secrets:neon -- --self-test-e2e  # the create path, over real HTTP
+```
+
+The second is the one that finds things the first cannot. `--self-test` proves the program chose to create; `--self-test-e2e` stands a fake console up on localhost — the same paths, the same status codes, a 409 on a duplicate name and a 400 on a malformed body — and runs the create against it, then runs it again to prove the second run creates nothing and lands on the same ids. A branch created with `{ name }` instead of `{ branch: { name } }` is a 400 from the real console and a cheerful 201 from a stub written by whoever got it wrong; that check is the difference.
 
 A branch per run is what removed the queue. The job used to serialise itself against every other ref (`ci-store-database`, `cancel-in-progress: false`) because two runs sharing one database clear each other's rows and fail in a way that reads like a store bug, and cancelling mid-wipe left the next run a half-seeded room. With nothing shared there is nothing to serialise, so the group is gone and a superseded run is cancelled like any other.
 

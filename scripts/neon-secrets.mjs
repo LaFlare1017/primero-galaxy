@@ -42,13 +42,37 @@
  * project is reused rather than duplicated, a branch that does not answer is
  * not reported as ready, and a failure part-way says which step failed instead
  * of leaving three half-set secrets behind.
+ *
+ * `--self-test-e2e` runs that same create path against a FAKE CONSOLE on
+ * localhost -- over real HTTP, on the console's own paths, answering with the
+ * status codes it answers with -- and writes nothing anywhere either. The stub
+ * above proves the decisions; this proves the requests, which is where a bug
+ * hides that never announces itself. A branch created with `{ name }` instead
+ * of `{ branch: { name } }` is a 400 from the real console and a cheerful 201
+ * from a stub written by whoever got it wrong. Both modes run from the repo
+ * doctor on every commit, so neither needs an account to keep working.
  */
 import { spawnSync } from 'node:child_process';
+import { createServer } from 'node:http';
 import { isMain } from './is-main.mjs';
 
-const API = 'https://console.neon.tech/api/v2';
+const DEFAULT_API = 'https://console.neon.tech/api/v2';
 const PROJECT_NAME = 'primero-galaxy-ci';
 const PARENT_BRANCH_NAME = 'ci-parent';
+
+/**
+ * Where the management calls go. Settable because a stubbed `fetch` proves the
+ * decisions but not the REQUESTS -- the URL, the method, the JSON body, the
+ * status a real console answers with. `--self-test-e2e` points this at a server
+ * on localhost, which is the only way to see those without an account.
+ *
+ * `NEON_API_URL` is for pointing at a different console, not for testing: the
+ * end-to-end check passes its base explicitly instead, so nothing in production
+ * depends on this variable being right.
+ */
+function apiBase(env = process.env) {
+  return (env.NEON_API_URL ?? '').trim() || DEFAULT_API;
+}
 
 /** Never printed, never logged, never passed on a command line. */
 function mask(key) {
@@ -61,8 +85,8 @@ function mask(key) {
  * stub in for it — the endpoints are the part that cannot be checked without an
  * account, and the decisions around them are the part that can.
  */
-export async function neon(path, { apiKey, fetchImpl = fetch, method = 'GET', body }) {
-  const response = await fetchImpl(`${API}${path}`, {
+export async function neon(path, { apiKey, base = apiBase(), fetchImpl = fetch, method = 'GET', body }) {
+  const response = await fetchImpl(`${base}${path}`, {
     method,
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -132,7 +156,7 @@ export async function ensureParentBranch(ctx, projectId) {
  * read by the job as "the remote leg did not run" — a quiet skip where a loud
  * failure belongs.
  */
-export async function resolveIds({ apiKey, projectId, parentBranchId }, fetchImpl = fetch) {
+export async function resolveIds({ apiKey, projectId, parentBranchId, base = apiBase() }, fetchImpl = fetch) {
   const needProject = !projectId;
   const needBranch = !parentBranchId;
   if (!needProject && !needBranch) {
@@ -149,6 +173,10 @@ export async function resolveIds({ apiKey, projectId, parentBranchId }, fetchImp
   const ctx = {
     apiKey,
     method: 'GET',
+    // Carried explicitly. Without it every call inside these two helpers falls
+    // back to the default console, which is right in production and makes the
+    // whole path untestable -- a stubbed `fetch` still reaches the network.
+    base,
     fetchImpl: (...args) => {
       calls += 1;
       return fetchImpl(...args);
@@ -222,12 +250,13 @@ export function preflight({ apiKey, repo, argv }) {
  * accident becomes one every later step can see. So this returns the ids and
  * nothing else, and the note is kept well away from them.
  */
-export async function resolveFor(env = process.env, fetchImpl = fetch) {
+export async function resolveFor(env = process.env, fetchImpl = fetch, base = apiBase(env)) {
   const resolved = await resolveIds(
     {
       apiKey: (env.NEON_API_KEY ?? '').trim(),
       projectId: (env.NEON_PROJECT_ID ?? '').trim(),
       parentBranchId: (env.NEON_PARENT_BRANCH_ID ?? '').trim(),
+      base,
     },
     fetchImpl,
   );
@@ -250,6 +279,151 @@ async function resolveMode() {
   return 0;
 }
 
+/**
+ * A local stand-in for the Neon console's v2 API, on the four endpoints this
+ * program speaks.
+ *
+ * A stubbed `fetch` proves the DECISIONS -- reuse rather than duplicate, refuse
+ * rather than half-apply. It cannot prove the REQUEST: that the URL is right,
+ * that the JSON body is shaped the way the console reads it, that a real status
+ * code comes back and is handled. Those are the parts that break silently, and
+ * a wrong body shape on a create looks exactly like a permission error.
+ *
+ * So this answers over real HTTP, on the same paths under the same `/api/v2`
+ * prefix, records what it was asked, and refuses a request with no bearer token
+ * the way the console does. It also serves the endpoints the CI JOB uses --
+ * connection_uri, and a delete -- because those are the calls a person reads in
+ * a failed store gate and would otherwise have no coverage at all.
+ *
+ * Deliberately strict in the ways a real console is: a duplicate project or
+ * branch name is a 409 rather than a second row, because "create if missing" is
+ * a claim about a server that says no.
+ */
+export async function startFakeNeon({ apiKey = 'test-key' } = {}) {
+  const requests = [];
+  const projects = [];
+  const branches = new Map();
+  let nextProject = 1;
+  let nextBranch = 1;
+
+  const server = createServer((req, res) => {
+    const chunks = [];
+    req.on('data', (chunk) => chunks.push(chunk));
+    req.on('end', () => {
+      const raw = Buffer.concat(chunks).toString('utf8');
+      const url = new URL(req.url ?? '/', 'http://localhost');
+      const auth = req.headers.authorization ?? '';
+      let body;
+      try {
+        body = raw ? JSON.parse(raw) : {};
+      } catch {
+        body = {};
+      }
+      requests.push({ method: req.method, path: url.pathname, auth, body, raw });
+      const send = (status, payload) => {
+        res.writeHead(status, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(payload));
+      };
+      if (auth !== `Bearer ${apiKey}`) {
+        send(401, { error: { message: 'invalid api key' } });
+        return;
+      }
+      const parts = url.pathname.split('/').filter(Boolean); // api,v2,...
+      const at = (name) => parts.indexOf(name);
+      const projectId = at('projects') === 2 ? parts[3] : undefined;
+      const project = projects.find((p) => p.id === projectId);
+      const branchList = () => branches.get(projectId) ?? [];
+
+      if (at('projects') === -1) {
+        send(404, { error: { message: 'unknown endpoint' } });
+        return;
+      }
+      if (parts.length === 3 && req.method === 'GET') {
+        send(200, { projects: projects.map(({ id, name }) => ({ id, name })) });
+        return;
+      }
+      if (parts.length === 3 && req.method === 'POST') {
+        // Strict about the body the way the console is. A fake that accepts any
+        // JSON would bless a request the real API answers 400, and the whole
+        // reason this exists is to catch exactly that.
+        if (typeof body.name !== 'string' || body.name === '') {
+          send(400, { error: { message: 'a project needs a name' } });
+          return;
+        }
+        if (projects.some((p) => p.name === body.name)) {
+          send(409, { error: { message: `project ${body.name} already exists` } });
+          return;
+        }
+        const made = { id: `proj-${nextProject++}`, name: body.name };
+        projects.push(made);
+        send(201, { project: made });
+        return;
+      }
+      if (projectId && !project) {
+        send(404, { error: { message: `no project ${projectId}` } });
+        return;
+      }
+      if (parts.length === 5 && parts[4] === 'branches' && req.method === 'GET') {
+        send(200, {
+          branches: branchList().map(({ id, name, parent_id, current_state }) => ({
+            id,
+            name,
+            parent_id: parent_id ?? null,
+            current_state,
+          })),
+        });
+        return;
+      }
+      if (parts.length === 5 && parts[4] === 'branches' && req.method === 'POST') {
+        const asked = body.branch;
+        if (!asked || typeof asked.name !== 'string' || asked.name === '') {
+          send(400, { error: { message: 'a branch needs a nested branch.name' } });
+          return;
+        }
+        if (branchList().some((b) => b.name === asked.name)) {
+          send(409, { error: { message: `branch ${asked.name} already exists` } });
+          return;
+        }
+        const made = {
+          id: `br-${nextBranch++}`,
+          name: asked.name,
+          parent_id: asked.parent_id ?? null,
+          current_state: 'ready',
+        };
+        branches.set(projectId, [...branchList(), made]);
+        send(201, { branch: made });
+        return;
+      }
+      if (parts.length === 5 && parts[4] === 'connection_uri' && req.method === 'GET') {
+        const wanted = url.searchParams.get('branch_id');
+        const found = branchList().find((b) => b.id === wanted);
+        if (!found) {
+          send(404, { error: { message: `no branch ${wanted}` } });
+          return;
+        }
+        send(200, { uri: `postgres://ci:pw@ep-fake.neon.tech/delegate-ci?branch_id=${found.id}` });
+        return;
+      }
+      if (parts.length === 6 && parts[4] === 'branches' && req.method === 'DELETE') {
+        branches.set(projectId, branchList().filter((b) => b.id !== parts[5]));
+        send(200, { branch: { id: parts[5] } });
+        return;
+      }
+      send(404, { error: { message: `no route for ${req.method} ${url.pathname}` } });
+    });
+  });
+
+  await new Promise((done) => server.listen(0, '127.0.0.1', done));
+  const { port } = server.address();
+  return {
+    url: `http://127.0.0.1:${port}/api/v2`,
+    requests,
+    /** What was asked, as `METHOD /path`, so a check can assert on the calls. */
+    calls: () => requests.map((r) => `${r.method} ${r.path}`),
+    close: () => new Promise((done) => server.close(() => done())),
+  };
+}
+
 async function main(argv) {
   if (argv.includes('--help')) {
     console.log(`Provision the Neon secrets the store CI job needs.
@@ -263,6 +437,9 @@ async function main(argv) {
                                        NEON_PARENT_BRANCH_ID for $GITHUB_ENV, finding or
                                        creating each unless both are already set
   npm run secrets:neon -- --self-test  check the decision logic against a stub, writing nothing
+  npm run secrets:neon -- --self-test-e2e
+                                       the same create path over real HTTP, against a
+                                       fake console on localhost — no account, no network
 
 The API key is read from NEON_API_KEY, never from the command line. It is not
 minted here: make one at console.neon.tech → Account Settings → API keys.`);
@@ -270,18 +447,18 @@ minted here: make one at console.neon.tech → Account Settings → API keys.`);
   }
 
   if (argv.includes('--resolve')) return resolveMode();
+  if (argv.includes('--self-test-e2e')) return selfTestE2e();
+  if (argv.includes('--self-test')) return selfTest();
 
   const apiKey = (process.env.NEON_API_KEY ?? '').trim();
   const { repo, wantsApply } = preflight({ apiKey, repo: process.env.NEON_REPO, argv });
 
-  if (argv.includes('--self-test')) return selfTest();
-
   const ctx = { apiKey, method: 'GET' };
   const steps = [
-    `GET  ${API}/projects                       → find "${PROJECT_NAME}"`,
-    `POST ${API}/projects                       → create it, only if it is not there`,
-    `GET  ${API}/projects/<id>/branches         → find "${PARENT_BRANCH_NAME}"`,
-    `POST ${API}/projects/<id>/branches         → create it, only if it is not there`,
+    `GET  ${apiBase()}/projects                       → find "${PROJECT_NAME}"`,
+    `POST ${apiBase()}/projects                       → create it, only if it is not there`,
+    `GET  ${apiBase()}/projects/<id>/branches         → find "${PARENT_BRANCH_NAME}"`,
+    `POST ${apiBase()}/projects/<id>/branches         → create it, only if it is not there`,
     `gh secret set NEON_API_KEY          (value on stdin, never argv)`,
     `gh secret set NEON_PROJECT_ID       (value on stdin, never argv)`,
     `gh secret set NEON_PARENT_BRANCH_ID (value on stdin, never argv)`,
@@ -331,6 +508,9 @@ minted here: make one at console.neon.tech → Account Settings → API keys.`);
  */
 function selfTest() {
   let failures = 0;
+  // Every stub below routes by path, so it has to know which prefix to strip.
+  // These checks never touch a network, so that prefix is always the real one.
+  const base = DEFAULT_API;
   const check = (name, passed, detail) => {
     console.log(`${passed ? 'PASS' : 'FAIL'}  ${name} — ${detail}`);
     if (!passed) failures += 1;
@@ -339,8 +519,8 @@ function selfTest() {
   const seen = [];
   const stub = (routes) => async (url, init = {}) => {
     const method = init.method ?? 'GET';
-    seen.push(`${method} ${url.replace(API, '')}`);
-    const route = routes[`${method} ${url.replace(API, '')}`];
+    seen.push(`${method} ${url.replace(base, '')}`);
+    const route = routes[`${method} ${url.replace(base, '')}`];
     if (!route) throw new Error(`stub has no route for ${method} ${url}`);
     const { status = 200, body = {} } = route;
     return {
@@ -373,7 +553,7 @@ function selfTest() {
     const fresh = [];
     const creating = async (url, init = {}) => {
       const method = init.method ?? 'GET';
-      const path = url.replace(API, '');
+      const path = url.replace(base, '');
       fresh.push(`${method} ${path}`);
       if (method === 'GET' && path === '/projects') {
         return { ok: true, status: 200, text: async () => JSON.stringify({ projects: [] }) };
@@ -481,7 +661,7 @@ function selfTest() {
       const seen = [];
       const stubFetch = async (url, init = {}) => {
         const method = init.method ?? 'GET';
-        const path = url.replace(API, '');
+        const path = url.replace(base, '');
         seen.push(`${method} ${path}`);
         // Every id is already present, so nothing this stub is asked to do
         // creates anything: the question each check asks is which calls were
@@ -575,6 +755,135 @@ function selfTest() {
     console.log(failures === 0 ? '\nall neon-secret checks passed' : `\n${failures} neon-secret check(s) FAILED`);
     return failures === 0 ? 0 : 1;
   })();
+}
+
+/**
+ * The create path, over real HTTP, against a fake console. No account, no
+ * network, nothing written anywhere.
+ *
+ * The stubbed checks above answer the question "did the program choose to
+ * create". This answers "would a real console have understood it" -- and that
+ * is where the bugs that never announce themselves live. A branch created with
+ * `{ name }` instead of `{ branch: { name } }` is a 400 from the real console and
+ * a cheerful 201 from a stub written by the same author who got it wrong. So
+ * here the request crosses a socket, is parsed as a body, and is answered with
+ * the status codes a real console uses.
+ *
+ * The two halves of the contract are checked in one run: the first resolve
+ * creates, the second must create nothing and land on the same ids. That second
+ * pass is the whole point -- it is what proves the ids the job gets are the ones
+ * the console can be asked about again, not two freshly invented strings.
+ */
+async function selfTestE2e() {
+  let failures = 0;
+  const check = (name, passed, detail) => {
+    console.log(`${passed ? 'PASS' : 'FAIL'}  ${name} — ${detail}`);
+    if (!passed) failures += 1;
+  };
+  const fake = await startFakeNeon({ apiKey: 'test-key' });
+  try {
+    const first = await resolveFor({ NEON_API_KEY: 'test-key' }, fetch, fake.url);
+    const posts = fake.requests.filter((r) => r.method === 'POST');
+
+    check(
+      'the first resolve creates a project and a branch, in that order, over HTTP',
+      posts.length === 2 &&
+        posts[0].path === '/api/v2/projects' &&
+        posts[1].path === `/api/v2/projects/${first.lines[0].split('=')[1]}/branches`,
+      posts.map((r) => `${r.method} ${r.path}`).join(' → ') || 'no POSTs at all',
+    );
+
+    check(
+      'each create sends the body the console reads — the branch name is nested',
+      posts[0]?.body?.name === PROJECT_NAME &&
+        posts[1]?.body?.branch?.name === PARENT_BRANCH_NAME &&
+        posts[0]?.body?.branch === undefined,
+      `project ${JSON.stringify(posts[0]?.body)}, branch ${JSON.stringify(posts[1]?.body)}`,
+    );
+
+    check(
+      'the branch is created with no parent, so it starts empty',
+      posts[1]?.body?.branch?.parent_id === undefined && posts[1]?.body?.parent_id === undefined,
+      // A Neon branch COPIES its parent's state, so a parent_id here would
+      // hand these gates a schema they clear with clearAll. Nothing would fail
+      // loudly — the schema would simply be somebody else's.
+      `branch create body was ${JSON.stringify(posts[1]?.body)}`,
+    );
+
+    check(
+      'every call carries the key as a bearer token and nothing else',
+      fake.requests.every((r) => r.auth === 'Bearer test-key') && fake.requests.length === 4,
+      `${fake.requests.length} call(s): ${fake.calls().join(', ')}`,
+    );
+
+    check(
+      'the ids handed to $GITHUB_ENV are the ones the server actually made',
+      first.lines[0] === 'NEON_PROJECT_ID=proj-1' &&
+        first.lines[1] === 'NEON_PARENT_BRANCH_ID=br-1' &&
+        first.lines.length === 2 &&
+        !first.lines.some((line) => line.includes(' ')) &&
+        !first.lines.some((line) => line.includes('test-key')),
+      `${first.lines.length} line(s): ${first.lines.join(' | ')}`,
+    );
+
+    check(
+      'the note says it created, and says so on stderr where the job ignores it',
+      first.note.includes('created') && !first.note.includes('reusing'),
+      first.note,
+    );
+
+    // The second pass: convergence. Re-running is how the script is used — it
+    // runs once per job that needs the ids — so creating again on the second
+    // run would mean a new project per run, which is the accumulation the
+    // parent branch exists to avoid.
+    const before = fake.requests.length;
+    const second = await resolveFor({ NEON_API_KEY: 'test-key' }, fetch, fake.url);
+    const secondRound = fake.requests.slice(before);
+    check(
+      'running it again creates nothing and reaches the same ids',
+      secondRound.every((r) => r.method === 'GET') &&
+        secondRound.length === 2 &&
+        second.lines[0] === first.lines[0] &&
+        second.lines[1] === first.lines[1],
+      `${secondRound.length} call(s), ${secondRound.filter((r) => r.method === 'POST').length} of them POST; ${second.lines.join(' | ')}`,
+    );
+
+    check(
+      'and the second run says it is reusing',
+      second.note.includes('reusing') && !second.note.includes('created'),
+      second.note,
+    );
+
+    // A wrong key must fail the run, not answer with empty ids — the failure
+    // mode the job reads $GITHUB_ENV for.
+    let refused = '(nothing thrown)';
+    try {
+      await resolveFor({ NEON_API_KEY: 'not-the-key' }, fetch, fake.url);
+    } catch (error) {
+      refused = error.message;
+    }
+    check(
+      'a key the console rejects fails loudly rather than yielding empty ids',
+      refused.includes('401') && refused.includes('invalid api key'),
+      refused.slice(0, 100),
+    );
+
+    // And the id the server made has to be the one a later lookup can use,
+    // which is the claim the whole parent-branch arrangement rests on.
+    const conn = await neon(
+      `/projects/${first.lines[0].split('=')[1]}/connection_uri?branch_id=${first.lines[1].split('=')[1]}`,
+      { apiKey: 'test-key', base: fake.url },
+    );
+    check(
+      'the branch id the job exports is one the console can be asked about',
+      typeof conn.uri === 'string' && conn.uri.includes(first.lines[1].split('=')[1]),
+      conn.uri,
+    );
+  } finally {
+    await fake.close();
+  }
+  console.log(failures === 0 ? '\nall neon-secret end-to-end checks passed' : `\n${failures} end-to-end check(s) FAILED`);
+  return failures === 0 ? 0 : 1;
 }
 
 if (isMain(import.meta.url)) {
