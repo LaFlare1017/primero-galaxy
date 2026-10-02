@@ -8,11 +8,12 @@ import { join, resolve } from 'path';
 /**
  * The restart trick, in one place.
  *
- * Everything else in this suite runs against one long-lived server, which is
- * also why the deployment problem these two specs exist for was invisible to
- * it. A run's `ScenarioRuntime` is held in a per-process registry, so on a
- * single machine every request about a run is served by the process that
- * created it and the lookup is a map hit. On Vercel the opposite is normal:
+ * Everything else in this suite runs against a long-lived server — now one per
+ * worker, each started in its own fixture — which is also why the deployment
+ * problem these two specs exist for was invisible to it. A run's
+ * `ScenarioRuntime` is held in a per-process registry, so on a single machine
+ * every request about a run is served by the process that created it and the
+ * lookup is a map hit. On Vercel the opposite is normal:
  * the request carrying a participant's next click is very likely a different
  * invocation from the one that carried their last, so the registry is empty and
  * the run has to be resolved from the store instead.
@@ -25,18 +26,19 @@ import { join, resolve } from 'path';
  *
  * Two servers are started rather than reusing the suite's, on a port the OS
  * hands out, and both are killed in `afterAll`. That isolation is not
- * politeness: killing the suite's server would fail every spec after it,
- * because Playwright starts that server once for the whole run. The scratch
+ * politeness: killing the worker's server would fail every spec that worker
+ * still had to run, and the worker's server is the one its `baseURL` points
+ * every request at. The scratch
  * store is a second directory for the same reason — the suite's own room must
  * hold only the rows its own specs seeded, and a restart test that wrote into
  * it would leave a run behind for the facilitator specs to trip over. Each spec
  * passes its own `dataDir`, which is what keeps two cold specs from sharing a
  * room.
  *
- * The build is the suite's (`.next-e2e`, built by the configured webServer
- * before any spec runs), so starting a server here is `next start` and nothing
- * else — no rebuild, which is what keeps this affordable inside the per-test
- * budget along with two process starts.
+ * The build is the suite's (`.next-e2e`, built by `globalSetup` before any
+ * worker starts), so starting a server here is `next start` and nothing else —
+ * no rebuild, which is what keeps this affordable inside the per-test budget
+ * along with two process starts.
  */
 
 export const ROOT = resolve(__dirname, '..');
@@ -95,30 +97,37 @@ function newestSourceMtime(): { file: string; at: number } {
 /**
  * Refuse to test a build that predates the sources.
  *
- * A cold spec starts its own server, so it cannot be blamed on the suite's —
- * and that is exactly how it can end up serving something stale without saying
- * so. `playwright.config.ts` sets `reuseExistingServer` for local runs, so when
- * a server is already listening on :3100 the configured webServer command never
- * runs and `.next-e2e` is never rebuilt. The spec then starts a perfectly
- * healthy server on a free port, serving a build from hours ago, and the
- * failure it produces is a behavioural one: an assertion about a fix that is in
- * the source tree and not in the bundle. That is a genuinely confusing way to
- * lose an afternoon, and it has happened here once already.
+ * A cold spec starts its own server, so it cannot be blamed on any other — and
+ * that is exactly how it can end up serving something stale without saying so.
+ * This used to have a specific cause: `playwright.config.ts` reused a listening
+ * server for local runs, so when something was already on :3100 the configured
+ * webServer command never ran, `.next-e2e` was never rebuilt, and the spec went
+ * on to start a perfectly healthy server serving a bundle from hours ago. The
+ * failure that produced was a behavioural one — an assertion about a fix that is
+ * in the source tree and not in the bundle — which is a genuinely confusing way
+ * to lose an afternoon, and it had happened here once already.
  *
- * So the build is checked before anything is started, and the refusal names the
- * likely cause. The same rule the doctor's delegate check applies to
- * `delegate/dist`, for the same reason: a build is a claim about a source tree,
- * and a stale one should be caught before it is tested rather than blamed for.
+ * There is no `webServer` any more, and `globalSetup` builds before any worker
+ * starts, so that cause is gone. The check stays because the failure it catches
+ * is invisible when it happens, and a bundle can still go stale in the ways a
+ * build step does not cover: a suite pointed at a `dist` that was built
+ * elsewhere, a `.next-e2e` left over from a checkout that has since been
+ * edited, a spec run directly rather than through the config that builds it.
+ * Cheap, and it says what is wrong instead of letting it surface as behaviour.
+ *
+ * The same rule the doctor's delegate check applies to `delegate/dist`, for the
+ * same reason: a build is a claim about a source tree, and a stale one should
+ * be caught before it is tested rather than blamed for.
  */
 export function assertBuildIsCurrent(): void {
   const buildId = join(ROOT, COLD_DIST, 'BUILD_ID');
-  expect(existsSync(buildId), `${COLD_DIST}/BUILD_ID is missing — the suite's webServer builds it`).toBeTruthy();
+  expect(existsSync(buildId), `${COLD_DIST}/BUILD_ID is missing — globalSetup builds it before any worker starts`).toBeTruthy();
   const built = statSync(buildId).mtimeMs;
   const newest = newestSourceMtime();
   expect(
     built,
-    `${COLD_DIST} was built before ${newest.file} changed. A server is probably already listening on :3100, ` +
-      'so the configured webServer was reused and never rebuilt — stop it (or run with CI=1) and re-run.',
+    `${COLD_DIST} was built before ${newest.file} changed, so the servers would serve a bundle that is not this source tree. ` +
+      'Re-run through `npm run test:e2e`, which builds in globalSetup before any worker starts.',
   ).toBeGreaterThanOrEqual(newest.at);
 }
 

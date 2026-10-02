@@ -20,7 +20,8 @@
  *      showing the same debrief note the cold submit returned.
  */
 
-import { expect, test, type APIResponse, type Page } from '@playwright/test';
+import { expect, test } from './worker-server';
+import type { APIResponse, Page } from '@playwright/test';
 import { rmSync } from 'fs';
 import { join } from 'path';
 import {
@@ -75,7 +76,7 @@ test.describe('Delegate cold process', () => {
   let second: ManagedServer | null = null;
 
   test.beforeAll(() => {
-    // The suite's webServer builds .next-e2e before any spec runs, so a missing
+    // globalSetup builds .next-e2e before any worker starts, so a missing
     // build is only reachable if the suite was pointed elsewhere — but a STALE
     // one is easy to reach, and it fails as behaviour rather than as setup.
     assertBuildIsCurrent();

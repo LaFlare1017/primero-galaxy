@@ -19,7 +19,8 @@
  * are the slow ones — hovering and double-clicking re-project a rotating mesh
  * under software WebGL — so this file is the one that most needed the split.
  */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from './worker-server';
+import type { Page } from '@playwright/test';
 import {
   doubleClickStar,
   getTargetCompany,

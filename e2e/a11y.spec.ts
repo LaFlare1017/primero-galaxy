@@ -1,5 +1,6 @@
 import { AxeBuilder } from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from './worker-server';
+import type { Page } from '@playwright/test';
 
 /**
  * Automated accessibility gate (axe-core) across all three product
@@ -283,8 +284,8 @@ test.describe('Delegate accessibility', () => {
       // against its own store, cleared per run (playwright.config.ts) — so
       // this scan walks a room the size of one run's own seeding.
       //
-      // `slow()` stays as headroom rather than a workaround: a server handed
-      // to the suite from outside (`reuseExistingServer`) serves a workshop
+      // `slow()` stays as headroom rather than a workaround: a worker whose
+      // server was handed to it from outside this suite serves a workshop
       // store, and the scan stays a WHOLE-page one — scoping axe to the
       // toolbar would be a smaller claim wearing the same name.
       test.slow();

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './worker-server';
 
 /**
  * Reduced-motion proof (the e2e layer of the prefers-reduced-motion pass;

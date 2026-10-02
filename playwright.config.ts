@@ -1,16 +1,24 @@
 import { defineConfig } from '@playwright/test';
+import { workerCount } from './e2e/workers';
 
 /**
  * E2E tests for the Primero Galaxy 3D experience.
  *
  * The suite runs against a production build (`next start`) so there is no
- * HMR/dev-recompile flakiness: `npm run build && npm run start -- -p 3100`.
- * Point `reuseExistingServer` at a server you started yourself to skip the
- * rebuild for local iteration.
+ * HMR/dev-recompile flakiness. The build is isolated to `.next-e2e` via
+ * NEXT_E2E_DIST_DIR so it never touches the dev server's `.next` (dev and prod
+ * would otherwise clobber each other in a shared checkout).
  *
- * The build is isolated to `.next-e2e` via NEXT_E2E_DIST_DIR so it never
- * touches the dev server's `.next` (dev and prod would otherwise clobber
- * each other in a shared checkout).
+ * There is no `webServer` here any more, and that is the change that let the
+ * suite run wide. Playwright starts every entry in a `webServer` array before
+ * any worker exists, so there is no `parallelIndex` to give each worker a port
+ * and a store by — and `use.baseURL` is one value for the whole run, so two
+ * files at once would share one room. Thirteen of these specs reason about the
+ * room as a whole, so sharing it was never safe; the old answer was `workers: 1`,
+ * which cost the suite all of its parallelism. The server is now started per
+ * worker, by `e2e/worker-server.ts`, which can do the one thing `webServer`
+ * cannot: key a port and a `DELEGATE_DATA_DIR` on the worker that is running.
+ * The build it serves is made once, in `globalSetup`, before any worker starts.
  */
 export default defineConfig({
   testDir: './e2e',
@@ -27,26 +35,19 @@ export default defineConfig({
   timeout: 150_000,
   expect: { timeout: 20_000 },
   fullyParallel: false,
-  // Playwright parallelises by FILE, so one file is always one worker. The
-  // galaxy specs were a single 22-test file and took 15 minutes for that
-  // reason alone; they are four files now, so this number can finally be
-  // above 1.
+  // Playwright parallelises by FILE, so one file is always one worker, and
+  // tests inside a file still share that worker's room and run in order.
   //
-  // It stays 1 by default because thirteen of the suite's specs share ONE
-  // store: they seed participants into the room `globalSetup` empties, and
-  // then reason about it as a whole — the first and last row, the count in the
-  // sweep's `N of M`, what a status facet leaves visible. Two of those files
-  // running at once would put each other's rows in the room, and the failures
-  // would read as console bugs (the same shape global-setup.ts documents).
-  // Raising this to run the whole suite at once needs per-spec isolation
-  // first — a store per worker — not just a bigger number.
-  //
-  // `E2E_WORKERS=2` runs the galaxy files concurrently, which IS safe: each
-  // Playwright test gets its own browser context, so their localStorage and
-  // sessionStorage are separate and they touch no shared room. That is how the
-  // galaxy specs get their speed back without endangering the facilitator
-  // ones, and the CI e2e job passes it.
-  workers: Number(process.env.E2E_WORKERS ?? 1),
+  // This is the machine's width, not 1. It was 1 because thirteen of these
+  // specs share ONE store and reason about it as a whole — the first and last
+  // row, the count in the sweep's `N of M`, what a status facet leaves visible —
+  // so a second worker would have put their rows in each other's room and the
+  // failures would read as console bugs. Each worker now gets its own server and
+  // its own `DELEGATE_DATA_DIR` (see `e2e/worker-server.ts`), which is what
+  // makes a number above 1 mean anything. `E2E_WORKERS=1` is still the serial
+  // run, for when a failure needs to be reproduced without four other files
+  // competing for the machine.
+  workers: workerCount(),
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI
     ? [
@@ -60,7 +61,11 @@ export default defineConfig({
       ]
     : [['list']],
   use: {
-    baseURL: 'http://localhost:3100',
+    // The port every worker uses is set per worker, by a fixture that knows its
+    // own `parallelIndex`. This value is only what a test sees if it somehow
+    // escapes that fixture, so it stays the first worker's port rather than
+    // being absent.
+    baseURL: 'http://127.0.0.1:3100',
     headless: true,
     viewport: { width: 1440, height: 900 },
     screenshot: 'only-on-failure',
@@ -68,41 +73,5 @@ export default defineConfig({
     // RETRY attempts only, so a stable run pays nothing and a flaky test
     // ships the trace of the attempt that failed.
     trace: process.env.CI ? 'on-all-retries' : 'retain-on-failure',
-  },
-  webServer: {
-    // No `rm -rf` here on purpose — the suite's store is emptied by the
-    // globalSetup above, which runs whether or not this command does. Leaving
-    // the clear in two places would make it possible to move one and not the
-    // other, which is the bug being fixed.
-    command: 'NEXT_E2E_DIST_DIR=.next-e2e npm run build && NEXT_E2E_DIST_DIR=.next-e2e npm run start -- -p 3100',
-    url: 'http://localhost:3100',
-    // The suite owns its own workshop store. The delegate API reads these
-    // JSON files fresh on every request and its data dir is overridable
-    // (delegate/src/paths.ts exists for exactly this), so the server is
-    // pointed at a scratch dir under the ignored .next-e2e/ — emptied by
-    // globalSetup — and a run starts with an empty room holding only the rows
-    // the run itself seeded. That is what lets the console cap what it renders
-    // (see GRID_WINDOW in app/delegate/facilitator/page.tsx) without ever
-    // hiding a spec's own row. Before this, the suite wrote into
-    // delegate/data/, the store a facilitator opens in dev: 2651 accumulated
-    // runs, most of them seeded by e2e, sitting past the grid's first page —
-    // real participants the console no longer renders, and specs looking for a
-    // row they had just created.
-    env: { DELEGATE_DATA_DIR: '.next-e2e/delegate-data' },
-    // OPT-IN, and the default used to be "yes, reuse whatever is on :3100".
-    // That inherited two things nobody could see: the build that server was
-    // started from (so a run could test code hours older than the source tree,
-    // failing as behaviour rather than as setup), and its store — which, for a
-    // server started without this suite's DELEGATE_DATA_DIR, is
-    // delegate/data/ itself, the room a facilitator opens in dev. Reuse is
-    // worth it for local iteration, so it is one env var away:
-    //
-    //   E2E_REUSE=1 npm run test:e2e
-    //
-    // …and only against a server started the way this config starts one. With
-    // reuse off, a port that is already in use fails immediately and says so,
-    // which is a better outcome than nine timeouts an hour later.
-    reuseExistingServer: process.env.E2E_REUSE === '1',
-    timeout: 300_000,
   },
 });

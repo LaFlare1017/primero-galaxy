@@ -356,7 +356,12 @@ jobs:
   e2e:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Raised alongside the move to per-worker servers, which took this job from
+    # one file at a time to the runner's width. A parallel suite is bounded by
+    # its slowest test rather than its average, and the galaxy specs drive WebGL
+    # and camera transitions that only finish when the CPU is free — so the wall
+    # clock did not fall by the same factor the worker count rose by.
+    timeout-minutes: 40
     env:
       NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
     steps:
@@ -379,9 +384,18 @@ jobs:
       # recovered the conversation, which is the whole point of that spec. Scoped
       # to the step so no other test, and nothing the build touches, can reach
       # the key.
+      #
+      # E2E_WORKERS is pinned rather than inherited. Each worker is a `next start`
+      # AND a Chromium with its own store (e2e/worker-server.ts), so the number
+      # that is safe is a fact about the machine: this runner has four vCPUs,
+      # against the fourteen-core laptop the default and the ceiling in
+      # e2e/workers.ts were measured on. Past a point the galaxy specs stop
+      # finishing inside their timeouts rather than running in parallel, so the
+      # local default cannot be assumed to hold here.
       - run: npm run test:e2e
         env:
           CI: '1'
+          E2E_WORKERS: '3'
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       # A flaky test PASSES under retries, so failure-gated artifacts never
       # show it. Parse the JSON report, write the flaky table into the job

@@ -243,11 +243,32 @@ Other checks:
 ```bash
 npm run lint          # ESLint
 npm run typecheck     # tsc --noEmit
-npm run test:e2e      # Playwright, real browser input, on port 3100
+npm run test:e2e      # Playwright, real browser input, several servers
 ```
 
-`test:e2e` builds a **production** server on port **3100**, not 3000, and takes
-several minutes. It is the suite, not a way to look at the app.
+`test:e2e` builds a **production** bundle (into `.next-e2e`, not `.next`, so it
+never disturbs your dev server) and then takes several minutes. It is the suite,
+not a way to look at the app.
+
+It also runs **wide**, which is a change worth knowing about: each Playwright
+worker starts its own `next start` on a port the OS hands it, serving its own
+`DELEGATE_DATA_DIR`, so no worker can see another's rows. That is why the number
+can be above 1 — thirteen of the specs reason about the room as a whole (the
+first and last row, the count in the sweep's `N of M`), and they could not share
+one. The worker count is a fact about your machine rather than a constant, so it
+is set in one place:
+
+```bash
+npm run test:e2e                        # the default: up to 4, sized to your cores
+E2E_WORKERS=1 npm run test:e2e          # serial — use this when a failure needs the machine
+E2E_WORKERS=2 npm run test:e2e          # or when the default is too much for a laptop
+```
+
+Past about four workers the galaxy specs stop getting faster and start timing
+out: they raycast and animate, so they need the CPU, and on a busy machine one
+of them will run out of budget. If a galaxy spec fails on a timeout here, try the
+same file at `E2E_WORKERS=1` before believing it — that is how the difference
+between "this broke" and "the runner was full" is told apart.
 
 ## 12. When something is wrong
 

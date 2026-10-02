@@ -8,7 +8,8 @@
  *
  * Split out of the single 22-test `galaxy.spec.ts`; see galaxy-helpers.ts.
  */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from './worker-server';
+import type { Page } from '@playwright/test';
 import { waitForApp, type GalaxyHandle } from './galaxy-helpers';
 
 
@@ -162,13 +163,13 @@ test('brands without indexed favicons ship stable local logos in the planet pane
   expect(faviconFailures, faviconFailures.join('\n') || 'no failures').toEqual([]);
 });
 
-test('the galaxy degrades gracefully when WebGL is unavailable', async ({ browser }) => {
+test('the galaxy degrades gracefully when WebGL is unavailable', async ({ browser, baseURL }) => {
   // Force WebGL off so the Three.js renderer cannot create a context, exactly
   // like a browser with hardware acceleration disabled or a GPU blocklist.
   const noWebGL = await browser.browserType().launch({
     args: ['--disable-webgl', '--disable-webgl2', '--disable-software-rasterizer'],
   });
-  const page = await noWebGL.newPage({ baseURL: 'http://localhost:3100' });
+  const page = await noWebGL.newPage({ baseURL });
   const uncaught: string[] = [];
   page.on('pageerror', (err: Error) => uncaught.push(String(err)));
 
@@ -197,13 +198,13 @@ test('the galaxy degrades gracefully when WebGL is unavailable', async ({ browse
   await noWebGL.close();
 });
 
-test('the landing page warns before Enter the galaxy when WebGL is unavailable', async ({ browser }) => {
+test('the landing page warns before Enter the galaxy when WebGL is unavailable', async ({ browser, baseURL }) => {
   // Same WebGL-off launch as the galaxy fallback test: a browser that cannot
   // create a WebGL context must be told before it clicks into the 3D scene.
   const noWebGL = await browser.browserType().launch({
     args: ['--disable-webgl', '--disable-webgl2', '--disable-software-rasterizer'],
   });
-  const page = await noWebGL.newPage({ baseURL: 'http://localhost:3100' });
+  const page = await noWebGL.newPage({ baseURL });
   const uncaught: string[] = [];
   page.on('pageerror', (err: Error) => uncaught.push(String(err)));
 
@@ -225,7 +226,7 @@ test('the landing page warns before Enter the galaxy when WebGL is unavailable',
 
   // Control: with WebGL available the notice never renders (no flash on the
   // supported path that the rest of the suite exercises).
-  const okPage = await browser.newPage({ baseURL: 'http://localhost:3100' });
+  const okPage = await browser.newPage({ baseURL });
   await okPage.goto('/');
   await okPage.waitForLoadState('networkidle');
   await expect(okPage.getByText(/Your browser has WebGL turned off/i)).toHaveCount(0);

@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from './worker-server';
+import type { Page } from '@playwright/test';
 import { CONSOLE_CHORDS, CONSOLE_KEYS } from '../components/delegate/consoleShortcuts';
 import { pressEveryDeclaredBinding, type Exercise } from './keyboard-coverage';
 
@@ -40,11 +41,15 @@ interface Room {
    * by that. An effect that asked the SCREEN where the last row was would call
    * a four-hundred-row room two hundred rows long.
    *
-   * NAMES, and only names: a room is shared with every other spec in the run,
-   * so a label is not an identity. delegate-run-resume.spec.ts stamps one
-   * label across its six tests, and a full run ends holding six sessions
-   * called `E2E Resume <STAMP>` — which is why nothing here may locate a row
-   * by name (see `watch` and `position`).
+   * NAMES, and only names: a label is not an identity. delegate-run-resume
+   * .spec.ts stamps one label across its six tests, so a run that puts both on
+   * one worker ends holding six sessions called `E2E Resume <STAMP>` — which is
+   * why nothing here may locate a row by name (see `watch` and `position`).
+   *
+   * Which is now "the same worker" rather than "the same run": each worker has
+   * its own room (e2e/worker-server.ts), so at four workers those two files do
+   * not even meet, and at `E2E_WORKERS=1` they still do. Stamping the label is
+   * what makes this correct either way, which is the property worth keeping.
    */
   order: string[];
   /** The participant the cursor is on, or null on a cold console. */

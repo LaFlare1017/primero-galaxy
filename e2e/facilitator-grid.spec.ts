@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from './worker-server';
+import type { Page } from '@playwright/test';
 
 /**
  * End-to-end proof of the facilitator console (handoff §7): the live grid

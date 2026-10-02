@@ -8,7 +8,8 @@
  *
  * Split out of the single 22-test `galaxy.spec.ts`; see galaxy-helpers.ts.
  */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from './worker-server';
+import type { Page } from '@playwright/test';
 import {
   waitForGalaxyBoot,
   STAR_COUNT,

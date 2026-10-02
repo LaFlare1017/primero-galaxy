@@ -11,7 +11,8 @@
  *
  * Split out of the single 22-test `galaxy.spec.ts`; see galaxy-helpers.ts.
  */
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from './worker-server';
+import type { Page } from '@playwright/test';
 import {
   doubleClickPosition,
   makeSeedStar,
@@ -24,8 +25,19 @@ import {
 } from './galaxy-helpers';
 
 test('adding a company creates a persistent star and flies to it', async ({ page }) => {
-  // The delete phase adds a camera round-trip, so budget past the 90s default.
-  test.setTimeout(180_000);
+  // Measured: 138s with the machine to itself, which against a 180s budget left
+  // a 1.3x margin — a margin that only holds while nothing else runs. The
+  // delete phase is a camera round-trip, so this is the slowest test in the
+  // suite by a wide margin, and it was the one failure the move to per-worker
+  // servers produced at 4 workers: it did not get slower, the three workers
+  // beside it did, and the budget had no room to absorb that.
+  //
+  // 300s is roughly 2.2x the measured cost, which is the margin a test that
+  // waits on animation frames and a camera settle needs to survive a loaded
+  // machine. Raising it does not make the suite slower — the extra time is only
+  // ever spent when the machine is busy — and it keeps a timeout failure
+  // meaning "this broke" rather than "the runner was full".
+  test.setTimeout(300_000);
   await waitForApp(page);
 
   // Open the Add Your Company sheet from the bottom bar

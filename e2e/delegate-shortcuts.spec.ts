@@ -2,7 +2,8 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 
 import ts from 'typescript';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test } from './worker-server';
+import type { Page } from '@playwright/test';
 
 import {
   CONSOLE_CHORDS,
