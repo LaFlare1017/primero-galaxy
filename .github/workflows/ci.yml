@@ -185,90 +185,27 @@ jobs:
 
       # ── the database, created for this run and destroyed by it ──────────
       #
-      # Every response is checked by its HTTP status rather than left to
-      # errexit, for the same reason the gate step reads PIPESTATUS: the shell
-      # GitHub runs is not the shell a reader runs this in, and a correctness
-      # claim should not rest on which one that is. A failed create is a loud
-      # exit rather than an empty variable, because an empty variable is exactly
-      # what the last step treats as "the remote leg did not run".
+      # This was ninety lines of shell in this file, which meant the whole
+      # lifecycle had never been executed: this repository has no
+      # NEON_API_KEY, so every run so far has skipped all three of these steps
+      # and the code that does any of it has never run. It is `neon-branch.mjs`
+      # now, which means the create, the readiness wait, the URI and the delete
+      # are all covered by `--self-test-e2e` against a console on localhost —
+      # including the part no stub ever modelled, which is a branch that answers
+      # `current_state: init` for a while before its compute starts.
+      #
+      # The refusals came with it, and each is a decision somebody will want to
+      # make again: a create that fails exits loudly rather than leaving an empty
+      # BRANCH_ID, because an empty variable is exactly what the last step reads
+      # as "the remote leg did not run"; a delete that fails is a warning, not a
+      # failure, so untidiness cannot bury the gate's verdict; and the URI's
+      # password is handed to ::add-mask:: and never printed.
       - name: Create a Neon branch for this run
         if: env.NEON_API_KEY != ''
-        run: |
-          # expires_at is the backstop that makes cancelling safe: GitHub does
-          # not run the later steps of a cancelled job, so a cancelled run never
-          # reaches the delete below. Six hours is far longer than this gate
-          # needs and short enough that an abandoned branch costs nothing; Neon
-          # caps it at 30 days and refuses a time in the past.
-          #
-          # Spelled for BSD date first and GNU second so the step can also be run
-          # by hand on a laptop when a branch needs chasing — and the emptiness
-          # check is the part that matters: a branch created with an empty or
-          # unparseable expiry does not fail, it simply never cleans itself up,
-          # which is exactly the leak this line exists to prevent. So a clock that
-          # cannot produce a time refuses the whole run.
-          expires=$(date -u -v+6H +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date -u -d '+6 hours' +%Y-%m-%dT%H:%M:%SZ)
-          if [ -z "$expires" ]; then
-            echo "::error title=Store gate::could not compute an expiry for $BRANCH_NAME — refusing to create a branch that cannot delete itself"
-            exit 1
-          fi
-          code=$(curl -sS -o /tmp/branch.json -w '%{http_code}' -X POST \
-            "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches" \
-            -H "Authorization: Bearer $NEON_API_KEY" \
-            -H 'Content-Type: application/json' \
-            -d "{\"endpoints\":[{\"type\":\"read_write\"}],\"branch\":{\"name\":\"$BRANCH_NAME\",\"parent_id\":\"$NEON_PARENT_BRANCH_ID\",\"expires_at\":\"$expires\"}}" \
-            || true)
-          if [ "$code" != "201" ] && [ "$code" != "200" ]; then
-            echo "::error title=Store gate::creating branch $BRANCH_NAME returned HTTP $code: $(cat /tmp/branch.json)"
-            exit 1
-          fi
-          branch_id=$(jq -r '.branch.id // empty' /tmp/branch.json)
-          if [ -z "$branch_id" ]; then
-            echo "::error title=Store gate::Neon returned no branch id: $(cat /tmp/branch.json)"
-            exit 1
-          fi
-          echo "BRANCH_ID=$branch_id" >> "$GITHUB_ENV"
-          echo "created branch $BRANCH_NAME ($branch_id), expiring $expires"
-          # The branch is created asynchronously: its compute starts in `init`
-          # and the response says `pending_state: ready`. Querying it before it
-          # is ready fails in a way that reads like a broken driver, so wait for
-          # the state rather than sleep and hope. The LIST endpoint is the one
-          # whose response shape is not in question here.
-          for attempt in $(seq 1 60); do
-            state=$(curl -sS "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches" \
-              -H "Authorization: Bearer $NEON_API_KEY" \
-              | jq -r --arg id "$branch_id" '.branches[] | select(.id == $id) | .current_state' || true)
-            if [ "$state" = "ready" ]; then echo "branch ready after $attempt attempt(s)"; break; fi
-            if [ "$attempt" = "60" ]; then
-              echo "::error title=Store gate::branch $BRANCH_NAME never became ready (last state: ${state:-absent})"
-              exit 1
-            fi
-            sleep 2
-          done
+        run: node scripts/neon-branch.mjs create
       - name: Resolve this branch's connection URI
         if: env.NEON_API_KEY != ''
-        run: |
-          code=$(curl -sS -o /tmp/uri.json -w '%{http_code}' --get \
-            "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/connection_uri" \
-            -H "Authorization: Bearer $NEON_API_KEY" \
-            --data-urlencode "branch_id=$BRANCH_ID" \
-            || true)
-          if [ "$code" != "200" ]; then
-            echo "::error title=Store gate::resolving a connection URI for $BRANCH_NAME returned HTTP $code: $(cat /tmp/uri.json)"
-            exit 1
-          fi
-          uri=$(jq -r '.uri // empty' /tmp/uri.json)
-          if [ -z "$uri" ]; then
-            echo "::error title=Store gate::Neon returned no connection URI: $(cat /tmp/uri.json)"
-            exit 1
-          fi
-          # The URI carries a database password. Mask it before it goes near a
-          # log, and name the database by host and name only — the same redaction
-          # the reset tool's plan uses, for the same reason: a plan that names the
-          # wrong database is worse than one that names none, and one that prints
-          # a password has printed it to whoever reads the log.
-          echo "::add-mask::$(printf '%s' "$uri" | sed -E 's#^[a-z]+://[^:]*:([^@]*)@.*#\1#')"
-          echo "store gate database: $(printf '%s' "$uri" | sed -E 's#://[^:]*:[^@]*@#://#')"
-          echo "DELEGATE_STORE_TEST_URL=$uri" >> "$GITHUB_ENV"
+        run: node scripts/neon-branch.mjs uri
 
       # The in-process leg FIRST, and unconditionally: it is the leg that can
       # prove the one check a shared database cannot — the guard that refuses a
@@ -322,19 +259,7 @@ jobs:
         # an empty path. The expiry set at creation is the backstop for the one
         # case this cannot cover: a cancelled job, whose later steps never run.
         if: always() && env.NEON_API_KEY != '' && env.BRANCH_ID != ''
-        run: |
-          code=$(curl -sS -o /tmp/drop.json -w '%{http_code}' -X DELETE \
-            "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$BRANCH_ID" \
-            -H "Authorization: Bearer $NEON_API_KEY" \
-            || true)
-          if [ "$code" = "200" ] || [ "$code" = "204" ]; then
-            echo "dropped branch $BRANCH_NAME ($BRANCH_ID)"
-          else
-            # A warning, not a failure: the gate has already answered, and this
-            # branch deletes itself at the time the create step chose. Failing the
-            # run over untidiness would bury the verdict that matters.
-            echo "::warning title=Store gate::could not drop branch $BRANCH_NAME (HTTP $code) — it expires on its own: $(cat /tmp/drop.json)"
-          fi
+        run: node scripts/neon-branch.mjs drop
       # No connection URI has two meanings and they are not the same severity. A
       # FORK pull request gets no secrets from GitHub, so the remote leg cannot
       # run there and saying so is the whole job; every other event — a

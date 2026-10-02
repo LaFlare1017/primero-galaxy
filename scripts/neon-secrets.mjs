@@ -298,8 +298,16 @@ async function resolveMode() {
  * Deliberately strict in the ways a real console is: a duplicate project or
  * branch name is a 409 rather than a second row, because "create if missing" is
  * a claim about a server that says no.
+ *
+ * `readyAfter` is the one behaviour a real console has that a stub never
+ * invented: a branch is created with its compute still starting, answers
+ * `current_state: init` for a while, and only later reports `ready`. Everything
+ * downstream — the store job's poll, a gate that connects the moment it is told
+ * to — has to survive that window, and nothing but a console that actually
+ * holds the branch back can test it. Zero means ready at once, which is what a
+ * test that is not about readiness wants.
  */
-export async function startFakeNeon({ apiKey = 'test-key' } = {}) {
+export async function startFakeNeon({ apiKey = 'test-key', readyAfter = 0 } = {}) {
   const requests = [];
   const projects = [];
   const branches = new Map();
@@ -319,7 +327,7 @@ export async function startFakeNeon({ apiKey = 'test-key' } = {}) {
       } catch {
         body = {};
       }
-      requests.push({ method: req.method, path: url.pathname, auth, body, raw });
+      requests.push({ method: req.method, path: url.pathname, query: url.searchParams, auth, body, raw });
       const send = (status, payload) => {
         res.writeHead(status, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(payload));
@@ -364,12 +372,21 @@ export async function startFakeNeon({ apiKey = 'test-key' } = {}) {
         return;
       }
       if (parts.length === 5 && parts[4] === 'branches' && req.method === 'GET') {
+        // The readiness clock lives here: each listing is one poll, and a branch
+        // only reports `ready` once it has been seen `readyAfter` times.
+        const now = branchList().map((b) => {
+          b.polls = (b.polls ?? 0) + 1;
+          if (b.polls >= readyAfter) b.current_state = 'ready';
+          return b;
+        });
         send(200, {
-          branches: branchList().map(({ id, name, parent_id, current_state }) => ({
+          branches: now.map(({ id, name, parent_id, current_state, expires_at, endpoints }) => ({
             id,
             name,
             parent_id: parent_id ?? null,
             current_state,
+            expires_at: expires_at ?? null,
+            endpoints: endpoints ?? [],
           })),
         });
         return;
@@ -380,6 +397,15 @@ export async function startFakeNeon({ apiKey = 'test-key' } = {}) {
           send(400, { error: { message: 'a branch needs a nested branch.name' } });
           return;
         }
+        // `endpoints` is deliberately NOT required here. The store job's create
+        // sends `read_write` and should — a branch it cannot write would break
+        // the gate — but whether Neon defaults one or refuses without it is a
+        // claim about somebody's API that this fake cannot check without an
+        // account, and a fake that enforced a guess would fail the provisioning
+        // script over a rule nobody verified. The self-test in neon-branch.mjs
+        // asserts the REQUEST carries read_write, which is the part that is
+        // ours.
+        const endpoints = Array.isArray(body.endpoints) ? body.endpoints : [{ type: 'read_write' }];
         if (branchList().some((b) => b.name === asked.name)) {
           send(409, { error: { message: `branch ${asked.name} already exists` } });
           return;
@@ -388,7 +414,13 @@ export async function startFakeNeon({ apiKey = 'test-key' } = {}) {
           id: `br-${nextBranch++}`,
           name: asked.name,
           parent_id: asked.parent_id ?? null,
-          current_state: 'ready',
+          expires_at: asked.expires_at ?? null,
+          endpoints,
+          // As the console answers it: the branch exists, and its compute has
+          // not started yet. `pending_state` is where the readiness waits.
+          current_state: 'init',
+          pending_state: readyAfter === 0 ? undefined : 'ready',
+          polls: 0,
         };
         branches.set(projectId, [...branchList(), made]);
         send(201, { branch: made });
@@ -401,7 +433,12 @@ export async function startFakeNeon({ apiKey = 'test-key' } = {}) {
           send(404, { error: { message: `no branch ${wanted}` } });
           return;
         }
-        send(200, { uri: `postgres://ci:pw@ep-fake.neon.tech/delegate-ci?branch_id=${found.id}` });
+        send(200, {
+          uri: `postgres://ci:hunter2@ep-fake.neon.tech/delegate-ci?branch_id=${found.id}`,
+          // What the console also reports, and what makes a name-based check
+          // possible: the database this branch actually owns.
+          databases: [{ name: found.name, id: `db-${found.id}` }],
+        });
         return;
       }
       if (parts.length === 6 && parts[4] === 'branches' && req.method === 'DELETE') {

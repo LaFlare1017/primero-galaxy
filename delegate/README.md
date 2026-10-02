@@ -193,6 +193,15 @@ Three details of the branch's life are load-bearing:
 - The job waits for the branch's `current_state` to be `ready` before resolving a connection string. A branch is created asynchronously, and querying its compute too early fails in a way that reads like a broken driver.
 - The drop step is a belt to those braces: it runs even when the gate fails, and a drop that fails **warns** rather than failing a run whose verdict has already been reported.
 
+Those three steps were ninety lines of shell inside the workflow until recently, which meant the lifecycle had never actually been executed: this repository has no `NEON_API_KEY`, so every run so far has skipped all of them. It is `scripts/neon-branch.mjs` now — `create`, `uri`, `drop` — and each of those bullets is a claim a check now makes rather than prose a reader has to trust:
+
+```bash
+node scripts/neon-branch.mjs --self-test      # the decisions, against a stub
+node scripts/neon-branch.mjs --self-test-e2e  # the lifecycle, against a console on localhost
+```
+
+The end-to-end mode covers the one thing no stub ever modelled: a Neon branch is created with its compute still starting and answers `current_state: init` for a while, so the console it runs against holds the branch in `init` for its first three polls. Anything that connects the moment it is handed an id gets a database that is not there yet, and that window is the whole reason the poll exists. The last four checks run the program as a **process** — the three commands the workflow actually runs, with `$GITHUB_ENV` handed forward the way GitHub hands it forward — because a missed environment write is a `BRANCH_ID` the next step cannot find, and the answers leave through that wrapper rather than through the functions behind it. Both programs run from the repo doctor on every commit: 41 checks, no account, no network, no secret.
+
 The gate still reads `DELEGATE_STORE_TEST_URL`, and the job still sets that variable to empty at the in-process leg so it is in-process whatever the job's environment says. Two rules keep the remote leg from being green without having run:
 
 - The leg **asserts** the gate reported a remote engine. A gate that fell back to PGlite passes every check it makes while testing the wrong substrate, which is the one outcome this job exists to prevent.
