@@ -331,30 +331,34 @@ jobs:
         if: always() && !cancelled()
         id: flaky
         run: node scripts/flaky-report.mjs test-results/results.json
-      # The same report, read for what it is NOT saying. One spec in this suite
-      # needs a model, and it runs either way — without a key it replays a
-      # recorded transcript against a fake Anthropic on localhost. So "did it
-      # run" no longer says which model answered, and a live model and a fixture
-      # are very different claims for a green tick to be making. This step reads
-      # both out of the report: whether the spec ran at all, and the annotation
-      # it recorded about the agent that answered.
+      # The same report, read for what it is NOT saying. A skipped test is not a
+      # failed one, so the run above reads green either way: it prints
+      # `-  1 e2e/some.spec.ts:110:7` with no reason, and the count line says
+      # `132 passed` whether or not something ran. This step names every skip,
+      # with the reason the spec recorded for it.
       #
-      # It still fails when the spec did not run at all. That is the case the
-      # step was written for, and it is still reachable — a filter that excludes
-      # the file, a suite that aborts before it, a spec that skips again for
-      # some new reason — and a green tick with no restart assertion in it is
-      # the outcome worth refusing.
-      - name: Say whether the cold-process chat ran
+      # It started as one filename, and that is the version that would have been
+      # quietly wrong the day a second spec was written behind a key. So it is
+      # general now, with three verdicts rather than one:
+      #
+      #   - a skip with NO recorded reason FAILS, always. An unexplained skip is
+      #     a hole nobody can see, including whoever wrote it.
+      #   - a skip for want of a SECRET fails on an event that should have had
+      #     one, and is a notice on a fork pull request, where GitHub sends no
+      #     secrets at all. Nothing in this suite needs a key now — the
+      #     cold-process chat replays a transcript — so a secret-gated skip
+      #     anywhere else is a spec that has not caught up.
+      #   - any other skip is named and nothing more: it was a decision somebody
+      #     wrote down, and the job's business is to make it visible.
+      #
+      # The cold-process chat spec is still called out on its own, because it is
+      # the one assertion a mock cannot fake, and because "ran" alone does not
+      # say whether a live model or a recorded transcript answered it.
+      - name: Say what did not run
         if: always() && !cancelled()
-        run: |
-          node scripts/e2e-live-leg.mjs test-results/results.json || {
-            if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.head.repo.fork }}" = "true" ]; then
-              echo "::notice title=Cold-process chat::the spec did not run on this fork pull request. It replays a recorded transcript when there is no key, so it needs neither secrets nor an account — a skip here means something excluded the file, not that GitHub withheld a key."
-              exit 0
-            fi
-            echo "::error title=Cold-process chat::the cold-process chat spec did not run, so nothing proved that a restarted process recovers the conversation — and the suite passed anyway, because a skipped spec is not a failure. It replays a recorded transcript when there is no ANTHROPIC_API_KEY, so a skip is not about secrets at all: check the job summary above for the reason the spec recorded, and delegate/README.md#live-anthropic-runs."
-            exit 1
-          }
+        run: >-
+          node scripts/e2e-coverage.mjs test-results/results.json
+          ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && '--fork-pr' || '' }}
       - name: Upload Playwright report and traces
         # Not failure-gated: a green run with flaky tests still ships the
         # html report plus the retry-attempt traces (trace: on-all-retries).
