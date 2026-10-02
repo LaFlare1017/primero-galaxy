@@ -49,6 +49,7 @@ import { appendFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { isMain } from './is-main.mjs';
 import { neon, startFakeNeon } from './neon-secrets.mjs';
 
 /** Where this job's addresses come from. Overridable so the self-test can point elsewhere. */
@@ -86,6 +87,80 @@ export function expiresAt(now = new Date(), hours = EXPIRY_HOURS) {
     throw new Error(`could not compute an expiry ${hours}h out from ${now.toISOString()}`);
   }
   return at.toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
+/**
+ * The three secrets the remote leg needs, and what each one is for.
+ *
+ * Exported rather than written into the refusal inline, so a check can assert
+ * against the same text the job prints. A refusal that names a secret nobody has
+ * to set is a worse instruction than no refusal, and the way that happens is
+ * usually an edit to a message that nothing reads back.
+ */
+export const REQUIRED_SECRETS = [
+  'NEON_API_KEY',
+  'NEON_PROJECT_ID',
+  'NEON_PARENT_BRANCH_ID',
+];
+
+/**
+ * What the job says when the remote leg did not run.
+ *
+ * Two things are being claimed and both have to survive an edit. It names all
+ * three secrets, because the reader's first question is "what do I set" — and it
+ * says that the KEY is what fixes it, because the two ids are optional: the
+ * resolve step finds or creates them by name, so telling somebody to go and mint
+ * three secrets when one is enough is how a correct refusal gets ignored.
+ *
+ * The step that prints this keys on the connection URI rather than on the API
+ * key, so a create that failed is reported as the failure it is instead of
+ * reading as a run that never had credentials. That is why this text can talk
+ * about a missing URI without assuming why it is missing.
+ */
+export function remoteLegRefusal(event = 'this event') {
+  return (
+    `no connection URI for a per-run branch on ${event}, so the store gate ran on its in-process ` +
+    'engine only. The serverless driver is the one piece an in-process engine cannot execute, and it is ' +
+    'now untested rather than assumed.\n' +
+    `  Fix it with ${REQUIRED_SECRETS[0]} alone — a key at console.neon.tech → Account Settings → API keys. ` +
+    `The resolve step then finds or creates the other two by name, so ${REQUIRED_SECRETS[1]} and ` +
+    `${REQUIRED_SECRETS[2]} are only needed to pin them rather than look them up.\n` +
+    "  If a key IS set, read the create step's own output above: it says which call failed. " +
+    'See delegate/README.md#the-store-gate-against-a-real-database.'
+  );
+}
+
+/** The same fact, said as a notice, for the one case where it is not a failure. */
+export function forkPullRequestNotice() {
+  return (
+    'no Neon API key on a fork pull request — GitHub passes no secrets, so the remote leg did not run. ' +
+    'The in-process one did.'
+  );
+}
+
+/**
+ * Report whether the remote leg ran, and fail the job when it did not.
+ *
+ * The one mode that does NOT need an address: it runs precisely when there is
+ * none, so asking it for one first would be asking the question it answers.
+ */
+export function reportRemoteLeg(env = process.env, { forkPullRequest = false } = {}) {
+  const url = (env.DELEGATE_STORE_TEST_URL ?? '').trim();
+  if (url !== '') {
+    // Keyed on the URI, and this is the case that keying on the key would get
+    // wrong: a run that has a database is a run whose leg ran, whatever its
+    // key looks like.
+    say('the remote leg has a connection URI, so it ran');
+    return { level: 'pass', message: '' };
+  }
+  if (forkPullRequest) {
+    const message = forkPullRequestNotice();
+    process.stderr.write(`::notice title=Store gate::${message}\n`);
+    return { level: 'notice', message };
+  }
+  const message = remoteLegRefusal(env.GITHUB_EVENT_NAME ?? 'this event');
+  process.stderr.write(`::error title=Store gate::${message}\n`);
+  return { level: 'error', message };
 }
 
 /** The name this run's branch carries, which is what somebody sees in the console. */
@@ -286,8 +361,16 @@ function exportEnv(name, value) {
   appendFileSync(file, `${name}=${value}\n`, 'utf8');
 }
 
-/** `create`, `uri`, `drop` — the three things the workflow calls. */
-async function lifecycle(mode, env = process.env) {
+/** `create`, `uri`, `drop`, `report` — the four things the workflow calls. */
+async function lifecycle(mode, env = process.env, argv = []) {
+  // Before `addresses`, deliberately: this mode runs precisely when the
+  // addresses are missing, so asking for them first would refuse for the wrong
+  // reason and name the wrong thing.
+  if (mode === 'report') {
+    const reported = reportRemoteLeg(env, { forkPullRequest: argv.includes('--fork-pr') });
+    return reported.level === 'error' ? 1 : 0;
+  }
+
   const { apiKey, projectId, parentBranchId, name } = addresses(env);
   const ctx = { apiKey, projectId, parentBranchId, base: apiBase(env), fetchImpl: fetch };
 
@@ -334,7 +417,7 @@ async function lifecycle(mode, env = process.env) {
     return warn(`could not drop branch ${name} (HTTP ${dropped.status}) — it expires on its own: ${dropped.detail}`);
   }
 
-  return fail(`unknown mode "${mode}" — this program does create, uri and drop`);
+  return fail(`unknown mode "${mode}" — this program does create, uri, drop and report`);
 }
 
 /**
@@ -349,6 +432,34 @@ function selfTest() {
   const check = (name, passed, detail) => {
     console.log(`${passed ? 'PASS' : 'FAIL'}  ${name} — ${detail}`);
     if (!passed) failures += 1;
+  };
+
+  /**
+   * Runs something with both streams captured, and hands them back.
+   *
+   * The checks below assert on what a refusal PRINTS, so they cannot let it
+   * print: a self-test whose own output is interleaved with the annotations it
+   * is testing is harder to read than one that is not, and `::error` in the
+   * middle of a list of passes reads as a failure that did not happen.
+   */
+  const silenced = async (run) => {
+    const out = [];
+    const err = [];
+    const realOut = process.stdout.write.bind(process.stdout);
+    const realErr = process.stderr.write.bind(process.stderr);
+    process.stdout.write = (chunk) => (out.push(String(chunk)), true);
+    process.stderr.write = (chunk) => (err.push(String(chunk)), true);
+    try {
+      // AWAIT FIRST. An object literal evaluates its properties in order, so
+      // `out: out.join(''), result: await run()` would read both arrays before
+      // anything was ever written to them — and would report "printed nothing"
+      // for a refusal that printed everything.
+      const result = await run();
+      return { out: out.join(''), err: err.join(''), result };
+    } finally {
+      process.stdout.write = realOut;
+      process.stderr.write = realErr;
+    }
   };
 
   const base = 'https://console.neon.tech/api/v2';
@@ -528,6 +639,81 @@ function selfTest() {
         'missing addresses are named together, so one run says everything it lacks',
         ['NEON_PROJECT_ID', 'NEON_PARENT_BRANCH_ID', 'BRANCH_NAME'].every((k) => refused.includes(k)),
         refused.split('.')[0],
+      );
+    }
+
+    // ── the refusal a job actually fails on ──────────────────────────────
+    //
+    // This is the message the store job goes red with every push while there is
+    // no Neon account, and it was a string in a YAML shell block that nothing
+    // read back. A refusal nobody checks is prose; these are the properties that
+    // make it worth printing at all.
+    {
+      const refusal = remoteLegRefusal('push');
+      const named = REQUIRED_SECRETS.filter((secret) => refusal.includes(secret));
+      check(
+        'the refusal names all three secrets, so the reader knows what to set',
+        named.length === 3,
+        `${named.length} of 3: ${named.join(', ') || 'none'}`,
+      );
+
+      check(
+        'and it says the KEY alone fixes it, because the two ids are found by name',
+        refusal.includes('NEON_API_KEY alone') &&
+          refusal.includes('finds or creates the other two by name'),
+        'an edit that told somebody to mint three secrets when one is enough would send them down the wrong path',
+      );
+
+      check(
+        'it says what went untested, not only that something is missing',
+        refusal.includes('serverless driver') && refusal.includes('untested rather than assumed'),
+        'the reader has to know WHY this fails a job rather than which variable is empty',
+      );
+
+      check(
+        'and it points at the step that would say more when a key IS present',
+        refusal.includes('create step') && refusal.includes('#the-store-gate-against-a-real-database'),
+        'the two failures — no key, and a key whose call failed — must not read the same',
+      );
+    }
+
+    // The severity split, which is the reason this is not one message.
+    {
+      const { result: reported } = await silenced(() =>
+        reportRemoteLeg({ DELEGATE_STORE_TEST_URL: '' }, { forkPullRequest: true }),
+      );
+      check(
+        'a fork pull request is a NOTICE, because GitHub sends it no secrets and the leg cannot run',
+        reported.level === 'notice' && reported.message.includes('fork pull request'),
+        `level ${reported.level}`,
+      );
+    }
+
+    // And the leg that ran is not a failure, whatever else is missing.
+    {
+      const { result: reported } = await silenced(() =>
+        reportRemoteLeg({ DELEGATE_STORE_TEST_URL: 'postgres://u:p@h/d' }, { forkPullRequest: true }),
+      );
+      check(
+        'a run WITH a connection URI is not refused, even on a fork — the key is not the claim, the URI is',
+        reported.level === 'pass' && reported.message === '',
+        `level ${reported.level}${reported.message ? `: ${reported.message}` : ''}`,
+      );
+    }
+
+    // The refusal goes to stderr as a GitHub annotation. Stdout here is
+    // $GITHUB_ENV, and a stray line there is an environment variable nothing reads.
+    {
+      const { out, err, result: code } = await silenced(() =>
+        lifecycle('report', { DELEGATE_STORE_TEST_URL: '', GITHUB_EVENT_NAME: 'push' }, []),
+      );
+      check(
+        'the refusal is a ::error on stderr, exits 1, and prints nothing to stdout',
+        code === 1 &&
+          err.startsWith('::error title=Store gate::') &&
+          out === '' &&
+          REQUIRED_SECRETS.every((s) => err.includes(s)),
+        `exit ${code}, stdout ${out === '' ? 'empty' : 'HAD A LINE'}, ${err.split('\n')[0]?.slice(0, 48) ?? '(silent)'}`,
       );
     }
 
@@ -770,17 +956,23 @@ async function main(argv) {
   const mode = argv.find((arg) => !arg.startsWith('-'));
   if (!mode) {
     console.error(
-      'Usage: node scripts/neon-branch.mjs <create|uri|drop>\n' +
+      'Usage: node scripts/neon-branch.mjs <create|uri|drop|report>\n' +
+        '       node scripts/neon-branch.mjs report --fork-pr\n' +
         '       node scripts/neon-branch.mjs --self-test\n' +
         '       node scripts/neon-branch.mjs --self-test-e2e',
     );
     return 2;
   }
   try {
-    return await lifecycle(mode);
+    return await lifecycle(mode, process.env, argv);
   } catch (error) {
     return fail(error.message);
   }
 }
 
-process.exitCode = await main(process.argv.slice(2));
+// Guarded like every other program here, and this one has to be: importing the
+// module to reach a function used to RUN it, printing a usage message and
+// setting the exit code of whatever imported it.
+if (isMain(import.meta.url)) {
+  process.exitCode = await main(process.argv.slice(2));
+}

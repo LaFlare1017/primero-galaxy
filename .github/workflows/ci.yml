@@ -268,15 +268,17 @@ jobs:
       # driver untested behind a green tick. Keyed on the URI rather than on the
       # secret so that a failed create is reported as the failure it is, instead
       # of reading as a run that never had credentials.
+      #
+      # The words are `neon-branch.mjs report`, not this file, because a refusal
+      # nothing reads back is prose: this is the message the job goes red with on
+      # every push while there is no Neon account, and a check now asserts that it
+      # names all three secrets, says which one of them alone is enough, and says
+      # what went untested. An edit that dropped one of those used to be invisible.
       - name: Say whether the remote leg ran
         if: always() && env.DELEGATE_STORE_TEST_URL == ''
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.head.repo.fork }}" = "true" ]; then
-            echo "::notice title=Store gate::no Neon API key on a fork pull request — GitHub passes no secrets, so the remote leg did not run. The in-process one did."
-            exit 0
-          fi
-          echo "::error title=Store gate::no connection URI for a per-run branch on ${{ github.event_name }}, so the store gate ran on its in-process engine only. The serverless driver is the one piece an in-process engine cannot execute, and it is now untested rather than assumed. Check NEON_API_KEY, NEON_PROJECT_ID and NEON_PARENT_BRANCH_ID, and the create step's own output above (delegate/README.md#the-store-gate-against-a-real-database)."
-          exit 1
+        run: >-
+          node scripts/neon-branch.mjs report
+          ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && '--fork-pr' || '' }}
 
   e2e:
     name: E2E (Playwright)
