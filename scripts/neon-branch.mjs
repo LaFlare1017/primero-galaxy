@@ -908,6 +908,74 @@ async function selfTestE2e() {
       );
     }
 
+    // ── and the four refusals on the CREATE paths ───────────────────────
+    //
+    // These are the console's strictness — the properties its own header names
+    // as the reason it exists — and nothing in this repository asserted them.
+    // Every other refusal it enforces was already pinned by a check in one of
+    // the two programs: the bad bearer and the expired branch above, the URI for
+    // a dropped branch above that. These four had no check anywhere, which meant
+    // the strictness was a sentence in a comment rather than a behaviour. A fake
+    // that forgave them would pass every program here, and it would pass the
+    // doctor's own fixture that proves the nested `branch.name` matters — a
+    // fixture that would then be green for the wrong reason instead of red for
+    // the right one.
+    //
+    // Each asserts the refusal AND what the console KEPT, because the two halves
+    // fail apart. A console that stopped answering 409 but still stored the row
+    // looks correct from the client's side, and the harm is in what it kept: two
+    // projects by one name, or two branches that every later run would pick
+    // between at random.
+    {
+      // What the console said to a request it should have refused, or '' when
+      // it let the request through. `neon()` frames every failure the same way,
+      // so the reason is the part of the message worth reading back.
+      const refusalOf = async (path, options) => {
+        try {
+          await neon(path, { apiKey: 'test-key', base, ...options });
+          return '';
+        } catch (error) {
+          return error.message;
+        }
+      };
+      const said = (message) => (message === '' ? 'the console let it through' : message.replace(/^Neon \w+ \S+ answered /, ''));
+
+      const nameless = await refusalOf('/projects', { method: 'POST', body: { label: 'no name at all' } });
+      check(
+        'a project create with no name is refused rather than created nameless',
+        nameless.includes('400') && nameless.includes('a project needs a name') && fake.projects().length === 1,
+        `${said(nameless)}; ${fake.projects().length} project(s) exist`,
+      );
+
+      const twice = await refusalOf('/projects', { method: 'POST', body: { name: 'primero-galaxy-ci' } });
+      const byName = fake.projects().filter((p) => p.name === 'primero-galaxy-ci');
+      check(
+        'a second project of the same name is a 409 rather than a second row',
+        twice.includes('409') && byName.length === 1,
+        `${said(twice)}; ${byName.length} project(s) named primero-galaxy-ci`,
+      );
+
+      const flat = await refusalOf(`/projects/${project.project.id}/branches`, { method: 'POST', body: { name: 'ci-nested' } });
+      check(
+        'a branch create whose name is not nested under `branch` is refused',
+        flat.includes('400') &&
+          flat.includes('nested branch.name') &&
+          fake.branches(project.project.id).every((b) => b.name !== 'ci-nested'),
+        `${said(flat)}; ${fake.branches(project.project.id).map((b) => b.name).join(', ') || '(no branches)'}`,
+      );
+
+      const twiceBranch = await refusalOf(`/projects/${project.project.id}/branches`, {
+        method: 'POST',
+        body: { branch: { name: 'ci-parent' } },
+      });
+      const parents = fake.branches(project.project.id).filter((b) => b.name === 'ci-parent');
+      check(
+        'a second branch of the same name is a 409 rather than a second row',
+        twiceBranch.includes('409') && parents.length === 1,
+        `${said(twiceBranch)}; ${parents.length} branch(es) named ci-parent`,
+      );
+    }
+
     // ── and the thing CI actually runs ────────────────────────────────���──
     //
     // Everything above calls the functions. CI does not: it runs this program

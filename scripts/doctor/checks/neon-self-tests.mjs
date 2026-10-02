@@ -183,6 +183,79 @@ export default {
       why: 'a checkout with neither program in it, where there is nothing to prove',
       setup: () => {},
     },
+    // ── the console's four refusals on the CREATE paths ───────────────────
+    //
+    // These are the strictness the fake console's own header names as the
+    // reason it exists: a create sent in the wrong shape, and a name used
+    // twice. Every other refusal that console enforces was already pinned by a
+    // check in one of the two programs above — the bad bearer, the `expires_at`
+    // the console would reject, the `connection_uri` for a branch that is gone
+    // — so those needed no fixture of their own. These four had no check
+    // anywhere in this repository, which meant the strictness was a sentence in
+    // a comment rather than a behaviour anyone could break and find out.
+    //
+    // Each fixture forgives ONE refusal in the console and requires this check
+    // to go red, which is the whole claim: a fake that forgave these would pass
+    // every program here, and would pass the fixture above that proves the
+    // nested `branch.name` matters — a fixture that would then be green for the
+    // wrong reason instead of red for the right one.
+    {
+      level: 'fail',
+      why: 'a project create with no name, which the console forgives and answers with a nameless row',
+      setup: (root) => {
+        copyIn(root, here);
+        breakScript(
+          root,
+          'scripts/neon-fake-console.mjs',
+          "if (typeof body.name !== 'string' || body.name === '') {",
+          'if (false) {',
+        );
+      },
+    },
+    {
+      level: 'fail',
+      why: 'a duplicate project name the console admits twice rather than answering 409',
+      setup: (root) => {
+        copyIn(root, here);
+        breakScript(
+          root,
+          'scripts/neon-fake-console.mjs',
+          'if (projects.some((p) => p.name === body.name)) {',
+          'if (false) {',
+        );
+      },
+    },
+    {
+      level: 'fail',
+      why: 'a branch create whose name is not nested under `branch`, read off the top level instead of refused',
+      setup: (root) => {
+        copyIn(root, here);
+        // Deliberately NOT `if (false)`. A console that merely stopped CHECKING
+        // would then dereference the absent `body.branch` and crash, which fails
+        // for a reason that has nothing to do with the refusal — the same
+        // mistake as a proof that passes because it crashed. This is what
+        // forgiving actually looks like: take the name wherever it finds it.
+        breakScript(
+          root,
+          'scripts/neon-fake-console.mjs',
+          'const asked = body.branch;',
+          'const asked = body.branch ?? body;',
+        );
+      },
+    },
+    {
+      level: 'fail',
+      why: 'a duplicate branch name the console admits twice, so two runs could branch from different databases under one name',
+      setup: (root) => {
+        copyIn(root, here);
+        breakScript(
+          root,
+          'scripts/neon-fake-console.mjs',
+          'if (branchList().some((b) => b.name === asked.name)) {',
+          'if (false) {',
+        );
+      },
+    },
   ],
   run(root) {
     const present = PROGRAMS.filter((program) => existsSync(join(root, program.script)));
