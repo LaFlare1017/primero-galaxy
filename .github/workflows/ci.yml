@@ -4,6 +4,17 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Re-measuring the worker curve on demand. The `E2E worker curve` job below
+  # runs it on main pushes anyway; this is for the moment somebody wants the
+  # number without waiting for a push — after changing the pin, or after moving
+  # the suite to a runner class with different cores.
+  workflow_dispatch:
+  # Weekly, because the premise of the curve is that it rots silently: the
+  # runner's hardware is not the runner it was, and a pin chosen for four vCPUs
+  # stays green on six. ~25 minutes of runner time a week. Delete this and the
+  # job still runs on every push to main.
+  schedule:
+    - cron: '17 6 * * 1'
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -341,10 +352,12 @@ jobs:
       # against the fourteen-core laptop the default and the ceiling in
       # e2e/workers.ts were measured on. Past a point the galaxy specs stop
       # finishing inside their timeouts rather than running in parallel, so the
-      # local default cannot be assumed to hold here. `npm run e2e:bench`
-      # (scripts/e2e-workers-bench.mjs) re-measures the curve and reads this
-      # number back out of the workflow, so the pin can be checked against data
-      # instead of re-argued from a laptop.
+      # local default cannot be assumed to hold here. The `E2E worker curve` job
+      # below measures the curve on this same runner class and puts the result in
+      # its summary, with this number read back out of the workflow by
+      # scripts/e2e-workers-bench.mjs — so the pin is a measurement rather than
+      # an argument from a laptop. Change it here and that job says whether the
+      # change was an improvement.
       - run: npm run test:e2e
         env:
           CI: '1'
@@ -396,6 +409,56 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+
+  curve:
+    name: E2E worker curve
+    # The e2e job above runs the suite at `E2E_WORKERS: 3`, a number chosen by
+    # comparing a fourteen-core laptop to a four-vCPU runner in prose. This job
+    # stops doing that by comparison: it runs the whole suite at 2, 3 and 4
+    # workers ON THE RUNNER and writes the curve into this job's summary, next
+    # to the pin read back out of the workflow by the bench itself.
+    #
+    # Main pushes and manual runs only, deliberately. Three full suite runs is
+    # real runner time on every pull request, and a curve does not change
+    # because a spec was edited — it changes when the suite's shape does, which
+    # is what landing on main is. The e2e job above remains the thing that says
+    # whether the suite passes.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    # Three full suite runs plus a build each. The e2e job's 40 is for one run;
+    # this is three, on a runner with four vCPUs, and the point of measuring the
+    # curve is not to have the measurement time out.
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # The suite contains a spec that runs the store gate BINARY, so the gate
+      # has to exist here as it does in the e2e job above. Same two steps.
+      - run: npm --prefix delegate ci
+      - run: npm --prefix delegate run build
+      # No secrets at all, and that is the point of the bench's own environment
+      # handling: it clears ANTHROPIC_API_KEY from every run it makes, because a
+      # live call spends money and its latency belongs to a network rather than
+      # to the machine being measured. So this job measures the machine, and a
+      # job that needs no credentials is one that can also run anywhere.
+      - name: Measure the suite at each worker count
+        run: node scripts/e2e-workers-bench.mjs --workers=2,3,4 --json="$RUNNER_TEMP/worker-curve.json"
+      - name: Upload the raw measurements
+        # Not failure-gated, and not conditional on the step above passing: the
+        # numbers are the record even when a count timed out, which is a result
+        # rather than an error. Comparing this file across weeks is how a change
+        # in the runner gets noticed.
+        if: always() && !cancelled()
+        uses: actions/upload-artifact@v7
+        with:
+          name: worker-curve
+          path: ${{ runner.temp }}/worker-curve.json
+          retention-days: 90
 
   lighthouse:
     name: Lighthouse a11y + SEO gate

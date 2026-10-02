@@ -51,7 +51,15 @@
  * And the limit of all of it, printed at the end of every run: this measures
  * THIS machine. A curve from a laptop justifies the local default and the shape
  * of the knee; the pin is only settled on the runner. A number here is evidence
- * about the pin, never a replacement for it.
+ * about the pin, never a replacement for it — which is why the workflow runs
+ * this same program in an `E2E worker curve` job on `main`, and why it asks
+ * `RUNNER_ENVIRONMENT` rather than counting cores before it claims to have
+ * measured anything a pin should be based on.
+ *
+ * When `GITHUB_STEP_SUMMARY` is set, the table and every claim below are
+ * appended to it as markdown — printed from the same values as the log, never
+ * recomputed, because a summary that disagrees with the output beside it is a
+ * curve nobody can trust.
  *
  * Usage:
  *   node scripts/e2e-workers-bench.mjs --workers=1,2,3,4,6 [--repeat=2]
@@ -72,7 +80,7 @@
  *   --force      measure on a machine that is too busy to measure on.
  */
 import { spawn } from 'node:child_process';
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from 'node:fs';
 import { arch, cpus, loadavg, platform, release, tmpdir, totalmem } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -411,6 +419,17 @@ if (machine.load >= cores * BUSY && !options.force) {
   process.exit(2);
 }
 
+/**
+ * Whether this IS the machine CI runs the pin on, asked of the environment and
+ * not of the core count.
+ *
+ * A four-core laptop is not a runner, and a curve that claimed to be one
+ * because it counted four cores would be exactly the kind of inference this
+ * tool exists to replace. GitHub says which machine it is running on
+ * (`RUNNER_ENVIRONMENT`), so the question is asked of the thing that knows.
+ */
+const hosted = process.env.RUNNER_ENVIRONMENT === 'github-hosted' || process.env.GITHUB_ACTIONS === 'true';
+
 const dir = join(tmpdir(), `e2e-workers-bench-${process.pid}`);
 mkdirSync(dir, { recursive: true });
 const pin = pinnedWorkers();
@@ -428,7 +447,21 @@ console.log(
   }`,
 );
 console.log(`${lead('counts')}${options.counts.join(', ')} × ${options.repeat} run${options.repeat === 1 ? '' : 's'} = ${runs} full suite run${runs === 1 ? '' : 's'}`);
-console.log(`${lead('shape')}${options.local ? 'local (retries 0)' : 'CI-shaped (CI=1, retries 2) — the same run the pin will make'}`);
+
+console.log(
+  `${lead('runner')}${
+    hosted
+      ? `GitHub reported a hosted runner here (${process.env.RUNNER_ENVIRONMENT}) — read the core count above before believing that`
+      : 'not a GitHub runner, so these numbers describe this machine and nothing else'
+  }`,
+);
+console.log(
+  `${lead('summary')}${
+    (process.env.GITHUB_STEP_SUMMARY ?? '') === ''
+      ? 'GITHUB_STEP_SUMMARY is not set, so these facts go to the log and nowhere else'
+      : process.env.GITHUB_STEP_SUMMARY
+  }`,
+);
 console.log(`${lead('pin')}${pin === null ? 'not found in .github/workflows/ci.yml — the comparison below cannot be made' : `CI pins E2E_WORKERS=${pin}`}`);
 if (options.only !== null) {
   console.log(`${lead('filter')}${options.only} — a filtered run is not a suite measurement, and the rows below say so`);
@@ -457,104 +490,157 @@ for (const count of options.counts) {
 
 const rows = options.counts.map((count) => summarise(count, results.filter((run) => run.count === count)));
 
-console.log('\n  workers   suite     wall      vs fewer   slowest file              verdict');
-for (const row of rows) {
-  const previous = rows[rows.indexOf(row) - 1];
+/**
+ * The table as data, so the log and the job summary are printed from the same
+ * numbers rather than from two descriptions of them that agree until they don't.
+ */
+const cells = rows.map((row, at) => {
+  const previous = rows[at - 1];
   const delta =
     previous?.suite != null && row.suite != null && previous.suite > 0
       ? `${previous.suite - row.suite >= 0 ? 'saved ' : 'LOST '}${clock(Math.abs(previous.suite - row.suite))}`
       : '—';
-  const slowest = row.slowest === null ? '—' : `${row.slowest.file} ${clock(row.slowest.ms)}`;
-  const verdict =
-    row.why !== null
-      ? 'unmeasurable'
-      : row.green
-        ? row.flaky > 0
-          ? `green, but ${row.flaky} needed a retry`
-          : 'green'
-        : `failed: ${row.timeouts.length} timeout(s), ${row.runs[0]?.unexpected ?? '?'} unexpected`;
-  console.log(
-    `  ${pad(row.count, 8)} ${pad(clock(row.suite), 9)} ${pad(clock(row.wall), 9)} ${pad(delta, 10)} ${pad(slowest, 24)} ${verdict}`,
-  );
-}
+  return {
+    count: row.count,
+    suite: clock(row.suite),
+    wall: clock(row.wall),
+    delta,
+    slowest: row.slowest === null ? '—' : `${row.slowest.file} ${clock(row.slowest.ms)}`,
+    verdict:
+      row.why !== null
+        ? 'unmeasurable'
+        : row.green
+          ? row.flaky > 0
+            ? `green, but ${row.flaky} needed a retry`
+            : 'green'
+          : `failed: ${row.timeouts.length} timeout(s), ${row.runs[0]?.unexpected ?? '?'} unexpected`,
+  };
+});
+
+/**
+ * Every claim this run makes, collected once.
+ *
+ * So that the terminal and the job summary carry the same words. A summary
+ * written from a second pass over the numbers is a summary that can disagree
+ * with the log, and a curve that disagrees with itself is worse than no curve:
+ * a reader who sees one in the summary and the other in the output has no way to
+ * tell which one the bench meant.
+ */
+const findings = [];
+const say = (label, text) => findings.push({ label, text });
 
 const greenRows = rows.filter((row) => row.green && row.suite !== null);
 const failedRows = rows.filter((row) => !row.green && row.why === null);
 const unreadable = rows.filter((row) => row.why !== null);
+const fastestOf = (list) => list.reduce((a, b) => (b.suite < a.suite ? b : a));
 
-console.log('');
 if (greenRows.length === 0) {
-  console.log('  No count finished green, so there is no fastest green count to report. The rows above are what happened.');
+  say('', 'No count finished green, so there is no fastest green count to report. The rows above are what happened.');
 } else {
-  const fastest = greenRows.reduce((a, b) => (b.suite < a.suite ? b : a));
-  const knee = greenRows.filter((row) => row.suite <= fastest.suite * (1 + WITHIN)).reduce((a, b) => (b.count < a.count ? b : a));
-  console.log(`  ${lead('fastest green')}${fastest.count} worker${fastest.count === 1 ? '' : 's'} — suite ${clock(fastest.suite)}`);
-  console.log(
-    `  ${lead('the knee')}${knee.count} worker${knee.count === 1 ? '' : 's'} — within ${Math.round(WITHIN * 100)}% of that (${clock(knee.suite)}), and one fewer process`,
-  );
+  const fastest = fastestOf(greenRows);
+  const knee = greenRows
+    .filter((row) => row.suite <= fastest.suite * (1 + WITHIN))
+    .reduce((a, b) => (b.count < a.count ? b : a));
+  const workers = (count) => `${count} worker${count === 1 ? '' : 's'}`;
+  say('fastest green', `${workers(fastest.count)} — suite ${clock(fastest.suite)}`);
+  say('the knee', `${workers(knee.count)} — within ${Math.round(WITHIN * 100)}% of that (${clock(knee.suite)}), and one fewer process`);
   if (knee.count !== fastest.count) {
-    console.log(`  ${lead('')}${fastest.count} workers buys ${clock(fastest.suite - knee.suite)} more than ${knee.count} does. Whether that is worth the machine is not a question a stopwatch answers.`);
+    say('', `${workers(fastest.count)} buys ${clock(fastest.suite - knee.suite)} more than ${workers(knee.count)} does. Whether that is worth the machine is not a question a stopwatch answers.`);
   }
 }
 
 if (pin !== null) {
   const measured = rows.find((row) => row.count === pin);
+  const fastest = greenRows.length === 0 ? null : fastestOf(greenRows);
   if (measured === undefined) {
-    console.log(`  ${lead('the pin')}${pin} was not measured here (--workers did not include it), so this says nothing about the number CI uses.`);
+    say('the pin', `${pin} was not measured here (--workers did not include it), so this says nothing about the number CI uses.`);
   } else if (measured.why !== null) {
-    console.log(`  ${lead('the pin')}${pin} could not be measured — ${measured.why}`);
+    say('the pin', `${pin} could not be measured — ${measured.why}`);
   } else if (!measured.green) {
-    console.log(`  ${lead('the pin')}${pin} is not green on this machine (${measured.timeouts.length} timeout(s)). That is a fact about this machine, and CI's runner is not this machine.`);
-  } else if (greenRows.length > 0) {
-    const fastest = greenRows.reduce((a, b) => (b.suite < a.suite ? b : a));
-    if (fastest.count === pin) {
-      console.log(
-      `  ${lead('the pin')}${pin} is both the fastest green count and the number CI pins. The pin is behind a measurement.${
-        measured.flaky > 0 ? ` It is also the run that hid ${measured.flaky} retry-flown test(s) behind exit 0.` : ''
-      }`,
-    );
-    } else if (fastest.count > pin) {
-      console.log(
-        `  ${lead('the pin')}${pin} measured ${clock(measured.suite)}; ${fastest.count} measured ${clock(fastest.suite)}, ${clock(measured.suite - fastest.suite)} faster. Whether CI can have ${fastest.count} is a question about four vCPUs, not about this machine.`,
-      );
-    } else {
-      console.log(
-        `  ${lead('the pin')}${pin} measured ${clock(measured.suite)}, ${clock(measured.suite - fastest.suite)} slower than ${fastest.count} — so the pin is conservative here, which is the right direction to be wrong in.`,
-      );
-    }
+    say('the pin', `${pin} is not green here (${measured.timeouts.length} timeout(s)). ${hosted ? 'GitHub reports this as a hosted runner, so the pin is wrong here rather than merely unmeasured.' : "That is a fact about this machine, and CI's runner is not this machine."}`);
+  } else if (fastest === null) {
+    say('the pin', `${pin} finished green in ${clock(measured.suite)}, and nothing else did, so there is no comparison to make.`);
+  } else if (fastest.count === pin) {
+    say('the pin', `${pin} is both the fastest green count and the number CI pins. The pin is behind a measurement.${measured.flaky > 0 ? ` It is also the run that hid ${measured.flaky} retry-flown test(s) behind exit 0.` : ''}`);
+  } else if (fastest.count > pin) {
+    say('the pin', `${pin} measured ${clock(measured.suite)}; ${fastest.count} measured ${clock(fastest.suite)}, ${clock(fastest.suite - measured.suite)} faster.${hosted ? ' Both ran where the pin runs, so this is the number to change the pin to.' : ' Whether CI can have that many is a question about four vCPUs, not about this machine.'}`);
+  } else {
+    say('the pin', `${pin} measured ${clock(measured.suite)}, ${clock(measured.suite - fastest.suite)} slower than ${fastest.count} — so the pin is conservative here, which is the right direction to be wrong in.`);
   }
 }
 
+for (const row of failedRows) {
+  const named = row.timeouts.slice(0, 4).join('; ');
+  say(`${row.count} workers`, `did not finish green — ${row.timeouts.length} timeout(s)${named ? `: ${named}${row.timeouts.length > 4 ? `; and ${row.timeouts.length - 4} more` : ''}` : ''}`);
+}
 if (failedRows.length > 0) {
-  for (const row of failedRows) {
-    const named = row.timeouts.slice(0, 4).join('; ');
-    console.log(
-      `  ${lead(`${row.count} workers`)}did not finish green — ${row.timeouts.length} timeout(s)${named ? `: ${named}${row.timeouts.length > 4 ? `; and ${row.timeouts.length - 4} more` : ''}` : ''}`,
-    );
-  }
-  console.log(
-    `  ${lead('')}A count that times out is not a slow count, it is a broken one, and its time is not comparable to a green run's.`,
-  );
+  say('', 'A count that times out is not a slow count, it is a broken one, and its time is not comparable to a green run\'s.');
 }
 for (const row of unreadable) {
-  console.log(`  ${lead(`${row.count} workers`)}unmeasurable — ${row.why}`);
+  say(`${row.count} workers`, `unmeasurable — ${row.why}`);
 }
 if (options.repeat === 1) {
-  console.log(`${lead('one run')}a single run is a sample, not a number — re-run with --repeat=3 before changing the pin on the strength of it.`);
+  say('one run', 'a single run is a sample, not a number — re-run with --repeat=3 before changing the pin on the strength of it.');
 }
 
-console.log(`
-  What this does not tell you: it measures ${machine.cores} cores on this machine. GitHub's runner has
-  four vCPUs, so this justifies the local default and the shape of the curve; the pin is
-  settled on the runner, or by a job summary there. The suite parallelises by FILE
-  (fullyParallel: false), so the floor is the slowest file and no worker count reaches
-  below it — that column is why a curve flattens instead of falling.
-  Raw reports: ${dir}`);
+/**
+ * What this measurement is not evidence about, said the same way wherever it is
+ * printed. The point of the sentence changes when the machine changes, which is
+ * why it is computed rather than written once: run here, it is a caveat about a
+ * laptop; run on the runner, it would have been a lie about the runner.
+ */
+const caveat = hosted
+  ? `GitHub reported this as a hosted runner, so this is the machine the pin runs on: ${machine.cores} logical cores, ${machine.platform}. If that is not the runner class the pin was chosen for, the hardware moved under the number and it wants measuring again. The local default in e2e/workers.ts is sized for a developer's machine and still says so. The suite parallelises by FILE (fullyParallel: false), so the floor is the slowest file and no worker count reaches below it.`
+  : `This measured ${machine.cores} logical cores on this machine. GitHub's runner has four vCPUs, so this justifies the local default and the shape of the curve; the pin is settled on the runner, by the \`E2E worker curve\` job. The suite parallelises by FILE (fullyParallel: false), so the floor is the slowest file and no worker count reaches below it.`;
+
+console.log('\n  workers   suite     wall      vs fewer   slowest file              verdict');
+for (const cell of cells) {
+  console.log(
+    `  ${pad(cell.count, 8)} ${pad(cell.suite, 9)} ${pad(cell.wall, 9)} ${pad(cell.delta, 10)} ${pad(cell.slowest, 24)} ${cell.verdict}`,
+  );
+}
+console.log('');
+for (const { label, text } of findings) console.log(`${lead(label)}${text}`);
+
+/**
+ * The same table and the same findings, as markdown, for the job summary.
+ *
+ * Written from `cells` and `findings` rather than recomputed, so there is no
+ * second reading of the numbers to fall out of step with the first.
+ */
+function summaryMarkdown() {
+  const lines = ['### The worker curve, measured here', ''];
+  lines.push('| workers | suite | wall | vs fewer | slowest file | verdict |');
+  lines.push('|---|---|---|---|---|---|');
+  for (const cell of cells) {
+    lines.push(`| ${cell.count} | ${cell.suite.trim()} | ${cell.wall.trim()} | ${cell.delta} | ${cell.slowest} | ${cell.verdict} |`);
+  }
+  lines.push('');
+  lines.push(
+    `\`suite\` is the report's own duration; \`wall\` is the stopwatch and includes the one build \`globalSetup\` makes before any worker starts. Every run was ${options.local ? 'local-shaped (retries 0)' : 'CI-shaped (retries 2)'} with \`ANTHROPIC_API_KEY\` removed, so what is timed is the machine rather than a network.`,
+  );
+  lines.push('');
+  lines.push(
+    `Machine: ${machine.platform} · ${machine.cores} logical cores · node ${machine.node}${hosted ? ' · **GitHub reports this as a hosted runner**' : ''}${pin === null ? '' : ` · the workflow pins E2E_WORKERS=${pin}`}.`,
+  );
+  lines.push('');
+  for (const { label, text } of findings) lines.push(label === '' ? `  ${text}` : `- **${label}** — ${text}`);
+  lines.push('', caveat);
+  return `${lines.join('\n')}\n`;
+}
+
+const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+if (summaryPath !== undefined && summaryPath !== '') {
+  appendFileSync(summaryPath, summaryMarkdown());
+  console.log(`\n  ${lead('summary')}${summaryPath} — the curve and every claim above, in this job's summary`);
+}
+console.log(`\n  What this does not tell you: ${caveat}`);
+console.log(`  Raw reports: ${dir}`);
 
 if (options.json !== null) {
   writeFileSync(
     options.json,
-    `${JSON.stringify({ recordedAt: new Date().toISOString(), machine, pin, options, runs: results }, null, 2)}\n`,
+    `${JSON.stringify({ recordedAt: new Date().toISOString(), machine, hosted, pin, options, runs: results }, null, 2)}\n`,
   );
   console.log(`  Measurements written to ${options.json}`);
 }

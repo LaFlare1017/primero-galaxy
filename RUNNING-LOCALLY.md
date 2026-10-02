@@ -289,7 +289,11 @@ count, not a slow one — that is the datapoint that keeps the ceiling honest.
 
 It measures **this** machine, which is the limit of it: GitHub's runner has four
 vCPUs, so a curve here justifies the local default and the shape of the knee,
-and the pin itself is only settled on the runner.
+and the pin itself is only settled on the runner — which is why the
+`E2E worker curve` job runs this same script on `main` pushes, weekly and on
+demand (`workflow_dispatch`), and writes the curve into its job summary next to
+the pin read back out of the workflow. If that summary ever disagrees with the
+number in `ci.yml`, the summary is the newer truth.
 
 ## 12. When something is wrong
 
