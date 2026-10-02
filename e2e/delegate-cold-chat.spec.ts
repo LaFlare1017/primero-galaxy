@@ -12,6 +12,7 @@ import {
   storeRows,
   type ManagedServer,
 } from './cold-process';
+import { coldChatTranscriptPath, loadTranscript, startFakeAnthropic, type FakeAnthropic } from './fake-anthropic';
 
 /**
  * The cold-process path for the CHAT route, across a real restart.
@@ -46,8 +47,18 @@ const STAMP = Date.now().toString(36).slice(-5);
 const PARTICIPANT = `E2E Cold Chat ${STAMP}`;
 const SCENARIO = 's1';
 
-/** The key is the gate. Absent, every test below is skipped, not failed. */
+/** A real key means a real model. Without one, the recorded transcript answers instead. */
 const LIVE = Boolean(process.env.ANTHROPIC_API_KEY);
+
+/**
+ * The env the spawned servers need to reach whichever Anthropic is in play.
+ *
+ * With a key: the real API, untouched. Without one: `ANTHROPIC_BASE_URL` pointed
+ * at the fixture endpoint and a syntactically real key, because the provider
+ * refuses to be constructed without one and the whole point is to exercise the
+ * real provider rather than the workshop's mock.
+ */
+const FAKE_KEY = 'sk-ant-api03-replay-fixture-not-a-real-key-0000000000000000000000000000000000000000000000000000000000000000';
 
 /** A real multi-hop turn is slow by nature; the route's own ceiling is 60s. */
 const TURN_TIMEOUT = 120_000;
@@ -95,30 +106,54 @@ function eventsFor(runId: string): StoredEvent[] {
 test.describe('Delegate cold process (chat)', () => {
   let first: ManagedServer | null = null;
   let second: ManagedServer | null = null;
+  let fake: FakeAnthropic | null = null;
 
-  test.skip(!LIVE, 'no ANTHROPIC_API_KEY — this spec needs the real agent, since the mock cannot show whether the history survived the restart');
+  /**
+   * The servers' Anthropic environment, decided once for the file.
+   *
+   * `ANTHROPIC_BASE_URL` is the seam the agent already has
+   * (`AnthropicProvider` reads it), so pointing it at a transcript on localhost
+   * is enough to exercise the real provider, the real request shape and the real
+   * tool loop with no account and no spend. A key, when there is one, still wins:
+   * the live path is not downgraded to make the replay easier to run.
+   */
+  function agentEnv(): Record<string, string> {
+    if (LIVE) return { DELEGATE_AGENT: 'anthropic' };
+    return { DELEGATE_AGENT: 'anthropic', ANTHROPIC_API_KEY: FAKE_KEY, ANTHROPIC_BASE_URL: fake!.url };
+  }
 
-  test.beforeAll(() => {
+  test.beforeAll(async () => {
     assertBuildIsCurrent();
     rmSync(join(ROOT, DATA_DIR), { recursive: true, force: true });
+    if (!LIVE) {
+      fake = await startFakeAnthropic(loadTranscript(coldChatTranscriptPath(ROOT)));
+    }
   });
 
   test.afterAll(async () => {
     await stopServer(second);
     await stopServer(first);
+    await fake?.close();
   });
 
-  test('a turn on a process that never saw the run still knows what came before it', async ({ page }) => {
-    // Two process starts, a restart, and two real model turns. Generous on
-    // purpose: the model is the slowest thing here by an order of magnitude.
+  test('a turn on a process that never saw the run still knows what came before it', async ({ page }, testInfo) => {
+    // Two process starts, a restart, and two model turns. Generous on purpose:
+    // the model is the slowest thing here by an order of magnitude — and it is
+    // only ever that slow against a real API, so the replay path needs a
+    // fraction of this and finishes long before it.
     test.setTimeout(360_000);
+
+    // Which of the two this was, recorded in the report rather than only in the
+    // log: a CI reader looking at a green run cannot otherwise tell a real model
+    // from a transcript, and those are very different things to be true.
+    testInfo.annotations.push({ type: 'agent', description: LIVE ? 'live model' : 'recorded transcript' });
 
     let runId = '';
     let firstPid = 0;
     let coldUrl = '';
 
     await test.step('a warm process takes the first turn with the real agent', async () => {
-      first = await startServerOnAnyPort(DATA_DIR, { DELEGATE_AGENT: 'anthropic' });
+      first = await startServerOnAnyPort(DATA_DIR, agentEnv());
       const seeded = await startRun(page, first.url);
       runId = seeded.runId;
       expect(runId).toMatch(/^run-/);
@@ -134,6 +169,15 @@ test.describe('Delegate cold process (chat)', () => {
       expect((body.reply ?? '').length).toBeGreaterThan(0);
     });
 
+    await test.step('the transcript was consulted, not just the last prompt', async () => {
+      if (LIVE) return;
+      // Not decoration. It is what makes the replay path worth trusting: the
+      // cold answer is only reachable from the turn that REQUIRES the first
+      // question to be present, so seeing that turn served means the fixture
+      // took the branch the assertion depends on.
+      expect(fake!.served, 'the warm turn is answered from the transcript').toContain('warm');
+    });
+
     await test.step('the first process is stopped, and its port comes back', async () => {
       firstPid = first!.pid;
       const firstPort = Number(new URL(first!.url).port);
@@ -147,7 +191,7 @@ test.describe('Delegate cold process (chat)', () => {
     });
 
     await test.step('a different process starts, on a port of its own', async () => {
-      second = await startServerOnAnyPort(DATA_DIR, { DELEGATE_AGENT: 'anthropic' });
+      second = await startServerOnAnyPort(DATA_DIR, agentEnv());
       coldUrl = second.url;
       expect(second.pid, 'the second server must not be the first one').not.toBe(firstPid);
     });
@@ -172,6 +216,20 @@ test.describe('Delegate cold process (chat)', () => {
         body.reply ?? '',
         'the cold process answered from its own prompt rather than from the transcript',
       ).toMatch(CARRIED);
+    });
+
+    await test.step('the cold answer came from the turn that needs the history', async () => {
+      if (LIVE) return;
+      // The fallback turn is the one that says it has nothing. If THAT is what
+      // answered, the spec has just caught the regression it was written for —
+      // so its presence here would be a failure, not a detail.
+      expect(
+        fake!.served,
+        'the cold turn fell through to the has-no-history fallback, so the transcript was not recovered',
+      ).not.toContain('cold-without-history');
+      expect(fake!.served, 'the cold turn was answered from the turn that requires the first question').toContain(
+        'cold-with-history',
+      );
     });
 
     await test.step('the cold process wrote both turns to the store', async () => {

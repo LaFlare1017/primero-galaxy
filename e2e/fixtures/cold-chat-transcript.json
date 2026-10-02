@@ -1,0 +1,92 @@
+{
+  "$note": "The transcript the cold-process chat spec replays. See e2e/fake-anthropic.ts for how it is matched and served, and delegate/README.md for why the spec cannot simply skip when there is no key.",
+  "$format": {
+    "turns": "Matched against the request, in order. `when` must appear in the LAST user message that is a plain string; `requires`, when present, must appear anywhere in the request body. The first turn whose `when` matches and whose `requires` is satisfied serves its next hop, so a turn that calls a tool takes two hops and the tool results it produced still match.",
+    "whyMatchedNotSequential": "A sequential fixture hands out its next answer whatever the request says. That would answer the cold turn identically whether the restarted process had recovered the transcript or lost it, so the spec would pass with no history in it at all — which is the one thing the spec exists to rule out."
+  },
+  "turns": [
+    {
+      "id": "warm",
+      "when": "Reconcile the March operating bank account",
+      "hops": [
+        {
+          "content": [
+            {
+              "type": "text",
+              "text": "Let me pull the March bank feed for HLI-US and tie it out."
+            },
+            {
+              "type": "tool_use",
+              "id": "toolu_fx_warm_01",
+              "name": "get_bank_feed",
+              "input": { "entity": "HLI-US", "month": "2026-03" }
+            }
+          ],
+          "stop_reason": "tool_use",
+          "usage": { "input_tokens": 1180, "output_tokens": 74 }
+        },
+        {
+          "content": [
+            {
+              "type": "text",
+              "text": "I reconciled the March operating account for HLI-US. The bank feed and GL activity tie out to $412,881.90 with no unreconciled items, and both $18,450 customer deposits match open invoices of the same amount. Nothing is outstanding, and the account is ready for close."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "usage": { "input_tokens": 1420, "output_tokens": 96 }
+        }
+      ]
+    },
+    {
+      "id": "cold-with-history",
+      "when": "what did I just ask you to do",
+      "requires": "Reconcile the March operating bank account",
+      "$requiresWhy": "The sentence the answer carries comes from the FIRST turn, which only reaches this request if the restarted process read the transcript back out of the store. Lose the history and this turn stops matching, and the one below answers instead.",
+      "hops": [
+        {
+          "content": [
+            {
+              "type": "text",
+              "text": "Checking the feed again so the answer is current."
+            },
+            {
+              "type": "tool_use",
+              "id": "toolu_fx_cold_01",
+              "name": "get_bank_feed",
+              "input": { "entity": "HLI-US", "month": "2026-03" }
+            }
+          ],
+          "stop_reason": "tool_use",
+          "usage": { "input_tokens": 1610, "output_tokens": 71 }
+        },
+        {
+          "content": [
+            {
+              "type": "text",
+              "text": "You asked me to reconcile the March operating bank account and tell you what does not tie."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "usage": { "input_tokens": 1755, "output_tokens": 28 }
+        }
+      ]
+    },
+    {
+      "id": "cold-without-history",
+      "when": "what did I just ask you to do",
+      "$idWhy": "Served only when the turn above did not match, which is exactly the regression: the restarted process answered from its own prompt with nothing of the earlier conversation in front of it.",
+      "hops": [
+        {
+          "content": [
+            {
+              "type": "text",
+              "text": "I do not have your earlier question in front of me — this conversation starts with your last message. Please paste what you asked before."
+            }
+          ],
+          "stop_reason": "end_turn",
+          "usage": { "input_tokens": 210, "output_tokens": 32 }
+        }
+      ]
+    }
+  ]
+}

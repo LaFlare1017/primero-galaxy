@@ -305,12 +305,12 @@ jobs:
       # report below.
       #
       # ANTHROPIC_API_KEY is set on this STEP, not the job, because exactly one
-      # spec reads it: e2e/delegate-cold-chat.spec.ts, which skips without it.
-      # It needs the real agent rather than the mock — a mock answers from the
-      # prompt text, so it cannot show whether a restarted process actually
-      # recovered the conversation, which is the whole point of that spec. Scoped
-      # to the step so no other test, and nothing the build touches, can reach
-      # the key.
+      # spec reads it: e2e/delegate-cold-chat.spec.ts. That spec RUNS either way
+      # — with no key it replays a recorded transcript against a fake Anthropic
+      # on localhost, so the restart assertion is proved on every push rather
+      # than only on the machines that happen to have a key — and a key turns the
+      # replay into a live call. Scoped to the step so no other test, and nothing
+      # the build touches, can reach the key.
       #
       # E2E_WORKERS is pinned rather than inherited. Each worker is a `next start`
       # AND a Chromium with its own store (e2e/worker-server.ts), so the number
@@ -331,28 +331,28 @@ jobs:
         if: always() && !cancelled()
         id: flaky
         run: node scripts/flaky-report.mjs test-results/results.json
-      # The same report, read for the other thing it is not saying. One spec in
-      # this suite needs a real model, and skips itself when
-      # ANTHROPIC_API_KEY is absent — skipped, not failed, because a spec that
-      # costs money must not turn a fork pull request red. The cost of that is
-      # that the run is green either way: `expected: 0, skipped: 1` is the same
-      # tick as the assertion having run, and the log line for a skip carries no
-      # reason. So the job says which one it was, from the report rather than
-      # from the environment — a key that was set and the spec still skipped is
-      # a case a key-presence check would pass straight over.
+      # The same report, read for what it is NOT saying. One spec in this suite
+      # needs a model, and it runs either way — without a key it replays a
+      # recorded transcript against a fake Anthropic on localhost. So "did it
+      # run" no longer says which model answered, and a live model and a fixture
+      # are very different claims for a green tick to be making. This step reads
+      # both out of the report: whether the spec ran at all, and the annotation
+      # it recorded about the agent that answered.
       #
-      # Fails on push, notices on a fork PR: the same split the store gate uses,
-      # and for the same reason. GitHub sends no secrets to a fork, so there the
-      # leg cannot run and saying so is the whole job.
-      - name: Say whether the live leg ran
+      # It still fails when the spec did not run at all. That is the case the
+      # step was written for, and it is still reachable — a filter that excludes
+      # the file, a suite that aborts before it, a spec that skips again for
+      # some new reason — and a green tick with no restart assertion in it is
+      # the outcome worth refusing.
+      - name: Say whether the cold-process chat ran
         if: always() && !cancelled()
         run: |
           node scripts/e2e-live-leg.mjs test-results/results.json || {
             if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.head.repo.fork }}" = "true" ]; then
-              echo "::notice title=E2E live leg::no ANTHROPIC_API_KEY on a fork pull request — GitHub passes no secrets, so the cold-process chat spec skipped and the restarted-process transcript is untested here. The in-process suite did run."
+              echo "::notice title=Cold-process chat::the spec did not run on this fork pull request. It replays a recorded transcript when there is no key, so it needs neither secrets nor an account — a skip here means something excluded the file, not that GitHub withheld a key."
               exit 0
             fi
-            echo "::error title=E2E live leg::the cold-process chat spec did not run, so nothing proved that a restarted process recovers the conversation — and the suite passed anyway, because a skipped spec is not a failure. Add ANTHROPIC_API_KEY as a repository secret (gh secret set ANTHROPIC_API_KEY, value on stdin) and re-run; the job summary above carries the spec's own reason. delegate/README.md#live-anthropic-runs"
+            echo "::error title=Cold-process chat::the cold-process chat spec did not run, so nothing proved that a restarted process recovers the conversation — and the suite passed anyway, because a skipped spec is not a failure. It replays a recorded transcript when there is no ANTHROPIC_API_KEY, so a skip is not about secrets at all: check the job summary above for the reason the spec recorded, and delegate/README.md#live-anthropic-runs."
             exit 1
           }
       - name: Upload Playwright report and traces

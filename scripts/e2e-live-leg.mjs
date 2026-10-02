@@ -8,13 +8,19 @@
  * process that recovered the transcript can answer, and that answer is the
  * assertion.
  *
- * So the file skips itself when `ANTHROPIC_API_KEY` is absent — skipped, not
- * failed, because a spec that costs money and needs a key must not turn a fork
- * pull request red. That is the right behaviour and it hides a real one: a
- * skipped spec is not a failure, so the run is green, and green with
+ * That spec used to skip itself when `ANTHROPIC_API_KEY` was absent — skipped,
+ * not failed, because a spec that costs money and needs a key must not turn a
+ * fork pull request red. Correct, and it hid a real one: a skipped spec is not a
+ * failure, so the run was green, and green with
  * `stats: {expected: 0, skipped: 1}` is the same tick as green with the test
- * actually having run. Nothing in the log distinguishes them either — the list
- * reporter prints `-  1 e2e/delegate-cold-chat.spec.ts:110:7` and stops.
+ * actually having run. Nothing in the log distinguished them either.
+ *
+ * The spec now replays a recorded transcript when there is no key, so it always
+ * runs — which makes this script's job different rather than unnecessary. "Did
+ * it run" no longer says which agent answered, and a live model and a fixture
+ * on localhost are very different claims for a green tick to be making. So the
+ * report is read for both: whether the spec ran, and what it recorded about the
+ * agent that answered it.
  *
  * This reads the evidence instead of the environment. It does not check
  * whether the key was present, because a key's presence is not what is being
@@ -37,6 +43,18 @@ import { appendFileSync, readFileSync } from 'node:fs';
 
 /** The spec whose running is the claim. Named by path so a rename cannot pass. */
 const LIVE_SPEC = 'delegate-cold-chat.spec.ts';
+
+/**
+ * What the spec recorded about the agent that answered it.
+ *
+ * The spec runs either way now — it replays a recorded transcript when there is
+ * no `ANTHROPIC_API_KEY` — so "did it run" is no longer enough to read. A green
+ * run means the restarted process recovered the conversation, which is a real
+ * result; whether that was proved against a live model or a fixture on localhost
+ * is a materially different claim about how much the run covered, and the two
+ * used to look identical because one of them did not happen at all.
+ */
+const AGENT_ANNOTATION = 'agent';
 
 /**
  * Statuses that mean the assertion was actually attempted. These are the values
@@ -94,6 +112,25 @@ function whySkipped(specs) {
   return 'no skip reason was recorded';
 }
 
+/**
+ * Which agent answered, as the spec recorded it.
+ *
+ * Read from the test's annotations rather than guessed at: whether the key was
+ * present is a fact about the runner's environment, and this is a fact about
+ * the run.
+ */
+function whichAgent(specs) {
+  for (const spec of specs) {
+    for (const test of spec.tests ?? []) {
+      for (const result of test.results ?? []) {
+        const note = (result.annotations ?? []).find((entry) => entry.type === AGENT_ANNOTATION);
+        if (note?.description) return note.description;
+      }
+    }
+  }
+  return 'unrecorded';
+}
+
 const attempted = specs.flatMap((spec) => spec.tests ?? []).filter((test) =>
   ATTEMPTED.has(test.status),
 );
@@ -111,15 +148,21 @@ const reason =
       ? 'the spec was never collected, so the run did not reach it'
       : whySkipped(specs);
 const verdict = reason === null;
+/** Only meaningful once the spec has run; naming it anyway would be a guess. */
+const agent = verdict ? whichAgent(specs) : null;
 
 const summary = verdict
-  ? `### Live leg\n\nThe cold-process chat spec ran against a real model — ${attempted.length} test(s) attempted. A restarted process was asked what it was asked a moment ago, and had to answer from the recovered transcript.`
-  : `### Live leg did not run\n\nThe cold-process chat spec never executed, so **nothing this run proved that a restarted process recovers the conversation**. The suite still passed: a skipped spec is not a failure.\n\n- Reason recorded by the spec: _${reason}_\n- \`ANTHROPIC_API_KEY\` is the gate — add it as a repository secret and re-run.`;
+  ? `### Cold-process chat\n\nThe cold-process chat spec ran — ${attempted.length} test(s) attempted, answered by the **${agent}**. A restarted process was asked what it was asked a moment ago, and had to answer from the recovered transcript.${
+      agent === 'recorded transcript'
+        ? '\n\nThat is the transcript replaying on localhost rather than a live model: the restart is proved, the model is not exercised. Add `ANTHROPIC_API_KEY` as a repository secret for the latter.'
+        : ''
+    }`
+  : `### Cold-process chat did not run\n\nThe cold-process chat spec never executed, so **nothing this run proved that a restarted process recovers the conversation**. The suite still passed: a skipped spec is not a failure.\n\n- Reason recorded by the spec: _${reason}_`;
 
 if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${summary}\n`);
 
 if (verdict) {
-  console.log(`${LIVE_SPEC}: ran — ${attempted.length} test(s) attempted against the real agent.`);
+  console.log(`${LIVE_SPEC}: ran — ${attempted.length} test(s) attempted, answered by the ${agent}.`);
   process.exit(0);
 }
 
