@@ -13,6 +13,7 @@
     "doctor": "node scripts/doctor.mjs",
     "hooks:install": "node scripts/hooks-install.mjs",
     "secrets:neon": "node scripts/neon-secrets.mjs",
+    "store:rehearse": "npm --prefix delegate run build --silent && node scripts/store-job-rehearsal.mjs",
     "reset:delegate": "npm --prefix delegate run build --silent && node delegate/dist/alpha/reset-cohort.js"
   },
   "dependencies": {

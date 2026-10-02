@@ -101,6 +101,23 @@ jobs:
       - run: npm --prefix delegate run build
       - run: npm --prefix delegate test
 
+      # The `store` job's seven steps, walked in order against a console on
+      # localhost. It is not in the `store` job because that job is gated on
+      # NEON_API_KEY, which this repository does not have — a step there would
+      # never run, and a rehearsal that never runs is a comment. Here it runs on
+      # every push and every fork PR, hermetically, with no account and no
+      # database: the resolve/create/uri/drop/report steps, the `$GITHUB_ENV`
+      # hand-off between them, and the in-process gate leg. The remote leg is
+      # named as unreached on every run — the fake console serves the management
+      # API and there is no Postgres behind its URI — which is why the `store`
+      # job still exists.
+      #
+      # It reads `.github/workflows/ci.yml` back and fails if it finds a Neon
+      # command line CI depends on that this rehearsal does not run, so a renamed
+      # mode breaks here rather than silently un-rehearsing the job.
+      - name: Rehearse the store job
+        run: node scripts/store-job-rehearsal.mjs
+
   store:
     name: Store gate (real Postgres)
     runs-on: ubuntu-latest

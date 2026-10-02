@@ -176,7 +176,17 @@ NEON_API_KEY=… npm run secrets:neon -- --apply
 
 Without `--apply` it prints the plan and touches nothing, so it is safe to run to see what it would do. The key is read from the environment rather than a flag because a key on a command line lands in the shell history and in `ps` output; `gh secret set` reads each value from stdin, so it never appears in a command line either. Mint a key at **console.neon.tech → Account Settings → API keys** — the script will not do that for you, since it would mean handling your account password.
 
-Two modes check it without an account, and both are run by the repo doctor on every commit, so a script that stops working says so at the commit that broke it rather than at the next push that needs an account:
+That covers each program. It does not cover the **job**, and a job is not the sum of its parts: it is the order the steps run in, the variables each one hands the next, and the exact command lines CI writes in YAML. A `--self-test` mode can pass while the workflow calls a program with a mode that no longer exists, and nothing in the doctor would notice — the same class of gap as transcribing a job into prose.
+
+So the whole thing is walked as well, in order, as **processes**, against a console on localhost:
+
+```bash
+npm run store:rehearse     # all seven store-job steps, no account and no database
+```
+
+It is the `resolve` → `create` → `uri` → gate → `drop` → `report` sequence, each step a child process with `$GITHUB_ENV` handed forward the way GitHub hands it forward, and the run exits non-zero if any step does or if any of its eight claims fails. It runs in the `delegate` CI job on every push and every fork PR, and it is deliberately not in the `store` job: that job is gated on `NEON_API_KEY`, which this repository does not have, so a rehearsal there would never run — and a rehearsal that never runs is a comment.
+
+Two things about it are load-bearing. The steps are **transcribed**, and a transcription rots, so the last check reads `.github/workflows/ci.yml` back and fails if it finds a Neon command line CI depends on that the rehearsal does not itself run: a renamed mode breaks the rehearsal rather than silently un-rehearsing the job. And the **remote gate leg cannot run** — the fake console answers the Neon management API and there is no Postgres behind the URI it hands back — so it is named as unreached in the output and in the exit report of every single run, rather than counted as covered. That leg is the reason the `store` job still exists and still goes red on a push until somebody mints a key; nothing in this rehearsal stands in for a database.
 
 ```bash
 npm run secrets:neon -- --self-test      # the decisions, against a stubbed fetch
@@ -202,7 +212,7 @@ node scripts/neon-branch.mjs --self-test      # the decisions, against a stub
 node scripts/neon-branch.mjs --self-test-e2e  # the lifecycle, against a console on localhost
 ```
 
-The end-to-end mode covers the one thing no stub ever modelled: a Neon branch is created with its compute still starting and answers `current_state: init` for a while, so the console it runs against holds the branch in `init` for its first three polls. Anything that connects the moment it is handed an id gets a database that is not there yet, and that window is the whole reason the poll exists. The last four checks run the program as a **process** — the three commands the workflow actually runs, with `$GITHUB_ENV` handed forward the way GitHub hands it forward — because a missed environment write is a `BRANCH_ID` the next step cannot find, and the answers leave through that wrapper rather than through the functions behind it. Both programs run from the repo doctor on every commit: 41 checks, no account, no network, no secret.
+The end-to-end mode covers the one thing no stub ever modelled: a Neon branch is created with its compute still starting and answers `current_state: init` for a while, so the console it runs against holds the branch in `init` for its first three polls. Anything that connects the moment it is handed an id gets a database that is not there yet, and that window is the whole reason the poll exists. The last four checks run the program as a **process** — the three commands the workflow actually runs, with `$GITHUB_ENV` handed forward the way GitHub hands it forward — because a missed environment write is a `BRANCH_ID` the next step cannot find, and the answers leave through that wrapper rather than through the functions behind it. Both programs run from the repo doctor on every commit: 52 checks, no account, no network, no secret.
 
 The gate still reads `DELEGATE_STORE_TEST_URL`, and the job still sets that variable to empty at the in-process leg so it is in-process whatever the job's environment says. Two rules keep the remote leg from being green without having run:
 
