@@ -390,6 +390,30 @@ jobs:
         if: always() && !cancelled()
         id: flaky
         run: node scripts/flaky-report.mjs test-results/results.json
+      # The same report, read for the other thing it is not saying. One spec in
+      # this suite needs a real model, and skips itself when
+      # ANTHROPIC_API_KEY is absent — skipped, not failed, because a spec that
+      # costs money must not turn a fork pull request red. The cost of that is
+      # that the run is green either way: `expected: 0, skipped: 1` is the same
+      # tick as the assertion having run, and the log line for a skip carries no
+      # reason. So the job says which one it was, from the report rather than
+      # from the environment — a key that was set and the spec still skipped is
+      # a case a key-presence check would pass straight over.
+      #
+      # Fails on push, notices on a fork PR: the same split the store gate uses,
+      # and for the same reason. GitHub sends no secrets to a fork, so there the
+      # leg cannot run and saying so is the whole job.
+      - name: Say whether the live leg ran
+        if: always() && !cancelled()
+        run: |
+          node scripts/e2e-live-leg.mjs test-results/results.json || {
+            if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.pull_request.head.repo.fork }}" = "true" ]; then
+              echo "::notice title=E2E live leg::no ANTHROPIC_API_KEY on a fork pull request — GitHub passes no secrets, so the cold-process chat spec skipped and the restarted-process transcript is untested here. The in-process suite did run."
+              exit 0
+            fi
+            echo "::error title=E2E live leg::the cold-process chat spec did not run, so nothing proved that a restarted process recovers the conversation — and the suite passed anyway, because a skipped spec is not a failure. Add ANTHROPIC_API_KEY as a repository secret (gh secret set ANTHROPIC_API_KEY, value on stdin) and re-run; the job summary above carries the spec's own reason. delegate/README.md#live-anthropic-runs"
+            exit 1
+          }
       - name: Upload Playwright report and traces
         # Not failure-gated: a green run with flaky tests still ships the
         # html report plus the retry-attempt traces (trace: on-all-retries).
