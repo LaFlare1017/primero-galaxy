@@ -6,8 +6,12 @@
  * reason a serverless function can hold a Postgres connection at all — because
  * an in-process engine never goes near it. So the engine is a parameter:
  * unset, the gates use PGlite in a temp directory and cost nothing; set, they
- * use the real driver against a real database, which is the only way the
- * adapter is executed at all rather than assumed.
+ * use the real driver against a real database, which is how the adapter is
+ * executed rather than assumed. That does not need an account to do: the fake
+ * console grew a data plane and `e2e/delegate-store-remote.spec.ts` runs this
+ * very gate over the real `@neondatabase/serverless` driver against a Postgres
+ * on localhost, provisioning its branch with the same three scripts CI calls.
+ * What still needs a real Neon is Neon's own proxy, which only a compute does.
  *
  * The variable is named `DELEGATE_STORE_TEST_URL` and deliberately NOT
  * `DATABASE_URL`: a gate that switched substrate on the app's own

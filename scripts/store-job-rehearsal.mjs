@@ -423,7 +423,8 @@ console.log(
 for (const entry of unreached) {
   console.log(`  not covered: ${entry.step.label} — ${entry.why}`);
   console.log('    That leg is the reason the store job still runs against a real Neon, and why it still fails');
-  console.log('    on a push until somebody mints NEON_API_KEY. Nothing here stands in for a database.');
+  console.log('    on a push until somebody mints NEON_API_KEY. The driver itself IS covered without an account —');
+  console.log('    e2e/delegate-store-remote.spec.ts runs this same gate over it against the fake console.');
 }
 const verdict = [
   brokenSteps > 0 ? `${brokenSteps} step(s) exited non-zero` : null,

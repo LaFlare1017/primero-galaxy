@@ -105,12 +105,101 @@ export function expiryProblem(value, now = new Date()) {
  * teardown step and without leaving a fixture behind for the next run to trip
  * over.
  */
-export async function startFakeNeon({ apiKey = 'test-key', readyAfter = 0 } = {}) {
+export async function startFakeNeon({ apiKey = 'test-key', readyAfter = 0, dataPlane = false } = {}) {
   const requests = [];
   const projects = [];
   const branches = new Map();
   let nextProject = 1;
   let nextBranch = 1;
+
+  // ── the data plane ────────────────────────────────────────────────
+  //
+  // Opt-in and dynamically imported, so the consumers that only need the
+  // MANAGEMENT api — the provisioning and branch self-tests, the job rehearsal —
+  // never load PGlite and never pay for it.
+  //
+  // One engine per BRANCH, not one per connection, and that is the whole point.
+  // A Neon branch is a database; two connections to it see the same rows. An
+  // engine per connection would make every reopen look like a fresh empty
+  // database, which is the one behaviour the store gate most needs to be true
+  // in order to be worth running. Dropping the branch closes the engine, which
+  // is also faithful.
+  const engines = new Map();
+  let PGliteCtor = null;
+  if (dataPlane) {
+    const pglite = await import('@electric-sql/pglite');
+    PGliteCtor = pglite.PGlite;
+  }
+  const engineFor = async (branchId) => {
+    let engine = engines.get(branchId);
+    if (engine === undefined) {
+      engine = new PGliteCtor();
+      await engine.waitReady;
+      engines.set(branchId, engine);
+    }
+    return engine;
+  };
+  /**
+   * A result in the shape the Neon serverless driver expects back.
+   *
+   * Two details are the driver's, not ours, and both were wrong in the first
+   * version of this:
+   *
+   *   - `Neon-Raw-Text-Output: true` means values arrive as TEXT and the DRIVER
+   *     parses them by `dataTypeID`. So a boolean is `'t'`/`'f'` and a jsonb is
+   *     its JSON text, not `true` and an object.
+   *   - `Neon-Array-Mode: true` means rows are positional ARRAYS. Handing back
+   *     objects here fails deep inside the driver with `r.map is not a
+   *     function`, which is not a message anyone would connect to this file.
+   *
+   * The values are also stringified rather than passed through, because that is
+   * what the real console sends and the store's own assertions were written
+   * against what it receives.
+   */
+  const toNeonRow = (fields, row) =>
+    fields.map((field) => {
+      const value = row[field.name];
+      if (value === null || value === undefined) return null;
+      if (typeof value === 'boolean') return value ? 't' : 'f';
+      if (typeof value === 'object') return JSON.stringify(value);
+      if (typeof value === 'bigint') return value.toString();
+      return String(value);
+    });
+
+  /**
+   * Run one query on the branch's engine, in the shape the driver parses.
+   *
+   * The driver sends `{ query, params }`. Errors are thrown rather than
+   * returned so the caller can answer 400 the way the console does — and the
+   * message is the one Postgres raised, because a store that swallowed it would
+   * report a constraint violation as an empty result.
+   */
+  async function handleQuery(body, branchId) {
+    const text = body?.query;
+    if (typeof text !== 'string' || text === '') {
+      throw new Error('a /sql request needs a query string');
+    }
+    const engine = await engineFor(branchId);
+    const out = await engine.query(text, body.params ?? []);
+    // Defensive about the result's shape rather than assuming it. PGlite omits
+    // `rows` for some statement kinds — a DDL statement comes back with
+    // `affectedRows` and no row set at all — and answering with `rows:
+    // undefined` puts the failure somewhere else entirely: the driver's
+    // result processor hands the store an object with no rows, and the store
+    // reports `Cannot read properties of undefined (reading 'length')`, which
+    // names neither this file nor the query.
+    const fields = (out.fields ?? []).map((field) => ({ name: field.name, dataTypeID: field.dataTypeID }));
+    const rows = out.rows ?? [];
+    return {
+      fields,
+      rows: rows.map((row) => toNeonRow(fields, row)),
+      // `affectedRows` is 0 for a SELECT rather than absent, so a `??` would
+      // answer 0 for every read and a `fullResults` caller would be told it got
+      // nothing back. A SELECT's row count is how many rows it returned.
+      rowCount: fields.length === 0 ? (out.affectedRows ?? 0) : rows.length,
+      command: fields.length === 0 ? 'INSERT' : 'SELECT',
+    };
+  }
 
   const server = createServer((req, res) => {
     const chunks = [];
@@ -130,6 +219,36 @@ export async function startFakeNeon({ apiKey = 'test-key', readyAfter = 0 } = {}
         res.writeHead(status, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(payload));
       };
+
+      // ── `/sql`, the DATA plane, first and outside the bearer check ──
+      //
+      // Before everything else on purpose. The Neon serverless driver
+      // authenticates by connection-string rather than by the console's API
+      // key, and it addresses this path by its own name rather than under
+      // `/api/v2` — so a router that looked for `projects` first would answer
+      // 404 to every query the store makes, and a router that checked the
+      // bearer token first would answer 401 to a driver that never sends one.
+      // Both of those were true of the first version of this handler.
+      if (url.pathname === '/sql' && req.method === 'POST') {
+        if (!dataPlane) {
+          send(404, { message: 'this console serves the management API only — stand it up with dataPlane' });
+          return;
+        }
+        const branchId = url.searchParams.get('branch_id') ?? '';
+        const known = [...branches.values()].flat().some((b) => b.id === branchId);
+        if (!known) {
+          // A query against a branch that is not there is the shape a dropped
+          // branch's leftover URI produces. Answering it with an empty result
+          // set would be a lie the store would then keep.
+          send(400, { message: `no branch ${branchId} — the URI names a branch this console never issued` });
+          return;
+        }
+        handleQuery(body, branchId)
+          .then((payload) => send(200, payload))
+          .catch((error) => send(400, { message: error.message }));
+        return;
+      }
+
       if (auth !== `Bearer ${apiKey}`) {
         send(401, { error: { message: 'invalid api key' } });
         return;
@@ -237,8 +356,15 @@ export async function startFakeNeon({ apiKey = 'test-key', readyAfter = 0 } = {}
           send(404, { error: { message: `no branch ${wanted}` } });
           return;
         }
+        // The host is THIS server when there is a data plane, and a name that
+        // resolves nowhere when there is not. That is deliberate in both
+        // directions: `ep-fake.neon.tech` is honest about being unreachable,
+        // and a loopback host is the only one the driver could actually reach —
+        // it builds `https://<host>/sql` from whatever the URI says.
         send(200, {
-          uri: `postgres://ci:hunter2@ep-fake.neon.tech/delegate-ci?branch_id=${found.id}`,
+          uri: dataPlane
+            ? `postgres://ci:hunter2@127.0.0.1:${server.address().port}/delegate-ci?branch_id=${found.id}`
+            : `postgres://ci:hunter2@ep-fake.neon.tech/delegate-ci?branch_id=${found.id}`,
           // What the console also reports, and what makes a name-based check
           // possible: the database this branch actually owns.
           databases: [{ name: found.name, id: `db-${found.id}` }],
@@ -246,8 +372,14 @@ export async function startFakeNeon({ apiKey = 'test-key', readyAfter = 0 } = {}
         return;
       }
       if (parts.length === 6 && parts[4] === 'branches' && req.method === 'DELETE') {
+        // Closing the engine here is what makes a dropped branch gone rather
+        // than merely unreferenced: the rows go with it, as they would in a
+        // console where dropping a branch deletes its database.
+        const closing = engines.get(parts[5]);
+        engines.delete(parts[5]);
         branches.set(projectId, branchList().filter((b) => b.id !== parts[5]));
         send(200, { branch: { id: parts[5] } });
+        if (closing) closing.close().catch(() => {});
         return;
       }
       send(404, { error: { message: `no route for ${req.method} ${url.pathname}` } });
@@ -271,6 +403,18 @@ export async function startFakeNeon({ apiKey = 'test-key', readyAfter = 0 } = {}
      * listening holds its port for the rest of the machine's afternoon, and the
      * next run fails to bind for a reason that reads like a build problem.
      */
-    close: () => new Promise((done) => server.close(() => done())),
+    close: () =>
+      new Promise((done) => {
+        // Engines first, then the server. Closing the listener first would let
+        // an in-flight query's response find nobody listening, and the
+        // rejection would surface as an unhandled error rather than as the
+        // console having stopped.
+        Promise.all([...engines.values()].map((engine) => engine.close().catch(() => {}))).then(() => {
+          engines.clear();
+          server.close(() => done());
+        });
+      }),
+    /** Whether a data plane is answering SQL at all — a spec's first question. */
+    dataPlane: () => Boolean(dataPlane),
   };
 }

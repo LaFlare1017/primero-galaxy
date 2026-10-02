@@ -152,6 +152,16 @@ One check cannot run against a shared database: the guard that refuses a `delega
 
 CI runs both legs in the `store` job, and the remote leg gets a database of its own: each run **creates a Neon branch, runs the gate against it, and drops it**.
 
+**The remote leg does not need a Neon account to be executable.** `e2e/delegate-store-remote.spec.ts` stands the fake console up with a data plane — it answers the driver's `POST /sql` with a real PGlite engine, one per branch — and then runs *this same gate binary* over the real `@neondatabase/serverless` driver: same version, same HTTP shape, same raw-text and array-mode wire format, against a Postgres on localhost. Provisioning is the job's own rather than a helper written for the test, so the spec spawns `neon-secrets.mjs --resolve`, `neon-branch.mjs create` and `neon-branch.mjs uri` and hands `$GITHUB_ENV` forward exactly as the workflow does; drift in those programs fails here too.
+
+That is what it proves, and the distinction matters: the **adapter**, the wire format, the type round trip and the store's SQL all execute for real, with no account. What it does **not** prove is Neon's proxy, because PGlite is not behind one — only a real compute does that, which is why the `store` job still exists and is still the thing that has never run here.
+
+```bash
+npx playwright test e2e/delegate-store-remote.spec.ts --workers=1
+```
+
+One seam is worth knowing about: `neon()` hardcodes `https://<host>/sql`, which a loopback server cannot answer, so `e2e/neon-loopback-preload.mjs` repoints the driver's own `neonConfig.fetchEndpoint` through `NODE_OPTIONS` before the gate imports it. That keeps the test-only variable out of product code entirely.
+
 **One repository secret is needed. The other two the job used to need, it settles for itself.**
 
 | variable | what it is |

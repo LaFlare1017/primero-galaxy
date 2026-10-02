@@ -233,11 +233,20 @@ export function neonQuery(url: string): Query {
       const { neon } = await import("@neondatabase/serverless");
       client = neon(url);
     }
-    // The driver's return type is a union that includes its "array mode" (rows
-    // as bare arrays). This store asked for the object shape, and `query()` and
-    // the parameter list above are still type-checked against the driver — the
-    // cast is only about which of its two result shapes came back.
-    const result = (await client.query(text, params ?? [])) as { rows: Row[] };
+    // `fullResults: true` is what makes this return `{ rows }` rather than the
+    // bare rows array, and it is LOAD-BEARING: without it `client.query()`
+    // resolves to an ARRAY, `result.rows` is `undefined`, and every read in
+    // this store fails at `rows.length` with `Cannot read properties of
+    // undefined (reading 'length')` — a message that names neither the driver
+    // nor the store.
+    //
+    // This was a real bug, not an artefact of the fake console that found it:
+    // the remote leg had never been executed by anything in this repository,
+    // because it needs `NEON_API_KEY` and a real database, and every check for
+    // it ran against PGlite. Both installs of the driver are 1.1.0 and both
+    // behave this way, so the adapter would have failed on the first push that
+    // had a Neon account.
+    const result = (await client.query(text, params ?? [], { fullResults: true })) as { rows: Row[] };
     return { rows: result.rows };
   };
 }
