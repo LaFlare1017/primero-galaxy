@@ -111,13 +111,22 @@ function cli() {
   );
 }
 
-/** `m:ss.s`, because a suite is minutes and a millisecond is noise on it. */
+/**
+ * `m:ss.s`, because a suite is minutes and a millisecond is noise on it.
+ *
+ * Signed, and computed from the magnitude, because the one number here that can
+ * legitimately be negative is a difference between two runs — and the first
+ * version of this printed one as `-1:43.7`, which is `Math.floor` of a negative
+ * total and reads as a duration nobody ran. A difference that cannot be shown
+ * honestly is a difference to re-check, not one to publish.
+ */
 function clock(ms) {
   if (!Number.isFinite(ms)) return '   —  ';
-  const total = Math.round(ms / 100) / 10;
+  const sign = ms < 0 ? '-' : '';
+  const total = Math.round(Math.abs(ms) / 100) / 10;
   const minutes = Math.floor(total / 60);
   const seconds = (total - minutes * 60).toFixed(1).padStart(4, '0');
-  return `${minutes}:${seconds}`;
+  return `${sign}${minutes}:${seconds}`;
 }
 
 /** A count is a whole number of workers, ascending, and nothing else. */
@@ -372,6 +381,10 @@ function summarise(count, runs) {
     suite: timed.length === runs.length ? median(timed.map((run) => run.suite)) : null,
     wall: timed.length === runs.length ? median(timed.map((run) => run.wall)) : null,
     slowest: runs[0]?.files?.[0] ?? null,
+    // Retries are 2 under CI, so a test that failed and passed on its second
+    // attempt exits 0 and reads green — the same hole `scripts/flaky-report.mjs`
+    // exists to report. Counted here so a green row can say what it cost.
+    flaky: runs.reduce((total, run) => total + (run.flaky ?? 0), 0),
     timeouts: [...new Set(runs.flatMap((run) => run.timeouts))],
     why: runs.find((run) => run.why !== null)?.why ?? null,
   };
@@ -452,7 +465,14 @@ for (const row of rows) {
       ? `${previous.suite - row.suite >= 0 ? 'saved ' : 'LOST '}${clock(Math.abs(previous.suite - row.suite))}`
       : '—';
   const slowest = row.slowest === null ? '—' : `${row.slowest.file} ${clock(row.slowest.ms)}`;
-  const verdict = row.why !== null ? 'unmeasurable' : row.green ? 'green' : `failed: ${row.timeouts.length} timeout(s), ${row.runs[0]?.unexpected ?? '?'} unexpected`;
+  const verdict =
+    row.why !== null
+      ? 'unmeasurable'
+      : row.green
+        ? row.flaky > 0
+          ? `green, but ${row.flaky} needed a retry`
+          : 'green'
+        : `failed: ${row.timeouts.length} timeout(s), ${row.runs[0]?.unexpected ?? '?'} unexpected`;
   console.log(
     `  ${pad(row.count, 8)} ${pad(clock(row.suite), 9)} ${pad(clock(row.wall), 9)} ${pad(delta, 10)} ${pad(slowest, 24)} ${verdict}`,
   );
@@ -488,14 +508,18 @@ if (pin !== null) {
   } else if (greenRows.length > 0) {
     const fastest = greenRows.reduce((a, b) => (b.suite < a.suite ? b : a));
     if (fastest.count === pin) {
-      console.log(`  ${lead('the pin')}${pin} is both the fastest green count and the number CI pins. The pin is behind a measurement.`);
+      console.log(
+      `  ${lead('the pin')}${pin} is both the fastest green count and the number CI pins. The pin is behind a measurement.${
+        measured.flaky > 0 ? ` It is also the run that hid ${measured.flaky} retry-flown test(s) behind exit 0.` : ''
+      }`,
+    );
     } else if (fastest.count > pin) {
       console.log(
         `  ${lead('the pin')}${pin} measured ${clock(measured.suite)}; ${fastest.count} measured ${clock(fastest.suite)}, ${clock(measured.suite - fastest.suite)} faster. Whether CI can have ${fastest.count} is a question about four vCPUs, not about this machine.`,
       );
     } else {
       console.log(
-        `  ${lead('the pin')}${pin} measured ${clock(measured.suite)}, ${clock(fastest.suite - measured.suite)} slower than ${fastest.count} — so the pin is conservative here, which is the right direction to be wrong in.`,
+        `  ${lead('the pin')}${pin} measured ${clock(measured.suite)}, ${clock(measured.suite - fastest.suite)} slower than ${fastest.count} — so the pin is conservative here, which is the right direction to be wrong in.`,
       );
     }
   }
