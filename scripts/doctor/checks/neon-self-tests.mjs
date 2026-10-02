@@ -13,6 +13,11 @@
  * useful failure message, because it is the one you get when the setup itself
  * is wrong.
  *
+ * The console they are tested against is `neon-fake-console.mjs`, which is a
+ * module of its own rather than part of either program: a fake that lives inside
+ * the program it tests can only be used by that program, which is what made the
+ * branch program's checks import the provisioning program to get at it.
+ *
  * So this is the question rather than a rule about the source: the modes are
  * run, and a failure in any of them is a failure here. A check that read the
  * files could only report that the programs still exist and still mention their
@@ -61,8 +66,20 @@ const PROGRAMS = [
   },
 ];
 
-/** What a mode has to import to run at all. */
-const SHARED = ['scripts/is-main.mjs'];
+/**
+ * What a mode has to import to run at all.
+ *
+ * Every file, not just the entry points: a fixture that copies the two programs
+ * and not the client and the console beside them gets a module-not-found, which
+ * is a doctor failure about the fixture rather than a finding about a Neon
+ * program. That is the shape of bug this check exists to catch being caught by
+ * the check itself.
+ */
+const SHARED = [
+  'scripts/is-main.mjs',
+  'scripts/neon-api.mjs',
+  'scripts/neon-fake-console.mjs',
+];
 
 /** Long enough for four node startups and two loopback servers, short enough for a commit. */
 const LIMIT = 60_000;

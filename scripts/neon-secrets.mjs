@@ -53,62 +53,17 @@
  * doctor on every commit, so neither needs an account to keep working.
  */
 import { spawnSync } from 'node:child_process';
-import { createServer } from 'node:http';
 import { isMain } from './is-main.mjs';
+import { apiBase, DEFAULT_API, neon, setSecret } from './neon-api.mjs';
+import { startFakeNeon } from './neon-fake-console.mjs';
 
-const DEFAULT_API = 'https://console.neon.tech/api/v2';
 const PROJECT_NAME = 'primero-galaxy-ci';
 const PARENT_BRANCH_NAME = 'ci-parent';
-
-/**
- * Where the management calls go. Settable because a stubbed `fetch` proves the
- * decisions but not the REQUESTS -- the URL, the method, the JSON body, the
- * status a real console answers with. `--self-test-e2e` points this at a server
- * on localhost, which is the only way to see those without an account.
- *
- * `NEON_API_URL` is for pointing at a different console, not for testing: the
- * end-to-end check passes its base explicitly instead, so nothing in production
- * depends on this variable being right.
- */
-function apiBase(env = process.env) {
-  return (env.NEON_API_URL ?? '').trim() || DEFAULT_API;
-}
 
 /** Never printed, never logged, never passed on a command line. */
 function mask(key) {
   if (!key) return '(absent)';
   return `${key.slice(0, 4)}…${key.slice(-2)} (${key.length} chars)`;
-}
-
-/**
- * One Neon management call. `fetch` is a parameter so the self-test can stand a
- * stub in for it — the endpoints are the part that cannot be checked without an
- * account, and the decisions around them are the part that can.
- */
-export async function neon(path, { apiKey, base = apiBase(), fetchImpl = fetch, method = 'GET', body }) {
-  const response = await fetchImpl(`${base}${path}`, {
-    method,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      ...(body ? { 'Content-Type': 'application/json' } : {}),
-    },
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
-  const text = await response.text();
-  let json;
-  try {
-    json = text ? JSON.parse(text) : {};
-  } catch {
-    // A body that is not JSON is a proxy error or a captive portal, and
-    // reporting its first line beats reporting a parse error.
-    const first = text.split('\n').find((line) => line.trim() !== '') ?? '(empty)';
-    throw new Error(`Neon ${method} ${path} answered ${response.status} with a body that is not JSON: ${first.slice(0, 120)}`);
-  }
-  if (!response.ok) {
-    const detail = json?.error?.message ?? json?.message ?? '(no message)';
-    throw new Error(`Neon ${method} ${path} answered ${response.status}: ${detail}`);
-  }
-  return json;
 }
 
 /** The project to work in, created only if it is not already there. */
@@ -208,18 +163,6 @@ export function secretsFor({ apiKey, projectId, parentBranchId }) {
   ];
 }
 
-/** `gh secret set` reads the value from stdin, so the key is never in argv. */
-function setSecret(repo, name, value) {
-  const result = spawnSync('gh', ['secret', 'set', name, '--repo', repo], {
-    input: value,
-    encoding: 'utf8',
-  });
-  if (result.error) throw new Error(`could not run gh: ${result.error.message}`);
-  if (result.status !== 0) {
-    throw new Error(`gh secret set ${name} failed: ${(result.stderr || result.stdout || '').trim()}`);
-  }
-}
-
 /** Every refusal this program can make, and why, before it touches anything. */
 export function preflight({ apiKey, repo, argv }) {
   if (argv.includes('--apply') && !apiKey) {
@@ -279,187 +222,6 @@ async function resolveMode() {
   return 0;
 }
 
-/**
- * A local stand-in for the Neon console's v2 API, on the four endpoints this
- * program speaks.
- *
- * A stubbed `fetch` proves the DECISIONS -- reuse rather than duplicate, refuse
- * rather than half-apply. It cannot prove the REQUEST: that the URL is right,
- * that the JSON body is shaped the way the console reads it, that a real status
- * code comes back and is handled. Those are the parts that break silently, and
- * a wrong body shape on a create looks exactly like a permission error.
- *
- * So this answers over real HTTP, on the same paths under the same `/api/v2`
- * prefix, records what it was asked, and refuses a request with no bearer token
- * the way the console does. It also serves the endpoints the CI JOB uses --
- * connection_uri, and a delete -- because those are the calls a person reads in
- * a failed store gate and would otherwise have no coverage at all.
- *
- * Deliberately strict in the ways a real console is: a duplicate project or
- * branch name is a 409 rather than a second row, because "create if missing" is
- * a claim about a server that says no.
- *
- * `readyAfter` is the one behaviour a real console has that a stub never
- * invented: a branch is created with its compute still starting, answers
- * `current_state: init` for a while, and only later reports `ready`. Everything
- * downstream — the store job's poll, a gate that connects the moment it is told
- * to — has to survive that window, and nothing but a console that actually
- * holds the branch back can test it. Zero means ready at once, which is what a
- * test that is not about readiness wants.
- */
-export async function startFakeNeon({ apiKey = 'test-key', readyAfter = 0 } = {}) {
-  const requests = [];
-  const projects = [];
-  const branches = new Map();
-  let nextProject = 1;
-  let nextBranch = 1;
-
-  const server = createServer((req, res) => {
-    const chunks = [];
-    req.on('data', (chunk) => chunks.push(chunk));
-    req.on('end', () => {
-      const raw = Buffer.concat(chunks).toString('utf8');
-      const url = new URL(req.url ?? '/', 'http://localhost');
-      const auth = req.headers.authorization ?? '';
-      let body;
-      try {
-        body = raw ? JSON.parse(raw) : {};
-      } catch {
-        body = {};
-      }
-      requests.push({ method: req.method, path: url.pathname, query: url.searchParams, auth, body, raw });
-      const send = (status, payload) => {
-        res.writeHead(status, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(payload));
-      };
-      if (auth !== `Bearer ${apiKey}`) {
-        send(401, { error: { message: 'invalid api key' } });
-        return;
-      }
-      const parts = url.pathname.split('/').filter(Boolean); // api,v2,...
-      const at = (name) => parts.indexOf(name);
-      const projectId = at('projects') === 2 ? parts[3] : undefined;
-      const project = projects.find((p) => p.id === projectId);
-      const branchList = () => branches.get(projectId) ?? [];
-
-      if (at('projects') === -1) {
-        send(404, { error: { message: 'unknown endpoint' } });
-        return;
-      }
-      if (parts.length === 3 && req.method === 'GET') {
-        send(200, { projects: projects.map(({ id, name }) => ({ id, name })) });
-        return;
-      }
-      if (parts.length === 3 && req.method === 'POST') {
-        // Strict about the body the way the console is. A fake that accepts any
-        // JSON would bless a request the real API answers 400, and the whole
-        // reason this exists is to catch exactly that.
-        if (typeof body.name !== 'string' || body.name === '') {
-          send(400, { error: { message: 'a project needs a name' } });
-          return;
-        }
-        if (projects.some((p) => p.name === body.name)) {
-          send(409, { error: { message: `project ${body.name} already exists` } });
-          return;
-        }
-        const made = { id: `proj-${nextProject++}`, name: body.name };
-        projects.push(made);
-        send(201, { project: made });
-        return;
-      }
-      if (projectId && !project) {
-        send(404, { error: { message: `no project ${projectId}` } });
-        return;
-      }
-      if (parts.length === 5 && parts[4] === 'branches' && req.method === 'GET') {
-        // The readiness clock lives here: each listing is one poll, and a branch
-        // only reports `ready` once it has been seen `readyAfter` times.
-        const now = branchList().map((b) => {
-          b.polls = (b.polls ?? 0) + 1;
-          if (b.polls >= readyAfter) b.current_state = 'ready';
-          return b;
-        });
-        send(200, {
-          branches: now.map(({ id, name, parent_id, current_state, expires_at, endpoints }) => ({
-            id,
-            name,
-            parent_id: parent_id ?? null,
-            current_state,
-            expires_at: expires_at ?? null,
-            endpoints: endpoints ?? [],
-          })),
-        });
-        return;
-      }
-      if (parts.length === 5 && parts[4] === 'branches' && req.method === 'POST') {
-        const asked = body.branch;
-        if (!asked || typeof asked.name !== 'string' || asked.name === '') {
-          send(400, { error: { message: 'a branch needs a nested branch.name' } });
-          return;
-        }
-        // `endpoints` is deliberately NOT required here. The store job's create
-        // sends `read_write` and should — a branch it cannot write would break
-        // the gate — but whether Neon defaults one or refuses without it is a
-        // claim about somebody's API that this fake cannot check without an
-        // account, and a fake that enforced a guess would fail the provisioning
-        // script over a rule nobody verified. The self-test in neon-branch.mjs
-        // asserts the REQUEST carries read_write, which is the part that is
-        // ours.
-        const endpoints = Array.isArray(body.endpoints) ? body.endpoints : [{ type: 'read_write' }];
-        if (branchList().some((b) => b.name === asked.name)) {
-          send(409, { error: { message: `branch ${asked.name} already exists` } });
-          return;
-        }
-        const made = {
-          id: `br-${nextBranch++}`,
-          name: asked.name,
-          parent_id: asked.parent_id ?? null,
-          expires_at: asked.expires_at ?? null,
-          endpoints,
-          // As the console answers it: the branch exists, and its compute has
-          // not started yet. `pending_state` is where the readiness waits.
-          current_state: 'init',
-          pending_state: readyAfter === 0 ? undefined : 'ready',
-          polls: 0,
-        };
-        branches.set(projectId, [...branchList(), made]);
-        send(201, { branch: made });
-        return;
-      }
-      if (parts.length === 5 && parts[4] === 'connection_uri' && req.method === 'GET') {
-        const wanted = url.searchParams.get('branch_id');
-        const found = branchList().find((b) => b.id === wanted);
-        if (!found) {
-          send(404, { error: { message: `no branch ${wanted}` } });
-          return;
-        }
-        send(200, {
-          uri: `postgres://ci:hunter2@ep-fake.neon.tech/delegate-ci?branch_id=${found.id}`,
-          // What the console also reports, and what makes a name-based check
-          // possible: the database this branch actually owns.
-          databases: [{ name: found.name, id: `db-${found.id}` }],
-        });
-        return;
-      }
-      if (parts.length === 6 && parts[4] === 'branches' && req.method === 'DELETE') {
-        branches.set(projectId, branchList().filter((b) => b.id !== parts[5]));
-        send(200, { branch: { id: parts[5] } });
-        return;
-      }
-      send(404, { error: { message: `no route for ${req.method} ${url.pathname}` } });
-    });
-  });
-
-  await new Promise((done) => server.listen(0, '127.0.0.1', done));
-  const { port } = server.address();
-  return {
-    url: `http://127.0.0.1:${port}/api/v2`,
-    requests,
-    /** What was asked, as `METHOD /path`, so a check can assert on the calls. */
-    calls: () => requests.map((r) => `${r.method} ${r.path}`),
-    close: () => new Promise((done) => server.close(() => done())),
-  };
-}
 
 async function main(argv) {
   if (argv.includes('--help')) {

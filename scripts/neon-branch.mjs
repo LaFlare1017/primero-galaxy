@@ -50,7 +50,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isMain } from './is-main.mjs';
-import { neon, startFakeNeon } from './neon-secrets.mjs';
+import { neon } from './neon-api.mjs';
+import { startFakeNeon } from './neon-fake-console.mjs';
 
 /** Where this job's addresses come from. Overridable so the self-test can point elsewhere. */
 function apiBase(env = process.env) {
