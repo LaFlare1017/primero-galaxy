@@ -45,7 +45,7 @@
  *   node scripts/neon-branch.mjs drop     delete the branch
  */
 import { spawn } from 'node:child_process';
-import { appendFileSync, readFileSync, rmSync } from 'node:fs';
+import { appendFileSync, existsSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -64,6 +64,32 @@ const READY_INTERVAL_MS = 2_000;
 
 /** Long enough for six hours to be comfortably inside Neon's 30-day cap. */
 const EXPIRY_HOURS = 6;
+
+/**
+ * The window this run asked for, in hours.
+ *
+ * Read from the environment so the refusal is provable from OUTSIDE the
+ * process: the console's expiry rules can only be tested by a child that
+ * computes a bad expiry, and the only way to make a child do that is to tell
+ * it to. It is also a real input rather than a test-only hook — a job that
+ * needs a longer window for a slow gate sets it, and gets the same refusal if
+ * it asks for one the console will not take.
+ *
+ * Throws rather than falling back, and that is the same reasoning as
+ * `expiresAt`: a value that is not a number would otherwise become `NaN` deep
+ * inside a `Date`, where it surfaces as `Invalid time value` — an error about
+ * time formatting raised at the moment somebody tried to set a window, which
+ * names neither the variable nor its value.
+ */
+export function expiryHours(env = process.env) {
+  const asked = (env.EXPIRY_HOURS ?? '').trim();
+  if (asked === '') return EXPIRY_HOURS;
+  const hours = Number(asked);
+  if (!Number.isFinite(hours)) {
+    throw new Error(`EXPIRY_HOURS is ${JSON.stringify(asked)}, which is not a number of hours`);
+  }
+  return hours;
+}
 
 /**
  * When this branch deletes itself.
@@ -378,7 +404,7 @@ async function lifecycle(mode, env = process.env, argv = []) {
   if (mode === 'create') {
     let expires;
     try {
-      expires = expiresAt();
+      expires = expiresAt(new Date(), expiryHours(env));
     } catch (error) {
       return fail(`${error.message} — refusing to create a branch that cannot delete itself`);
     }
@@ -837,6 +863,51 @@ async function selfTestE2e() {
       refused.error ?? 'it got past the console',
     );
 
+    // ── the expiry, as the CONSOLE judges it ───────────────────────────
+    //
+    // The four rules below are Neon's, not ours, and they are enforced by the
+    // fake because they are the ones we cannot check ourselves: this program
+    // can prove it SENT a well-formed expiry, and only the server can say
+    // whether that expiry is one the console accepts. Each is a distinct 400,
+    // because "invalid expires_at" with no reason is a message that sends
+    // somebody to the wrong hour of the wrong day.
+    //
+    // Absent is deliberately still ACCEPTED. `neon-secrets.mjs` creates the
+    // parent branch with no expiry because it must outlive the run, so a fake
+    // that refused one would fail a correct program over a rule the console
+    // does not enforce.
+    {
+      const cases = [
+        ['no expiry at all', undefined, null],
+        ['an expiry six hours out', expiresAt(), null],
+        ['an expiry in the past', '2020-01-01T00:00:00Z', 'not in the future'],
+        ['an expiry past the 30-day limit', expiresAt(new Date(), 24 * 40), 'more than 30 days out'],
+        ['an expiry with no time zone', '2030-01-01T00:00:00', 'no time zone'],
+        ['an expiry that is not a date', '2030-13-45T99:99:99Z', 'not a date the console can read'],
+        ['an expiry that is not a string', 12345, 'must be an RFC 3339 timestamp'],
+      ];
+      const wrong = [];
+      for (const [about, value, expected] of cases) {
+        const at = await createBranch(
+          { ...ctx, parentId: 'br-parent' },
+          { name: `ci-expiry-${String(value).replace(/\W+/g, '-').slice(0, 24)}`, parentId: 'br-parent', expires: value },
+        );
+        if (expected === null) {
+          if (at.error !== undefined) wrong.push(`${about} should have been accepted but was refused: ${at.error}`);
+        } else if (at.error === undefined) {
+          wrong.push(`${about} should have been refused and was not`);
+        } else if (!at.error.includes(expected)) {
+          // Refused, but for a reason nobody would recognise as the problem.
+          wrong.push(`${about} was refused without saying "${expected}": ${at.error}`);
+        }
+      }
+      check(
+        'the console accepts a good expiry and refuses each bad one by name, and still accepts no expiry at all',
+        wrong.length === 0,
+        wrong.length === 0 ? `${cases.length} expiries judged, none wrongly` : wrong.join('; '),
+      );
+    }
+
     // ── and the thing CI actually runs ────────────────────────────────���──
     //
     // Everything above calls the functions. CI does not: it runs this program
@@ -936,6 +1007,70 @@ async function selfTestE2e() {
           bare.stdout === '',
         bare.stderr.split('\n')[0]?.slice(0, 90) ?? '(it said nothing)',
       );
+
+      // ── and the refusal as it reaches the LOG ────────────────────────
+      //
+      // A 400 from the console is only worth anything if it arrives as
+      // something a person reads. The create step's own error path is
+      // `fail()`, which writes a `::error` annotation to stderr, and THAT is
+      // the claim being tested here: the console's reason, the HTTP status, and
+      // the annotation all have to arrive together. A refusal that printed a
+      // bare message to stdout would be invisible as a red annotation AND
+      // corrupt `$GITHUB_ENV`, since stdout here is the file the next step
+      // reads.
+      //
+      // `EXPIRY_HOURS` is the seam. It is a real input, not a test hook: the
+      // refusal must be provable from outside the process, and the only way to
+      // make a child compute a bad expiry is to tell it to.
+      {
+        // A SEPARATE $GITHUB_ENV. The file used above holds a BRANCH_ID from
+        // the create that succeeded, so asserting on it here would pass
+        // because of the earlier step rather than because this one wrote
+        // nothing — the exact mistake the comment above is about.
+        const refusalEnv = join(tmpdir(), `neon-branch-refused-${process.pid}.env`);
+        rmSync(refusalEnv, { force: true });
+        const refuse = (branch, hours) =>
+          runCli('create', { BRANCH_NAME: branch, EXPIRY_HOURS: hours, GITHUB_ENV: refusalEnv });
+        const zero = await refuse('ci-exp-zero', '0');
+        const negative = await refuse('ci-exp-neg', '-4');
+        const silly = await refuse('ci-exp-silly', 'banana');
+        // The console's own words have to survive the trip, because "invalid
+        // expires_at" without a reason sends a reader to the wrong hour.
+        // Only the two the CONSOLE refuses are asked to carry an HTTP 400:
+        // `banana` never reaches the console at all, because `expiryHours`
+        // refuses it first, and its own annotation is checked below instead.
+        const saidWhy = /::error title=Store gate::.*HTTP 400.*invalid expires_at.*(?:future|time zone|30 days)/s;
+        const unreachable = /^::error title=Store gate::EXPIRY_HOURS is "banana", which is not a number of hours/;
+        check(
+          'a console refusal reaches the log as a ::error carrying the status AND the reason',
+          [zero, negative].every(
+            (run) => run.status === 1 && run.stderr.startsWith('::error title=Store gate::') && saidWhy.test(run.stderr),
+          ) && silly.status === 1 && unreachable.test(silly.stderr),
+          `0h and -4h annotated with the console's reason; "banana" hours ${
+            unreachable.test(silly.stderr) ? 'refused before the call' : `said ${silly.stderr.split('\n')[0]?.slice(0, 60) ?? 'nothing'}`
+          }`,
+        );
+
+        check(
+          'and a refused create writes NOTHING to stdout, so a bad $GITHUB_ENV cannot become a branch id',
+          [zero, negative, silly].every((run) => run.stdout === ''),
+          [zero, negative, silly].map((run) => (run.stdout === '' ? 'clean' : `WROTE ${run.stdout.split('\n')[0]}`)).join(' / '),
+        );
+
+        // Nothing was created, and no BRANCH_ID was exported — so the next step
+        // in the job cannot pick up an id for a branch that does not exist.
+        const left = await fetch(`${base}/projects/proj-1/branches`, {
+          headers: { Authorization: 'Bearer test-key' },
+        }).then((r) => r.json());
+        const stray = (left.branches ?? []).filter((b) => b.name.startsWith('ci-exp-'));
+        const exportedId = existsSync(refusalEnv) && /^BRANCH_ID=/m.test(readFileSync(refusalEnv, 'utf8'));
+        rmSync(refusalEnv, { force: true });
+        check(
+          'a refused create leaves no branch behind, and exports no id for one',
+          stray.length === 0 && !exportedId,
+          `${stray.length} stray branch(es); BRANCH_ID ${exportedId ? 'was exported anyway' : 'not exported'}`,
+        );
+      }
     } finally {
       rmSync(envFile, { force: true });
     }

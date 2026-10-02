@@ -293,6 +293,63 @@ try {
     `console holds ${fake.branches('proj-1').map((branch) => branch.name).join(', ') || 'nothing'}`,
   );
 
+  // ── and the job's FAILURE channel, which no passing run can show ────
+  //
+  // Deliberately not an eighth step in the list above. It is not part of the
+  // job, and putting it there would mean the step count and the
+  // "every command line CI runs is one we run" comparison were both describing
+  // something CI does not do. This asks a different question: when a step DOES
+  // fail, does the reason reach a person?
+  //
+  // It matters because stdout here is `$GITHUB_ENV`. A refusal printed to the
+  // wrong stream is not merely invisible as a red annotation — it is written
+  // into the file the next step reads, where it becomes an environment variable
+  // that looks like an answer. The create step is run with a zero-hour expiry,
+  // which is a real input rather than a fault injected into the program: the
+  // console refuses it because an expiry in the past is one the console will
+  // not take, and `EXPIRY_HOURS=0` is the way to ask for one.
+  {
+    const refusalEnvFile = join(tmpdir(), `store-job-refused-${process.pid}.env`);
+    rmSync(refusalEnvFile, { force: true });
+    const refusal = await runStep(
+      {
+        label: 'create, with an expiry the console refuses',
+        argv: ['scripts/neon-branch.mjs', 'create'],
+        env: { EXPIRY_HOURS: '0', BRANCH_NAME: `${carried.BRANCH_NAME}-refused`, GITHUB_ENV: refusalEnvFile },
+      },
+      carried,
+    );
+    const branchIdBefore = finalEnv.BRANCH_ID ?? '';
+    check(
+      'a refused create reaches the job log as a ::error naming the status and the reason',
+      // The status AND the reason, because "invalid expires_at" on its own
+      // sends a reader hunting for a clock problem they may not have.
+      refusal.status === 1 &&
+        refusal.stderr.startsWith('::error title=Store gate::') &&
+        /HTTP 400/.test(refusal.stderr) &&
+        /invalid expires_at/.test(refusal.stderr) &&
+        /not in the future/.test(refusal.stderr),
+      `exit ${refusal.status}, ${refusal.stderr.split('\n')[0]?.replace('::error title=Store gate::', '').slice(0, 96) ?? '(it said nothing)'}`,
+    );
+    check(
+      'and it writes nothing to stdout, so the refusal cannot become a $GITHUB_ENV line',
+      refusal.stdout === '' && !existsSync(refusalEnvFile),
+      `stdout ${refusal.stdout === '' ? 'empty' : `WROTE ${refusal.stdout.split('\n')[0]}`}; ${
+        existsSync(refusalEnvFile) ? `${refusalEnvFile} was created` : 'no env file written'
+      }`,
+    );
+    // The job's own state is untouched: a probe that leaked a branch id into
+    // the real $GITHUB_ENV would make the checks above pass for the wrong
+    // reason on the next run.
+    check(
+      'and the job’s real $GITHUB_ENV and branch are untouched by the probe',
+      (finalEnv.BRANCH_ID ?? '') === branchIdBefore &&
+        !(create?.console ?? []).some((branch) => branch.name.endsWith('-refused')),
+      `BRANCH_ID still ${branchIdBefore || '(none)'}; console holds ${(create?.console ?? []).map((b) => b.name).join(', ')}`,
+    );
+    rmSync(refusalEnvFile, { force: true });
+  }
+
   const report = ran.find((entry) => entry.step.argv[1] === 'report');
   check(
     'the verdict step passes once a URI exists, without needing the fork exception',

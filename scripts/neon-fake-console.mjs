@@ -23,6 +23,21 @@
  * treated as `{}`. Each of those is a mistake the fake exists to refuse, and a
  * fake that forgave them would pass the very programs it is here to catch.
  *
+ * `expires_at` is validated too, and only when one is SENT. That distinction is
+ * the whole rule, and getting it backwards breaks this repository: Neon's
+ * reference is explicit that the create method "does not require a request
+ * body", and a branch created with no expiry is an ordinary permanent branch --
+ * which is exactly how `neon-secrets.mjs` creates the empty parent every run
+ * branches from. A fake that refused a missing expiry would turn a correct
+ * program red over a rule the console does not enforce.
+ *
+ * What Neon does enforce, per its branch-expiration guide, is the VALUE of an
+ * expiry that is present: RFC 3339 with a time zone, in the future, and no more
+ * than 30 days out. Those four are enforced here, each with its own 400, and
+ * that is the window worth modelling -- an expiry computed wrongly does not
+ * produce a loud failure, it produces a branch that quietly never deletes
+ * itself, which is the leak `neon-branch.mjs` exists to prevent.
+ *
  * It is deliberately NOT strict about anything it cannot verify. Whether Neon
  * defaults a `read_write` endpoint when a create does not name one is a claim
  * about somebody's API; the fake does not enforce it, and the checks assert the
@@ -46,6 +61,41 @@
  *   }
  */
 import { createServer } from 'node:http';
+
+/**
+ * Neon's ceiling on an expiry, from its branch-expiration guide: "maximum
+ * expiration is 30 days from the current time". A create past it is a 400.
+ */
+const MAX_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Why an `expires_at` the console would refuse, or `null` if it is fine.
+ *
+ * A rule, not a guess, and the order is the order the errors are useful in.
+ * The time zone is checked before the value is parsed as a date, because
+ * `Date.parse` reads a zone-less string as LOCAL time: `2026-01-01T00:00:00`
+ * parses cleanly on a machine west of Greenwich and lands eleven hours in the
+ * past, so a check that parsed first would report a confusing "must be in the
+ * future" for what is really a missing `Z` -- which is the first thing Neon's
+ * own guide lists as a common mistake.
+ */
+export function expiryProblem(value, now = new Date()) {
+  if (typeof value !== 'string') {
+    return `it must be an RFC 3339 timestamp in a string, not a ${typeof value}`;
+  }
+  if (!/(Z|[+-]\d{2}:\d{2})$/i.test(value)) {
+    return `${value} has no time zone — use ${value}Z, or an offset like ${value}+01:00`;
+  }
+  const at = Date.parse(value);
+  if (Number.isNaN(at)) return `${value} is not a date the console can read`;
+  if (at <= now.getTime()) {
+    return `${value} is not in the future — a branch created with an expiry in the past is one that never cleans itself up`;
+  }
+  if (at > now.getTime() + MAX_EXPIRY_MS) {
+    return `${value} is more than 30 days out, which is the console's limit`;
+  }
+  return null;
+}
 
 /**
  * Start the console on a port the OS hands out.
@@ -150,6 +200,16 @@ export async function startFakeNeon({ apiKey = 'test-key', readyAfter = 0 } = {}
         // cannot check without an account, and a fake that enforced a guess
         // would fail the provisioning program over a rule nobody verified.
         const endpoints = Array.isArray(body.endpoints) ? body.endpoints : [{ type: 'read_write' }];
+        // The expiry, when one is sent. Absent is FINE and must stay fine: see
+        // the header, and `neon-secrets.mjs`, which creates the parent branch
+        // with no expiry on purpose because it is meant to outlive the run.
+        if (asked.expires_at !== undefined && asked.expires_at !== null) {
+          const wrong = expiryProblem(asked.expires_at, new Date());
+          if (wrong !== null) {
+            send(400, { error: { message: `invalid expires_at: ${wrong}` } });
+            return;
+          }
+        }
         if (branchList().some((b) => b.name === asked.name)) {
           send(409, { error: { message: `branch ${asked.name} already exists` } });
           return;
