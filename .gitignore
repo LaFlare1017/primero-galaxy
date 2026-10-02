@@ -35,6 +35,12 @@ test-results/
 playwright-report/
 playwright/.cache/
 
+# a recorded cold-chat fixture is a CANDIDATE, never a committed one. Anchored
+# and named for the single file a recording run writes by default; the program
+# also refuses to write the committed transcript at all, so this is the second
+# of two guards rather than the only one.
+/e2e/fixtures/cold-chat-transcript.candidate.json
+
 # freebuff session data (local conversation database, never uploaded)
 .freebuff/
 

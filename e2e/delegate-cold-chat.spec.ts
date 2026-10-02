@@ -12,7 +12,13 @@ import {
   storeRows,
   type ManagedServer,
 } from './cold-process';
-import { coldChatTranscriptPath, loadTranscript, startFakeAnthropic, type FakeAnthropic } from './fake-anthropic';
+import {
+  coldChatTranscriptPath,
+  loadTranscript,
+  recordingRequested,
+  startFakeAnthropic,
+  type FakeAnthropic,
+} from './fake-anthropic';
 
 /**
  * The cold-process path for the CHAT route, across a real restart.
@@ -49,6 +55,19 @@ const SCENARIO = 's1';
 
 /** A real key means a real model. Without one, the recorded transcript answers instead. */
 const LIVE = Boolean(process.env.ANTHROPIC_API_KEY);
+
+/**
+ * A recording run, which is neither of the two paths above on its own.
+ *
+ * With `RECORD_TRANSCRIPT` set the fake is stood up EVEN WITH a key, because in
+ * that mode it forwards to the real API and the point is to capture a real
+ * exchange — the transcript is not what answers. So `LIVE` stops deciding where
+ * the requests go and only decides what answers them.
+ */
+const RECORD = recordingRequested();
+
+/** The replay path is the only one whose answers come from the transcript. */
+const REPLAY = !LIVE && !RECORD;
 
 /**
  * The env the spawned servers need to reach whichever Anthropic is in play.
@@ -118,15 +137,22 @@ test.describe('Delegate cold process (chat)', () => {
    * the live path is not downgraded to make the replay easier to run.
    */
   function agentEnv(): Record<string, string> {
-    if (LIVE) return { DELEGATE_AGENT: 'anthropic' };
-    return { DELEGATE_AGENT: 'anthropic', ANTHROPIC_API_KEY: FAKE_KEY, ANTHROPIC_BASE_URL: fake!.url };
+    if (LIVE && !RECORD) return { DELEGATE_AGENT: 'anthropic' };
+    return {
+      DELEGATE_AGENT: 'anthropic',
+      // A recording run forwards to the real API, so it needs the REAL key; the
+      // fake's only job is to watch. Handing it the replay key here would make
+      // every request 401 upstream and the candidate empty.
+      ANTHROPIC_API_KEY: LIVE ? (process.env.ANTHROPIC_API_KEY as string) : FAKE_KEY,
+      ANTHROPIC_BASE_URL: fake!.url,
+    };
   }
 
   test.beforeAll(async () => {
     assertBuildIsCurrent();
     rmSync(join(ROOT, DATA_DIR), { recursive: true, force: true });
-    if (!LIVE) {
-      fake = await startFakeAnthropic(loadTranscript(coldChatTranscriptPath(ROOT)));
+    if (!LIVE || RECORD) {
+      fake = await startFakeAnthropic(loadTranscript(coldChatTranscriptPath(ROOT)), { root: ROOT });
     }
   });
 
@@ -134,6 +160,10 @@ test.describe('Delegate cold process (chat)', () => {
     await stopServer(second);
     await stopServer(first);
     await fake?.close();
+    // Named in the log rather than left in a temp file: a candidate nobody
+    // finds is a real model's answer spent for nothing, and this is the only
+    // line that says where it went.
+    if (fake?.recorded()) console.log(`      recorded a candidate transcript at ${fake.recorded()}`);
   });
 
   test('a turn on a process that never saw the run still knows what came before it', async ({ page }, testInfo) => {
@@ -146,7 +176,10 @@ test.describe('Delegate cold process (chat)', () => {
     // Which of the two this was, recorded in the report rather than only in the
     // log: a CI reader looking at a green run cannot otherwise tell a real model
     // from a transcript, and those are very different things to be true.
-    testInfo.annotations.push({ type: 'agent', description: LIVE ? 'live model' : 'recorded transcript' });
+    testInfo.annotations.push({
+      type: 'agent',
+      description: RECORD ? 'live model, recording a candidate fixture' : LIVE ? 'live model' : 'recorded transcript',
+    });
 
     let runId = '';
     let firstPid = 0;
@@ -170,7 +203,9 @@ test.describe('Delegate cold process (chat)', () => {
     });
 
     await test.step('the transcript was consulted, not just the last prompt', async () => {
-      if (LIVE) return;
+      // The transcript served nothing in a recording run, so `served` is empty and these
+      // assertions are about a mode that is not in play.
+      if (!REPLAY) return;
       // Not decoration. It is what makes the replay path worth trusting: the
       // cold answer is only reachable from the turn that REQUIRES the first
       // question to be present, so seeing that turn served means the fixture
@@ -219,7 +254,9 @@ test.describe('Delegate cold process (chat)', () => {
     });
 
     await test.step('the cold answer came from the turn that needs the history', async () => {
-      if (LIVE) return;
+      // The transcript served nothing in a recording run, so `served` is empty and these
+      // assertions are about a mode that is not in play.
+      if (!REPLAY) return;
       // The fallback turn is the one that says it has nothing. If THAT is what
       // answered, the spec has just caught the regression it was written for —
       // so its presence here would be a failure, not a detail.
