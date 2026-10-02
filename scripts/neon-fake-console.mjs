@@ -51,6 +51,18 @@
  * back can test it. Zero means ready at once, which is what a test that is not
  * about readiness wants.
  *
+ * `failNext()` is the other one: it makes the next matching management call
+ * answer 503, once, and then behave normally again. Everything else this fake
+ * refuses is the CLIENT being wrong -- a bad expiry, a name used twice, a
+ * missing bearer -- and a program that handles its own mistakes is easy to
+ * rehearse. What nothing could rehearse until this existed is the console being
+ * wrong: a store job whose `uri` step gets a 503 exports no connection URL, the
+ * gate quietly falls back to its in-process leg, and the job's verdict step then
+ * has to notice. That chain is the job's signature red annotation, and on a
+ * repository with no Neon key it fires on every single push -- so it is the one
+ * failure a reader of a failed run is most likely to be looking at, and it was
+ * the one never executed.
+ *
  * Stand one up and talk to it with `neon()` from `./neon-api.mjs`:
  *
  *   const fake = await startFakeNeon({ readyAfter: 2 });
@@ -105,12 +117,49 @@ export function expiryProblem(value, now = new Date()) {
  * teardown step and without leaving a fixture behind for the next run to trip
  * over.
  */
+const METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD']);
+
+/**
+ * Whether a fault applies to one call.
+ *
+ * `on` is either a method followed by a path fragment (`POST /branches`, which
+ * asks for that method AND that fragment) or just a fragment (`/connection_uri`,
+ * which asks for any method). The method is matched separately from the path
+ * because the console's paths are long — a request to resolve a URI is
+ * `GET /api/v2/projects/proj-1/connection_uri` — so matching the two together
+ * would make the obvious spelling match nothing, which is worse than no fault at
+ * all because it looks armed.
+ */
+function faultMatches(fault, method, pathname) {
+  const at = fault.on.search(/\s/);
+  if (at < 0) return pathname.includes(fault.on);
+  const wanted = fault.on.slice(0, at).toUpperCase();
+  if (!METHODS.has(wanted)) return false;
+  return wanted === method && pathname.includes(fault.on.slice(at + 1).trim());
+}
+
 export async function startFakeNeon({ apiKey = 'test-key', readyAfter = 0, dataPlane = false } = {}) {
   const requests = [];
   const projects = [];
   const branches = new Map();
   let nextProject = 1;
   let nextBranch = 1;
+
+  // ── the FAULT mode ──────────────────────────────────────────────────
+  //
+  // Armed by the caller and matched against `METHOD` and the path SEPARATELY,
+  // because a substring of `GET /api/v2/projects/proj-1/connection_uri` is not
+  // `GET /connection_uri` — the first version matched the two together and the
+  // obvious spelling silently matched nothing. Splitting them means
+  // `/connection_uri` and `POST /branches` both do what they look like, and a
+  // method on its own (`DELETE`) is a legal thing to ask for.
+  //
+  // `fired` is kept because a fault that never matched is the dangerous case: a
+  // probe that arms a 503 and then asserts the job handled it has proved nothing
+  // when the 503 never arrived, and the step it was checking succeeded for its
+  // own reasons.
+  const armed = [];
+  const fired = [];
 
   // ── the data plane ────────────────────────────────────────────────
   //
@@ -251,6 +300,30 @@ export async function startFakeNeon({ apiKey = 'test-key', readyAfter = 0, dataP
 
       if (auth !== `Bearer ${apiKey}`) {
         send(401, { error: { message: 'invalid api key' } });
+        return;
+      }
+
+      // ── a MANAGEMENT call that fails on purpose ─────────────────────────
+      //
+      // After the bearer check on purpose: a console answering 503 to a request
+      // it could not authenticate is not the same failure, and a fault that
+      // shadowed the 401 would quietly stop being able to rehearse it. What is
+      // being modelled here is the console having a bad day while the key is
+      // perfectly good — which is the failure a store job actually meets, and
+      // the one nothing in this repository could produce until now: every other
+      // refusal is the CLIENT being wrong (a bad expiry, a name used twice), so
+      // the job's behaviour when the SERVER is wrong had never been run.
+      //
+      // Armed rather than configured, because a rehearsal runs its steps in
+      // order and needs the fault to start at one of them. A `startFakeNeon`
+      // option would have to be set before the happy path that precedes it.
+      const call = `${req.method} ${url.pathname}`;
+      const matched = armed.findIndex((fault) => fault.left > 0 && faultMatches(fault, req.method, url.pathname));
+      if (matched >= 0) {
+        const fault = armed[matched];
+        fault.left -= 1;
+        fired.push({ on: fault.on, status: fault.status, call });
+        send(fault.status, { error: { message: fault.message } });
         return;
       }
       const parts = url.pathname.split('/').filter(Boolean); // api,v2,...
@@ -416,5 +489,32 @@ export async function startFakeNeon({ apiKey = 'test-key', readyAfter = 0, dataP
       }),
     /** Whether a data plane is answering SQL at all — a spec's first question. */
     dataPlane: () => Boolean(dataPlane),
+    /**
+     * Make the next `times` management calls whose `METHOD /path` contains
+     * `on` fail, and then behave normally again.
+     *
+     * Defaults are a 503 with the shape a real outage has, rather than a
+     * generic 500: "temporarily unavailable" is what a Neon read replica says
+     * when it is behind, and a rehearsal that answered 418 would prove the job
+     * copes with an I wrote down rather than with one that happens. `times`
+     * defaults to ONE because the interesting case is the transient one — a
+     * job that fails once and would pass on a retry is a different claim from a
+     * job whose setup is simply broken, and only one of them is worth
+     * rehearsing.
+     *
+     * Returns what was armed, so a caller can hold it and assert on it later.
+     */
+    failNext: ({ on, status = 503, message = 'the compute is temporarily unavailable, please retry', times = 1 } = {}) => {
+      if (typeof on !== 'string' || on.trim() === '') {
+        throw new Error(
+          'a fault needs an `on` to match against, e.g. "POST /branches" or "/connection_uri" — without one it would swallow every call',
+        );
+      }
+      const fault = { on, status, message, left: times };
+      armed.push(fault);
+      return fault;
+    },
+    /** What actually failed, so a check can prove its fault was not a no-op. */
+    faults: () => fired.map(({ on, status, call }) => ({ on, status, call })),
   };
 }

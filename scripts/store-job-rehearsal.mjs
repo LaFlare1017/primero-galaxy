@@ -380,6 +380,94 @@ const resolved = ran.find((entry) => entry.step.argv[0] === 'scripts/neon-secret
     rmSync(refusalEnvFile, { force: true });
   }
 
+  // ── and the job's error paths, which need the CONSOLE to be wrong ────
+  //
+  // The block above rehearses a refusal the client earned: the expiry it asked
+  // for is one the console will not take, which is a fact about the request and
+  // could be reached without inventing anything. This one is different, and it
+  // is the case the job actually meets. On a repository with no Neon key the
+  // store job goes red on every push, and the message a reader sees is the one
+  // that says there was no connection URI — which happens whenever the `uri`
+  // step does not produce one, for any reason at all. A 503 from the console is
+  // the most ordinary of those reasons and none of them had been run.
+  //
+  // So the fault is ARMED rather than configured, because a rehearsal runs its
+  // steps in order and the failure has to start at one of them. And every
+  // assertion below first checks that the fault FIRED, because a probe that
+  // arms a 503 and then asserts the job survived it has proved nothing when the
+  // 503 never arrived — the `uri` step would have succeeded, and everything
+  // downstream would have looked exactly right.
+  {
+    const outageEnvFile = join(tmpdir(), `store-job-outage-${process.pid}.env`);
+    rmSync(outageEnvFile, { force: true });
+    const before = fake.faults().length;
+    fake.failNext({ on: 'GET /connection_uri', status: 503 });
+    const outage = await runStep(
+      {
+        label: 'resolve a connection URI, while the console is unavailable',
+        argv: ['scripts/neon-branch.mjs', 'uri'],
+        env: { GITHUB_ENV: outageEnvFile },
+      },
+      carried,
+    );
+    const firedNow = fake.faults().slice(before);
+    check(
+      'the fault was really injected, so what follows is about a failing console and not a passing one',
+      firedNow.length === 1 && firedNow[0].status === 503,
+      firedNow.length === 0
+        ? 'the 503 never arrived — every check below would have passed anyway'
+        : `${firedNow[0].status} answered ${firedNow[0].call}`,
+    );
+    check(
+      'a URI step the console answers 503 to exits 1 and says so with the status',
+      outage.status === 1 &&
+        outage.stderr.startsWith('::error title=Store gate::') &&
+        /503/.test(outage.stderr) &&
+        /temporarily unavailable/.test(outage.stderr),
+      `exit ${outage.status}, ${outage.stderr.split('\n')[0]?.replace('::error title=Store gate::', '').slice(0, 96) ?? '(it said nothing)'}`,
+    );
+    check(
+      'and it exports no connection URL, so the gate cannot silently run on the wrong engine',
+      !existsSync(outageEnvFile) || !/^DELEGATE_STORE_TEST_URL=/m.test(readFileSync(outageEnvFile, 'utf8')),
+      existsSync(outageEnvFile) ? `wrote ${readFileSync(outageEnvFile, 'utf8').trim() || '(nothing)'}` : 'no env file written',
+    );
+
+    // And the consequence, which is the claim that matters: the job carries on,
+    // the gate runs in-process, and the VERDICT step is the thing that goes
+    // red. A job that noticed the outage in step 3 and stayed quiet afterwards
+    // would be a worse one than this, so the annotation is asserted here rather
+    // than assumed from the refusal above.
+    const withoutUrl = { ...carried };
+    delete withoutUrl.DELEGATE_STORE_TEST_URL;
+    const verdict = await runStep(
+      { label: 'report, with no connection URI to report', argv: ['scripts/neon-branch.mjs', 'report'] },
+      withoutUrl,
+    );
+    check(
+      'with no connection URI the verdict step fails the job, naming the URI rather than the key',
+      verdict.status === 1 &&
+        verdict.stderr.startsWith('::error title=Store gate::') &&
+        /connection URI/.test(verdict.stderr) &&
+        /NEON_API_KEY/.test(verdict.stderr),
+      `exit ${verdict.status}, ${verdict.stderr.split('\n')[0]?.replace('::error title=Store gate::', '').slice(0, 96) ?? '(it said nothing)'}`,
+    );
+
+    // The job’s own state must survive the probe, and the FILE is what this reads
+    // rather than `finalEnv`: that is a snapshot taken before the probe ran, so
+    // asserting against it cannot fail whatever the probe did — which makes it a
+    // check that reports a pass on a probe that leaked a branch id into the very
+    // file the next step reads. Re-read after the fact instead.
+    const afterOutage = readEnvFile(envFile);
+    check(
+      'and the job’s own $GITHUB_ENV still holds the happy path’s URL and branch, so the probe wrote nothing',
+      (afterOutage.DELEGATE_STORE_TEST_URL ?? '').startsWith('postgres://') &&
+        afterOutage.BRANCH_ID === finalEnv.BRANCH_ID &&
+        afterOutage.NEON_PROJECT_ID === 'proj-1',
+      `DELEGATE_STORE_TEST_URL ${(afterOutage.DELEGATE_STORE_TEST_URL ?? '(unset)').replace(/:[^:@]*@/, ':(masked)@')}; BRANCH_ID ${afterOutage.BRANCH_ID ?? '(unset)'}`,
+    );
+    rmSync(outageEnvFile, { force: true });
+  }
+
   const report = ran.find((entry) => entry.step.argv[1] === 'report');
   check(
     'the verdict step passes once a URI exists, without needing the fork exception',
