@@ -313,6 +313,15 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      # e2e/delegate-store-remote.spec.ts runs the store gate BINARY over the
+      # real Neon driver, so the gate has to exist before the suite starts. It
+      # refuses to skip when it does not, on the grounds that a skipped spec
+      # reads as coverage of a thing nobody ran — which is exactly how this
+      # job's first run with it failed, in a job whose other 133 specs passed
+      # and went green in parallel for the first time. The same two steps the
+      # Delegate gates and Store gate jobs run, for the same reason.
+      - run: npm --prefix delegate ci
+      - run: npm --prefix delegate run build
       # The playwright.config webServer builds + starts the production build
       # itself, so no separate server step is needed here. CI=1 enables the
       # config's retries (2) and the JSON reporter that feeds the flaky
