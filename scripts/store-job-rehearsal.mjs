@@ -34,9 +34,11 @@
  * Two details are load-bearing and easy to get wrong, which is most of why this
  * is a program rather than a person re-running the YAML by hand:
  *
- *   - Step 1's ids reach CI on STDOUT, because the workflow redirects
- *     `neon-secrets.mjs --resolve >> "$GITHUB_ENV"`. A rehearsal that captured
- *     stdout into a variable instead would rehearse a different job.
+ *   - Step 1's ids reach the job through `$GITHUB_ENV`, which the program now
+ *     appends to itself. The workflow line used to be a shell redirection —
+ *     `neon-secrets.mjs --resolve >> "$GITHUB_ENV"` — which made a shell the
+ *     thing that decided what became an environment variable. A rehearsal that
+ *     reproduced that redirection was testing the shell rather than the program.
  *   - Each step's `$GITHUB_ENV` additions are handed to the NEXT step as
  *     environment variables, which is what GitHub does between steps. Skip that
  *     and step 3 correctly refuses — it has no BRANCH_ID — and the rehearsal
@@ -79,6 +81,10 @@ const STEPS = [
     label: 'resolve the Neon project and parent branch',
     argv: ['scripts/neon-secrets.mjs', '--resolve'],
     intoEnv: true,
+    // The program appends to `$GITHUB_ENV` itself; the workflow line is just
+    // `node scripts/neon-secrets.mjs --resolve`. So the ids have to be in the
+    // FILE, not merely on stdout, and the check below reads the file.
+    handWritesEnv: true,
     handover: ['NEON_PROJECT_ID', 'NEON_PARENT_BRANCH_ID'],
   },
   {
@@ -208,10 +214,19 @@ try {
     }
 
     const result = await runStep(step, carried);
-    // The redirection the workflow writes for step 1, reproduced rather than
-    // replaced: the ids reach the job on stdout, so a rehearsal that captured
-    // them elsewhere would be rehearsing a different job.
-    if (step.intoEnv) appendFileSync(envFile, result.stdout, 'utf8');
+    // Nothing to redirect. Step 1 used to be `neon-secrets.mjs --resolve >>
+    // "$GITHUB_ENV"`, and this line reproduced that shell redirection by
+    // appending the step's stdout — which meant the rehearsal was testing the
+    // same shell feature the workflow used rather than the program's own
+    // contract, and would have kept passing if the workflow had gone back to
+    // depending on it.
+    //
+    // The program now writes `$GITHUB_ENV` itself, so the claim is simply that
+    // it did: `handWritesEnv` steps are expected to have put their answer in the
+    // file, and the check below reads the file rather than this process's copy
+    // of stdout. A step that prints its ids and writes nothing would now fail,
+    // which is the whole point of the change.
+    if (step.intoEnv && !step.handWritesEnv) appendFileSync(envFile, result.stdout, 'utf8');
     // And then GitHub's own hand-off: whatever `$GITHUB_ENV` now holds becomes
     // the environment the NEXT step runs in. Without this the rehearsal fails on
     // step 2 for want of an id step 1 just wrote — which is the correct refusal
@@ -241,10 +256,25 @@ try {
 
   const finalEnv = readEnvFile(envFile);
 
+  // Named before it is used, and NOT `resolve`: that is `path.resolve` at the top
+  // of this file, and shadowing it inside the try block is a temporal dead zone
+  // on the first reference — which reads as a crash rather than as a naming
+  // mistake, and cost a debugging round to see.
+const resolved = ran.find((entry) => entry.step.argv[0] === 'scripts/neon-secrets.mjs');
+  // The FILE, not the step's stdout. This check used to be phrased as "hands
+  // the next one the two ids, on stdout" and read a copy the rehearsal made by
+  // appending stdout itself — reproducing the shell redirection the workflow no
+  // longer has. It would have passed whether or not the program wrote anything,
+  // as long as it printed. `handWritesEnv` above says the program owns the
+  // write, so the claim has to be that it did.
   check(
-    'the resolve step hands the next one the two ids, on stdout',
-    finalEnv.NEON_PROJECT_ID === 'proj-1' && finalEnv.NEON_PARENT_BRANCH_ID === 'br-1',
-    `NEON_PROJECT_ID=${finalEnv.NEON_PROJECT_ID ?? '(unset)'}, NEON_PARENT_BRANCH_ID=${finalEnv.NEON_PARENT_BRANCH_ID ?? '(unset)'}`,
+    'the resolve step writes the two ids into $GITHUB_ENV itself, with no redirection in the job',
+    finalEnv.NEON_PROJECT_ID === 'proj-1' &&
+      finalEnv.NEON_PARENT_BRANCH_ID === 'br-1' &&
+      resolved?.result.stdout.includes('NEON_PROJECT_ID=proj-1'),
+    `NEON_PROJECT_ID=${finalEnv.NEON_PROJECT_ID ?? '(unset)'}, NEON_PARENT_BRANCH_ID=${
+      finalEnv.NEON_PARENT_BRANCH_ID ?? '(unset)'
+    }, written by the program${resolved?.result.stdout.includes('NEON_PROJECT_ID=proj-1') ? '' : ' (printed only)'}`,
   );
 
   const create = ran.find((entry) => entry.step.argv[1] === 'create');

@@ -198,7 +198,7 @@ jobs:
       # same condition as the ones below it, and nothing is ever created for one.
       - name: Resolve the Neon project and parent branch
         if: env.NEON_API_KEY != ''
-        run: node scripts/neon-secrets.mjs --resolve >> "$GITHUB_ENV"
+        run: node scripts/neon-secrets.mjs --resolve
 
       # ── the database, created for this run and destroyed by it ──────────
       #
@@ -242,15 +242,17 @@ jobs:
         run: node delegate/dist/store/test-store-backends.js
       # Then the same gate, same assertions, over the serverless driver.
       #
-      # Two things here are not style. The gate's exit status is read out of
-      # the PIPELINE rather than trusted to errexit: piped into `tee`, a failing
-      # gate reports `tee`'s status — zero — and this step would go green having
-      # proved nothing (and `set -e` is not something to hang a correctness
-      # claim on, since the shell GitHub picks is not the shell a reader runs
-      # this in). And the engine line is ASSERTED rather than read: a gate that
-      # fell back to the in-process engine passes every check it makes while
-      # testing the wrong substrate, which is the one outcome this job exists to
-      # catch.
+      # This was a `run:` block of five lines, and two of them were shell
+      # features standing in for correctness claims. It piped the gate into
+      # `tee` and read `${PIPESTATUS[0]}` — a BASH array, so the step's verdict
+      # depended on the runner's default shell rather than on the gate. And the
+      # engine line was checked by grepping a log file, which is a claim about a
+      # file rather than about a run.
+      #
+      # Both claims are made in `store-gate-remote.mjs` now: it reads the gate's
+      # own exit status from the child process, asserts the gate reported a
+      # REMOTE engine, and turns a failure into an annotation. Nothing here
+      # depends on which shell GitHub picked.
       - name: Store gate over the Neon serverless driver
         if: env.DELEGATE_STORE_TEST_URL != ''
         env:
@@ -263,12 +265,7 @@ jobs:
           # to choose. The guard stays armed for the local path, where the URL
           # is a human's to name.
           DELEGATE_STORE_TEST_ALLOW_ANY: '1'
-        run: |
-          node delegate/dist/store/test-store-backends.js 2>&1 | tee /tmp/store-gate-remote.log
-          status=${PIPESTATUS[0]}
-          if [ "$status" -ne 0 ]; then echo "::error title=Store gate::the gate failed over the Neon driver (exit $status)"; exit "$status"; fi
-          grep -q "postgres leg on remote postgres" /tmp/store-gate-remote.log \
-            || { echo "::error title=Store gate::the remote leg did not report a remote engine — it ran on something else, so the driver is untested"; exit 1; }
+        run: node scripts/store-gate-remote.mjs
       # ── and the branch goes away with it ─────────────────────────────────
       - name: Drop this run's branch
         # `always()` so a failing gate still cleans up after itself, and the
@@ -403,23 +400,11 @@ jobs:
       - run: npm ci
       - uses: browser-actions/setup-chrome@v2
       - run: npm run build
+      # Starts the server, waits for it with a real request and a real deadline,
+      # audits both routes, and stops the server in a `finally`. The shell version
+      # of this had two bugs that a reader could not see: a server that never came
+      # up fell through to the audits, whose empty reports the gate read as a
+      # pass; and `kill $SERVER` sat AFTER the audits, so a lighthouse failure —
+      # the case this gate exists to catch — skipped the cleanup.
       - name: Audit both routes and enforce the 100/100 gate
-        run: |
-          npm run start -- -p 3100 > /tmp/lh-server.log 2>&1 &
-          SERVER=$!
-          # Wait until the server answers before auditing.
-          for i in $(seq 1 30); do
-            curl -sf -o /dev/null http://localhost:3100/ && break
-            sleep 1
-          done
-          npx lighthouse http://localhost:3100/ --output=json \
-            --output-path=/tmp/lh-root.json \
-            --only-categories=accessibility,seo \
-            --chrome-flags="--headless=new --no-sandbox" --quiet
-          npx lighthouse http://localhost:3100/galaxy --output=json \
-            --output-path=/tmp/lh-galaxy.json \
-            --only-categories=accessibility,seo \
-            --chrome-flags="--headless=new --no-sandbox" --quiet \
-            --max-wait-for-load=60000
-          kill $SERVER 2>/dev/null || true
-          node scripts/lighthouse-gate.mjs /tmp/lh-root.json /tmp/lh-galaxy.json
+        run: node scripts/lighthouse-run.mjs

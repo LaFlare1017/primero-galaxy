@@ -53,6 +53,7 @@
  * doctor on every commit, so neither needs an account to keep working.
  */
 import { spawnSync } from 'node:child_process';
+import { appendFileSync } from 'node:fs';
 import { isMain } from './is-main.mjs';
 import { apiBase, DEFAULT_API, neon, setSecret } from './neon-api.mjs';
 import { startFakeNeon } from './neon-fake-console.mjs';
@@ -215,9 +216,36 @@ export async function resolveFor(env = process.env, fetchImpl = fetch, base = ap
   };
 }
 
-async function resolveMode() {
-  const { note, lines } = await resolveFor();
+/**
+ * `--resolve`: settle the two ids, and hand them to the job.
+ *
+ * The ids used to reach `$GITHUB_ENV` because the workflow line was
+ * `neon-secrets.mjs --resolve >> "$GITHUB_ENV"` — a shell redirection, which
+ * means the program's contract was "whatever it prints becomes an environment
+ * variable" and nothing in the program said so. A program that printed a
+ * progress line, or a warning, or a second run's output, would have written it
+ * into the file the next step reads.
+ *
+ * So it writes the file itself, and the redirection is gone. The claim is now
+ * the program's: it writes exactly those two lines and nothing else, and it
+ * says so on stdout too so a person running it by hand sees them.
+ *
+ * `GITHUB_ENV` is the CI name; `env.GITHUB_ENV` unset means a person, and then
+ * there is no file to write and the ids go to stdout alone. That is not a
+ * failure — a by-hand run is not a job, and refusing it would be a program
+ * that only works in one place.
+ */
+async function resolveMode(env = process.env) {
+  const { note, lines } = await resolveFor(env);
   console.error(`  ${note}`);
+
+  const file = (env.GITHUB_ENV ?? '').trim();
+  if (file !== '') {
+    // Appended, never truncated: `$GITHUB_ENV` accumulates across every step
+    // in the job, and a mode that opened it for writing would erase what the
+    // checkout and setup steps put there.
+    appendFileSync(file, `${lines.join('\n')}\n`, 'utf8');
+  }
   for (const line of lines) console.log(line);
   return 0;
 }
@@ -245,7 +273,7 @@ minted here: make one at console.neon.tech → Account Settings → API keys.`);
     return 0;
   }
 
-  if (argv.includes('--resolve')) return resolveMode();
+  if (argv.includes('--resolve')) return resolveMode(process.env);
   if (argv.includes('--self-test-e2e')) return selfTestE2e();
   if (argv.includes('--self-test')) return selfTest();
 

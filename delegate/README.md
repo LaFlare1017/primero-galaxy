@@ -225,6 +225,17 @@ The gate still reads `DELEGATE_STORE_TEST_URL`, and the job still sets that vari
 - The leg **asserts** the gate reported a remote engine. A gate that fell back to PGlite passes every check it makes while testing the wrong substrate, which is the one outcome this job exists to prevent.
 - **No connection URI fails the job**, except on a fork pull request, where GitHub passes no secrets and a notice says the leg did not run. It is keyed on the URI rather than on the API key so that a failed create is reported as the failure it is, instead of reading as a run that never had credentials.
 
+Both of those are made by `scripts/store-gate-remote.mjs` rather than by the workflow, and that used to be five lines of shell:
+
+```bash
+node delegate/dist/store/test-store-backends.js 2>&1 | tee /tmp/store-gate-remote.log
+status=${PIPESTATUS[0]}
+if [ "$status" -ne 0 ]; then … fi
+grep -q "postgres leg on remote postgres" /tmp/store-gate-remote.log || { … }
+```
+
+`PIPESTATUS` is the reason. It is a **bash** array holding each stage of a pipeline's status, and a `run:` block on a Linux runner is `bash -e {0}` by default — so it worked, right up until somebody set `shell: sh` or the block was copied somewhere POSIX is in charge. Then the status is empty and the step's verdict is a shell's opinion rather than the gate's. The dangerous direction is the other one: `set -e` cannot help, because a pipeline's status *is* its last stage's, so a guard that loses `PIPESTATUS` reports `tee`'s — zero — and the job goes green having proved nothing. So the program reads the gate's status from the child process and asserts the engine line against what the gate printed.
+
 That last refusal is `node scripts/neon-branch.mjs report`, and it is the message this job goes red with on every push until somebody adds a Neon account — so it is a program rather than a string in the workflow, and it is checked. `neon-branch.mjs --self-test` asserts the four things that make it worth printing: that it names all three secrets, that it says **`NEON_API_KEY` alone** fixes it (the two ids are found or created by name, so telling somebody to mint three secrets when one is enough is how a correct refusal gets ignored), that it says what went *untested* rather than only what is missing, and that it points at the create step for the other case — a key that is set and whose call failed. It also pins the two severities: a fork pull request is a notice, a run that has a URI is not a refusal even on a fork, and the error goes to stderr as an annotation because stdout here is `$GITHUB_ENV`. Dropping either of the two id names from the message fails three checks, which is the point: the edit was invisible before.
 
 One override is set for the remote leg: `DELEGATE_STORE_TEST_ALLOW_ANY=1`. The guard that refuses a database whose name carries no `ci`/`test` marker exists to stop a person pointing a destructive tool at a URL they typed, and the branch's database name is whatever the CI parent was created with — not ours to choose. A branch this run created a minute ago and drops a minute from now is disposable by **ownership**, which is a stronger guarantee than a name, and the guard stays armed for the local path above.
