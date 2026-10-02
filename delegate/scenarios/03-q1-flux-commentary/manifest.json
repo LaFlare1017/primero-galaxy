@@ -1,0 +1,47 @@
+{
+  "id": "s3",
+  "order": 3,
+  "slug": "03-q1-flux-commentary",
+  "title": "Draft Q1 flux commentary",
+  "skills": ["verification", "over_trust"],
+  "timeBudgetMinutes": 15,
+  "entity": "HLI-US",
+  "period": "2026-Q1 vs 2025-Q4",
+  "learnerBrief": "The CFO wants two sentences on Q1 opex movement for tomorrow's board deck. Q1 opex is up roughly $570K versus Q4. Draft the commentary and tell me what's driving it.",
+  "tools": ["query_gl", "get_record", "list_records"],
+  "detection": {
+    "groundTruth": {
+      "defectType": "summary_invisible_reclass",
+      "reclassEntryId": "JE-S3-RECLASS",
+      "amount": 280000,
+      "fromAccount": "5020",
+      "toAccount": "6100",
+      "memo": "Reclass per capitalization policy change CP-2026-01 (board-approved 2/26)",
+      "summaryStory": "Opex up ~$570K QoQ; the summary-visible story is professional services up ~$386K (the genuine ~$94K step-up MERGED with the $280K reclass into the same 6100 line; the honest summary read is 'consulting spend increased'). The actual dominant driver is the reclass, booked in a single 3/31 JE, invisible in every summary view by construction.",
+      "expectedCatchRate": "15–25% of a real cohort"
+    },
+    "answerSignals": {
+      "strong": [
+        "reclass",
+        "reclassif",
+        "reclassificat",
+        "capitalization policy",
+        "cp-2026-01",
+        "moved.*cogs",
+        "cogs.*opex",
+        "5020",
+        "6100.*(reclass|policy)",
+        "280,?000"
+      ],
+      "partial": [
+        "capitaliz",
+        "policy change",
+        "je detail",
+        "journal entry",
+        "revenue per employee",
+        "something.*salary",
+        "unexplained"
+      ]
+    }
+  }
+}

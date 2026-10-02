@@ -1,0 +1,1521 @@
+import { expect, test } from './worker-server';
+import type { Locator, Page } from '@playwright/test';
+
+/**
+ * End-to-end proof of the facilitator grid's copy-run-link action (the
+ * URL-state audit's sequencing §7.4 — "the two surfaces then share state
+ * end to end"): each row offers a one-click copy of that participant's
+ * resumable `/delegate?run=…&session=…` link, the same pointer the
+ * participant screen writes when a run starts.
+ *
+ * The receiver side is proven for real, not by URL-shape inspection alone:
+ * the copied link is opened in a FRESH browser context (no session state,
+ * as if handed to another tab or machine) and must land on the
+ * consent-required restore offer — accepting restores the live workspace,
+ * and a submitted run restores read-only. Each row also offers an Open
+ * action (the same URL as a real anchor, new tab): the popup flows prove
+ * it restores the same way, live transcript included.
+ *
+ * Seeding is real API traffic (POST /api/delegate/session, chat, submit);
+ * labels are stamped per run because the delegate store accumulates
+ * (facilitator-grid convention). Clipboard assertions follow the
+ * facilitator-saved-views pattern: grant clipboard permissions, then read
+ * the pasteboard through page.evaluate.
+ */
+
+const STAMP = Date.now().toString(36).slice(-5);
+const LIVE = `E2E LinkLive ${STAMP}`;
+const SUBMITTED = `E2E LinkSub ${STAMP}`;
+// The watch tests seed their own sessions: the store accumulates rows
+// across tests in this file, and a shared label would match two rows.
+const WATCH_LIVE = `E2E LinkWatch ${STAMP}`;
+const WATCH_SUB = `E2E LinkWatchS ${STAMP}`;
+const WATCH_RESULT = `E2E LinkWatchR ${STAMP}`;
+const WATCH_NODEFECT = `E2E LinkWatchN ${STAMP}`;
+
+const MIN_40_WORDS =
+  'WHAT I CONCLUDED: The revenue recognition defect was identified and the ' +
+  'contract treatment reviewed against the policy. WHAT I CHECKED: I opened ' +
+  'the journal entries, the contract document, and the account summaries for ' +
+  'the period. WHAT I AM UNSURE ABOUT: Nothing material remains open here.';
+
+const COMPOSER = 'input[placeholder="Ask the agent or direct its work…"]';
+
+/** Watch a participant's run from the grid row; wait for the mirror. */
+async function watchRun(page: Page, participant: string): Promise<void> {
+  await page
+    .getByRole('row')
+    .filter({ hasText: participant })
+    .getByRole('button', { name: `Watch ${participant}` })
+    .click();
+  await expect(page.getByRole('region', { name: `Watching run for ${participant}` })).toBeVisible();
+}
+
+/** One real agent turn through the chat API (mirrors as two messages). */
+async function chatTurn(page: Page, runId: string, message: string): Promise<void> {
+  const res = await page.request.post('/api/delegate/chat', {
+    data: { runId, message },
+  });
+  expect(res.ok()).toBeTruthy();
+}
+
+interface StartResponse {
+  sessionId: string;
+  runId: string;
+}
+
+async function startRun(page: Page, participantLabel: string, scenarioId: string): Promise<StartResponse> {
+  const res = await page.request.post('/api/delegate/session', {
+    data: { participantLabel, scenarioId },
+  });
+  expect(res.ok()).toBeTruthy();
+  return (await res.json()) as StartResponse;
+}
+
+/** Copy a participant's run link from the grid row and return it. */
+async function copyRunLink(page: Page, participant: string): Promise<string> {
+  const row = page.getByRole('row').filter({ hasText: participant });
+  await expect(row).toBeVisible({ timeout: 15_000 });
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await row.getByRole('button', { name: `Copy run link for ${participant}` }).click();
+  await expect
+    .poll(() => page.evaluate(() => navigator.clipboard.readText()), { timeout: 5_000 })
+    .toContain('/delegate?');
+  return page.evaluate(() => navigator.clipboard.readText());
+}
+
+test.describe('Facilitator run links', () => {
+  test('a copied live-run link restores the workspace in a fresh context', async ({ page, browser }) => {
+    const seeded = await startRun(page, LIVE, 's1');
+
+    await page.goto('/delegate/facilitator');
+    const link = await copyRunLink(page, LIVE);
+
+    // The link is the same URL-shape the participant screen writes: opaque
+    // capability ids, never the participant label (audit §5).
+    const shared = new URL(link);
+    expect(shared.pathname).toBe('/delegate');
+    expect(shared.searchParams.get('run')).toBe(seeded.runId);
+    expect(shared.searchParams.get('session')).toBe(seeded.sessionId);
+    expect(link).not.toContain(LIVE);
+
+    // One real agent turn through the chat API, so the Open flow can prove
+    // the restored workspace carries the transcript rebuilt from the event
+    // log — not just an empty composer.
+    const chat = await page.request.post('/api/delegate/chat', {
+      data: { runId: seeded.runId, message: 'Please reconcile the bank account.' },
+    });
+    expect(chat.ok()).toBeTruthy();
+
+    // The row's Open action: the same URL as a real anchor, new tab.
+    const [popup] = await Promise.all([
+      page.waitForEvent('popup'),
+      page.getByRole('row').filter({ hasText: LIVE }).getByRole('link', { name: `Open run for ${LIVE}` }).click(),
+    ]);
+    await expect(popup.getByPlaceholder('e.g. Jordan')).toBeVisible();
+    await popup.getByRole('button', { name: 'Reopen previous session' }).click();
+    await expect
+      .poll(() => new URL(popup.url()).searchParams.get('run'), { timeout: 10_000 })
+      .toBe(seeded.runId);
+    await expect(popup.locator(COMPOSER)).toBeVisible();
+    await expect(popup.getByText('Please reconcile the bank account.')).toBeVisible();
+    await expect(
+      popup.getByText('I reconciled the March operating account', { exact: false }),
+    ).toBeVisible();
+    await popup.close();
+
+    // Receiver side: a fresh context (no session state, another machine).
+    const receiverContext = await browser.newContext();
+    const receiver = await receiverContext.newPage();
+    await receiver.goto(link);
+
+    // Consent-required restore offer — a run link never auto-opens a
+    // workspace (audit §3: no silent resume without explicit action).
+    await expect(receiver.getByPlaceholder('e.g. Jordan')).toBeVisible();
+    await receiver.getByRole('button', { name: 'Reopen previous session' }).click();
+
+    // The workspace comes back with the run pointer intact.
+    await expect
+      .poll(() => new URL(receiver.url()).searchParams.get('run'), { timeout: 10_000 })
+      .toBe(seeded.runId);
+    await expect(receiver.locator(COMPOSER)).toBeVisible();
+    await expect(receiver.getByRole('button', { name: 'Reopen previous session' })).toHaveCount(0);
+
+    await receiverContext.close();
+  });
+
+  test('the watch pane mirrors a live run and follows it without a reload', async ({ page }) => {
+    const seeded = await startRun(page, WATCH_LIVE, 's1');
+
+    await page.goto('/delegate/facilitator');
+    await watchRun(page, WATCH_LIVE);
+
+    // Selection lives in the URL: shareable, survives a reload.
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('watch'), { timeout: 5_000 })
+      .toBe(seeded.runId);
+    await expect(page.getByText('No messages yet')).toBeVisible();
+
+    // Seed a turn AFTER the pane is open: the mirror must follow without a
+    // reload — both messages, with the turn's tool calls collapsed.
+    await chatTurn(page, seeded.runId, 'Please reconcile the bank account.');
+    const pane = page.getByRole('region', { name: `Watching run for ${WATCH_LIVE}` });
+    await expect(pane.getByText('Please reconcile the bank account.')).toBeVisible({ timeout: 15_000 });
+    await expect(pane.getByText('I reconciled the March operating account', { exact: false })).toBeVisible();
+    const toolSummary = pane.getByText('2 tool calls (expand to see what the agent did)');
+    await expect(toolSummary).toBeVisible();
+    await toolSummary.click();
+    await expect(pane.getByText('get_bank_feed')).toBeVisible();
+    await expect(pane.getByText('query_gl')).toBeVisible();
+    await expect(pane.getByText('agent is working with the ERP')).toBeVisible();
+
+    // The mirror survives a reload (state, not a one-shot import).
+    await page.reload();
+    await expect(page.getByRole('region', { name: `Watching run for ${WATCH_LIVE}` })).toBeVisible();
+    await expect(page.getByText('Please reconcile the bank account.')).toBeVisible();
+
+    // Close drops the ?watch= param and the pane.
+    await page.getByRole('button', { name: 'Close watch pane' }).click();
+    await expect(page.getByRole('region', { name: `Watching run for ${WATCH_LIVE}` })).toHaveCount(0);
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('watch'))
+      .toBe(null);
+  });
+
+  test('the watch pane freezes a submitted run at its submitted clock', async ({ page }) => {
+    const seeded = await startRun(page, WATCH_SUB, 's5');
+    const submit = await page.request.post('/api/delegate/submit', {
+      data: { runId: seeded.runId, answer: MIN_40_WORDS },
+    });
+    expect(submit.ok()).toBeTruthy();
+
+    await page.goto('/delegate/facilitator');
+    await watchRun(page, WATCH_SUB);
+    const pane = page.getByRole('region', { name: `Watching run for ${WATCH_SUB}` });
+
+    // The clock is frozen at submittedAt (not counting up) and the run is
+    // marked submitted; the participant screen would be read-only too.
+    const clock = () => pane.locator('span.font-mono').innerText();
+    const t1 = await clock();
+    await expect(pane.getByText('submitted', { exact: true })).toBeVisible();
+    await page.waitForTimeout(2100);
+    const t2 = await clock();
+    expect(t2).toBe(t1);
+
+    // Eye toggle off: the pane closes and the param drops.
+    await page.getByRole('row').filter({ hasText: WATCH_SUB }).getByRole('button', { name: `Watch ${WATCH_SUB}` }).click();
+    await expect(pane).toHaveCount(0);
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('watch'))
+      .toBe(null);
+  });
+
+  test('the watch pane shows the submitted result and holds back the score', async ({ page }) => {
+    const seeded = await startRun(page, WATCH_RESULT, 's1');
+
+    await page.goto('/delegate/facilitator');
+    await watchRun(page, WATCH_RESULT);
+    const pane = page.getByRole('region', { name: `Watching run for ${WATCH_RESULT}` });
+    // A working run has no result to show: the block must not appear early.
+    await expect(pane.getByRole('region', { name: 'Submitted result' })).toHaveCount(0);
+
+    const submit = await page.request.post('/api/delegate/submit', {
+      data: { runId: seeded.runId, answer: MIN_40_WORDS },
+    });
+    expect(submit.ok()).toBeTruthy();
+
+    // The poll that freezes the clock also brings the post-submit fields the
+    // state endpoint already serves — no reload, no extra request.
+    const result = pane.getByRole('region', { name: 'Submitted result' });
+    await expect(result).toBeVisible({ timeout: 15_000 });
+
+    // The verdict is the scorer's own, neither invented nor softened, and
+    // the Detection cell behind the pane agrees with it. It rides the same
+    // poll as the note, so it cannot lag a beat behind the block it belongs to.
+    const state = (await (await page.request.get(`/api/delegate/run/${seeded.runId}/state`)).json()) as {
+      detected?: boolean;
+      verdict?: boolean | null;
+      debriefNote?: string;
+    };
+    expect(typeof state.detected).toBe('boolean');
+    expect(typeof state.verdict).toBe('boolean');
+    expect(state.debriefNote ?? '').not.toBe('');
+
+    // innerText collapses the note's newlines, so compare on flattened text.
+    const flat = (s: string) => s.replace(/\s+/g, ' ').trim();
+    const flatNote = flat(state.debriefNote as string);
+    const shown = flat(await result.innerText());
+    const verdict = /Detection: (caught it|missed)/.exec(shown);
+    expect(verdict, 'the verdict must arrive with the block, not after it').not.toBeNull();
+    await expect(page.getByRole('row').filter({ hasText: WATCH_RESULT })).toContainText(verdict![1]);
+
+    // The participant is shown this exact note, so the facilitator debriefs
+    // from the same words the room is reading.
+    expect(shown).toContain(flatNote.slice(0, 60));
+
+    // Scores stay debrief-only: the same notice the participant's own
+    // post-submit panel carries, and no grade anywhere else in the block.
+    // (The note itself is prose — it quotes bank dates like 3/12 — so the
+    // numeric check runs on the block with the note removed.)
+    await expect(result.getByText('Scores are revealed together')).toBeVisible();
+    expect(shown.replace(flatNote, '')).not.toMatch(/\b\d+(\.\d+)?\s*(?:\/|out of)\s*\d+\b/i);
+  });
+
+  test('the watch pane invents no verdict for a scenario with no planted defect', async ({ page }) => {
+    // s5 plants no interception defect, so there is nothing to catch: the
+    // grid reports n/a and the endpoint answers verdict:null. The endpoint's
+    // separate `detected` boolean stays eager (true) for the participant
+    // panel's existing copy — a pane that trusted THAT would read "caught
+    // it" directly above a grid cell saying n/a.
+    const seeded = await startRun(page, WATCH_NODEFECT, 's5');
+    const submit = await page.request.post('/api/delegate/submit', {
+      data: { runId: seeded.runId, answer: MIN_40_WORDS },
+    });
+    expect(submit.ok()).toBeTruthy();
+
+    const state = (await (await page.request.get(`/api/delegate/run/${seeded.runId}/state`)).json()) as {
+      detected?: boolean;
+      verdict?: boolean | null;
+    };
+    expect(state.detected).toBe(true); // the participant panel's eager answer
+    expect(state.verdict).toBeNull(); // the honest one, which the pane uses
+
+    await page.goto('/delegate/facilitator');
+    await watchRun(page, WATCH_NODEFECT);
+    const pane = page.getByRole('region', { name: `Watching run for ${WATCH_NODEFECT}` });
+    const result = pane.getByRole('region', { name: 'Submitted result' });
+    await expect(result).toBeVisible({ timeout: 15_000 });
+
+    // The result is still there — the note and the debrief-only notice —
+    // just with no verdict claim to make.
+    await expect(result.getByText('Scores are revealed together')).toBeVisible();
+    await expect(result).not.toContainText('Detection:');
+    await expect(page.getByRole('row').filter({ hasText: WATCH_NODEFECT })).toContainText('n/a');
+  });
+
+  test('a shared ?watch= link whose row the status filter hides says so, and offers to show it', async ({ page }) => {
+    // The awkward case in the state-sharing story: a colleague hands over a
+    // link to one participant, and the console it lands on is already
+    // filtered to a different status. The run is real and the mirror is
+    // live, but the grid has no row for them — so the cursor points at
+    // nothing visible. The console has to say that rather than silently
+    // clearing the filter or, worse, quietly watching someone else.
+    const watched = await startRun(page, `E2E ${STAMP} FilteredWatch`, 's1');
+    const hider = await startRun(page, `E2E ${STAMP} FilteredHider`, 's2');
+    // One submitted row, so ?status=submitted leaves the grid non-empty:
+    // an empty grid would prove the note but not that the console knows
+    // WHICH row is missing.
+    const submit = await page.request.post('/api/delegate/submit', {
+      data: { runId: hider.runId, answer: MIN_40_WORDS },
+    });
+    expect(submit.ok()).toBeTruthy();
+
+    await page.goto(`/delegate/facilitator?status=submitted&watch=${watched.runId}`);
+    const pane = page.getByRole('region', { name: `Watching run for E2E ${STAMP} FilteredWatch` });
+    await expect(pane).toBeVisible({ timeout: 15_000 });
+    const rows = page.locator('tbody tr');
+    const cursored = page.locator('tbody tr[aria-current="true"]');
+    const watchedRow = rows.filter({ hasText: `E2E ${STAMP} FilteredWatch` });
+    // The room is real — the store keeps every run any spec has ever
+    // submitted, so ?status=submitted leaves plenty of rows — and the
+    // watched run is not one of them. That is the whole problem: a live
+    // mirror for a participant the grid is not showing.
+    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+    await expect(watchedRow).toHaveCount(0);
+    // With no row, the cursor has nothing to point at.
+    await expect(cursored).toHaveCount(0);
+
+    // The pane says so, names who it is, and offers the one action that
+    // fixes it. It is wired as the pane's description rather than a
+    // floating toast, so it is part of the mirror rather than something
+    // that scrolls away above it.
+    const note = pane.locator('#watch-hidden-by-facet');
+    await expect(note).toBeVisible();
+    await expect(note).toContainText(`E2E ${STAMP} FilteredWatch`);
+    await expect(note).toContainText('the status filter is hiding them');
+    await expect(pane).toHaveAttribute('aria-describedby', 'watch-hidden-by-facet');
+    // The mirror itself is untouched: a filter says nothing about whether a
+    // run is real, and the link is what the colleague actually shared.
+    await expect(pane.getByText('has no row in this view')).toBeVisible();
+
+    // The offer is the reconciliation: lifting the filter brings the row
+    // back, and with it the cursor — the same cursor that was invisible a
+    // moment ago, now marked on the row it always meant.
+    await note.getByRole('button', { name: 'Show in the grid' }).click();
+    await expect(note).toHaveCount(0);
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('status'))
+      .toBe(null);
+    const revealed = page.locator('tbody tr').filter({ hasText: `E2E ${STAMP} FilteredWatch` });
+    await expect(revealed).toHaveCount(1);
+    await expect(revealed).toHaveAttribute('aria-current', 'true');
+    // The pane never moved: the same run, now with a row behind it.
+    await expect(pane).toBeVisible();
+  });
+
+  test('a shared ?watch= link that points at nothing heals into the full room', async ({ page }) => {
+    // The other end of the shared-link story, and the one that used to
+    // strand people: a link whose run is not in the store — cleared after
+    // the link was handed over, or copied off a machine that never had it.
+    // The endpoint 404s, which is the same answer a deleted run gives, and
+    // the console used to answer it with a bare sentence in a <div> that
+    // had dropped the pane's name: no region, no close button, no lever at
+    // all. Someone arriving by link was parked in front of a dead pane.
+    await startRun(page, `E2E ${STAMP} StaleHost`, 's1');
+    const submitted = await startRun(page, `E2E ${STAMP} StaleSub`, 's2');
+    const res = await page.request.post('/api/delegate/submit', {
+      data: { runId: submitted.runId, answer: MIN_40_WORDS },
+    });
+    expect(res.ok()).toBeTruthy();
+    // A run id the store has never held, in the shape a real one takes.
+    const dead = `run_stale_${STAMP}`;
+
+    // Arriving with a facet, so "the full room" is a claim the test can
+    // check: the working row this test seeded is filtered out on arrival
+    // and present after the recovery.
+    await page.goto(`/delegate/facilitator?status=submitted&watch=${dead}`);
+
+    // The pane keeps its landmark in the dead state — the thing the old
+    // <div> lost — and names the contradiction as its description, so the
+    // note is part of the pane rather than a sentence floating under it.
+    const pane = page.getByRole('region', { name: 'Watch pane' });
+    await expect(pane).toBeVisible({ timeout: 15_000 });
+    await expect(pane).toHaveAttribute('aria-describedby', 'watch-stale-run');
+    await expect(pane.locator('#watch-stale-run')).toContainText('no longer in the workshop store');
+    await expect(pane.getByText('This run could not be found.')).toBeVisible();
+    // Not the OTHER contradiction: a run the store never had is not a run
+    // the status filter hid, so the facet note and its lever stay away.
+    await expect(page.locator('#watch-hidden-by-facet')).toHaveCount(0);
+    // Nor did it quietly watch somebody else on the way in.
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('watch'))
+      .toBe(dead);
+
+    const rows = page.locator('tbody tr');
+    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+    await expect(rows.filter({ hasText: `E2E ${STAMP} StaleHost` })).toHaveCount(0);
+
+    // The offer is the repair, and it is one action: the dead pointer and
+    // the facet it arrived with both go, and the cursor lands on a row that
+    // is really there — not on the run that vanished.
+    await pane.getByRole('button', { name: 'Show the full room' }).click();
+    const actions = page.getByRole('status', { name: 'Console action' });
+    await expect(actions).toHaveText('Watch link is dead — showing the full room');
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('watch'), { timeout: 5_000 })
+      .toBe(null);
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('status'), { timeout: 5_000 })
+      .toBe(null);
+    await expect(pane).toHaveCount(0);
+
+    // The room is a room: the working row the facet was hiding is back,
+    // and the cursor is on a row that exists rather than on the dead id —
+    // a dead run has no row at all, so a marked row is a real one.
+    const host = rows.filter({ hasText: `E2E ${STAMP} StaleHost` });
+    await expect(host).toHaveCount(1);
+    await expect(page.locator('tbody tr[aria-current="true"]')).toHaveCount(1);
+    // And the landing spoke: the walk region is derived from the row the
+    // cursor is on, so it is non-empty exactly when the cursor is real.
+    await expect(page.getByRole('status', { name: 'Cursor row' })).toContainText(`, `);
+  });
+
+  test('the watch pane sweeps the visible participants with prev/next', async ({ page }) => {
+    // Three sessions with labels that sort as a CONTIGUOUS block: the
+    // stamp leads ("E2E <stamp> SweepA/B/C"), so this execution's trio is
+    // adjacent in the participant-sorted sweep even though the store keeps
+    // every prior execution's rows (whose stamps sort before/after).
+    const b = await startRun(page, `E2E ${STAMP} SweepB`, 's2');
+    const c = await startRun(page, `E2E ${STAMP} SweepC`, 's3');
+    await startRun(page, `E2E ${STAMP} SweepA`, 's1');
+
+    // Deep-link the watch to the middle of the trio. The room is large,
+    // so only the indicator FORMAT is asserted, not absolute numbers.
+    await page.goto(`/delegate/facilitator?watch=${b.runId}`);
+    const paneB = page.getByRole('region', { name: `Watching run for E2E ${STAMP} SweepB` });
+    await expect(paneB).toBeVisible();
+    await expect(paneB.getByText(/^\d+ of \d+$/)).toBeVisible();
+    await expect(paneB.getByText('2 · Intercompany')).toBeVisible();
+
+    // Next from B lands on its sorted neighbor C; the URL pointer follows
+    // and the mirror switches (the header label swaps, the old pane goes).
+    await paneB.getByRole('button', { name: 'Watch next participant' }).click();
+    const paneC = page.getByRole('region', { name: `Watching run for E2E ${STAMP} SweepC` });
+    await expect(paneC).toBeVisible();
+    await expect(paneC.getByText('3 · Q1 flux')).toBeVisible();
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('watch'), { timeout: 5_000 })
+      .toBe(c.runId);
+    await expect(paneB).toHaveCount(0);
+
+    // Previous from C returns to B: both directions walk the displayed
+    // order without page scroll or row clicks.
+    await paneC.getByRole('button', { name: 'Watch previous participant' }).click();
+    await expect(page.getByRole('region', { name: `Watching run for E2E ${STAMP} SweepB` })).toBeVisible();
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get('watch'), { timeout: 5_000 })
+      .toBe(b.runId);
+
+    // The sweep follows the DISPLAYED room: facet to submitted-only and
+    // the working trio leaves the sweep — stepping from a run that is no
+    // longer visible enters the shrunken sweep at its first row, which is
+    // the first submitted row on screen.
+    await page.getByRole('group', { name: 'Filter by status' }).getByRole('button', { name: /^submitted/ }).click();
+    await page.getByRole('button', { name: 'Watch next participant' }).click();
+    const submittedInStore = (
+      (await (await page.request.get('/api/delegate/facilitator')).json()) as {
+        rows: Array<{ status: string }>;
+      }
+    ).rows.filter((r) => r.status === 'submitted').length;
+    await expect(page.getByText(`1 of ${submittedInStore}`)).toBeVisible();
+    const firstName = await page.locator('tbody tr').first().locator('td').first().innerText();
+    await expect(page.getByRole('region', { name: `Watching run for ${firstName}` })).toBeVisible();
+  });
+
+  test('the watch pane sweeps with the arrow keys, and yields them to text fields', async ({ page }) => {
+    // Stamped labels, stamp first, so this execution's pair sits together in
+    // the participant-sorted sweep whatever else the accumulating store holds.
+    const a = await startRun(page, `E2E ${STAMP} KeyA`, 's1');
+    await startRun(page, `E2E ${STAMP} KeyB`, 's2');
+
+    await page.goto(`/delegate/facilitator?watch=${a.runId}`);
+    // The open pane, whatever participant it currently shows.
+    const openPane = page.locator('section[aria-label^="Watching run for"]');
+    await expect(openPane).toBeVisible();
+    // Advertised only when there is somewhere to step to, and it must
+    // advertise the full transport set — a missing key here would mean a
+    // binding the pane claims but does not honour. Retried: the pane mounts
+    // before the first grid poll fills the room, so the attribute only
+    // appears once the sweep can actually go anywhere.
+    await expect(openPane).toHaveAttribute('aria-keyshortcuts', /ArrowLeft/);
+    const shortcuts = (await openPane.getAttribute('aria-keyshortcuts')) ?? '';
+    for (const key of ['ArrowLeft', 'ArrowRight', 'Home', 'End']) {
+      expect(shortcuts, `aria-keyshortcuts is missing ${key}`).toContain(key);
+    }
+    const position = async (): Promise<[number, number]> => {
+      const digits = (await openPane.getByText(/^\d+ of \d+$/).innerText()).match(/\d+/g) ?? [];
+      return [Number(digits[0]), Number(digits[1])];
+    };
+    // The watch pointer is read through the URL, and nuqs writes that with
+    // history.replaceState — so it trails the DOM by a tick. Every read of
+    // it below is POLLED rather than taken the instant a keypress returns:
+    // the claim is which run is watched, not how fast the address bar
+    // agreed, and an unpolled read after two quick presses reads the
+    // previous run and blames the wrong key.
+    const watching = () => new URL(page.url()).searchParams.get('watch');
+    const [at, total] = await position();
+    expect(total).toBeGreaterThan(1);
+
+    // Right steps forward through the DISPLAYED room, wrapping at the end.
+    await page.keyboard.press('ArrowRight');
+    await expect.poll(position).toEqual([(at % total) + 1, total]);
+    await expect.poll(watching).not.toBe(a.runId);
+    // Left walks it back to the exact run we started from — order-following
+    // in both directions, not just "something changed".
+    await page.keyboard.press('ArrowLeft');
+    await expect.poll(position).toEqual([at, total]);
+    await expect.poll(watching).toBe(a.runId);
+
+    // A modified press is the browser's own (Cmd+Left is back), not ours.
+    await page.keyboard.press('Control+ArrowRight');
+    await page.waitForTimeout(400);
+    await expect.poll(watching).toBe(a.runId);
+
+    // A focused text field owns its arrow keys: the palette search is the
+    // one text field this surface has, and it is also a modal, so the sweep
+    // must not fire behind it.
+    await page.keyboard.press('Control+KeyK');
+    const search = page.getByPlaceholder('Type a command or search…');
+    await expect(search).toBeFocused();
+    await search.fill('delegate');
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(400);
+    await expect.poll(watching).toBe(a.runId);
+    await expect(search).toHaveValue('delegate');
+    await page.keyboard.press('Escape');
+    await expect(search).toBeHidden();
+
+    // Positive control: focus that is NOT a text field still sweeps, so the
+    // guard above is not just "ignore everything focused".
+    await page.getByRole('button', { name: `Watch E2E ${STAMP} KeyB` }).focus();
+    await page.keyboard.press('ArrowRight');
+    await expect.poll(position).toEqual([(at % total) + 1, total]);
+    await expect.poll(watching).not.toBe(a.runId);
+  });
+
+  test('Home and End jump the sweep to its first and last visible participant', async ({ page }) => {
+    // The store accumulates, so the ends of the room are NOT this test's
+    // rows: read the first and last displayed row and assert the pane lands
+    // on those participants by name, which is what "the ends" means.
+    const seeded = await startRun(page, `E2E ${STAMP} Edge`, 's1');
+    await startRun(page, `E2E ${STAMP} EdgeB`, 's2');
+    await page.goto(`/delegate/facilitator?watch=${seeded.runId}`);
+
+    const firstRow = page.locator('tbody tr').first();
+    const lastRow = page.locator('tbody tr').last();
+    await expect(firstRow).toBeVisible({ timeout: 15_000 });
+    const firstName = await firstRow.locator('td').first().innerText();
+    const lastName = await lastRow.locator('td').first().innerText();
+    const total = await page.locator('tbody tr').count();
+    expect(total).toBeGreaterThan(1);
+    // Sweeping is only mounted for a room with more than one row; the
+    // deep-linked run is one of them, so the indicator is meaningful.
+    const pane = page.locator('section[aria-label^="Watching run for"]');
+    const indicator = () => pane.getByText(/^\d+ of \d+$/);
+    await expect(indicator()).toBeVisible();
+
+    // End: the LAST participant in the displayed order, counted as such.
+    await page.keyboard.press('End');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${lastName}`, { timeout: 10_000 });
+    await expect(indicator()).toHaveText(`${total} of ${total}`);
+
+    // Home: the first, from anywhere in the room.
+    await page.keyboard.press('Home');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${firstName}`, { timeout: 10_000 });
+    await expect(indicator()).toHaveText(`1 of ${total}`);
+
+    // Home/End are keys a text field owns too: the caret must still reach
+    // the end of the palette search, with no sweep behind it.
+    //
+    // The run Home landed on is read from the ROOM rather than from the
+    // address bar, and the address bar is then POLLED for it. Reading the URL
+    // the instant the keypress returned was this test's flake: nuqs writes
+    // `?watch=` with history.replaceState, so it trails the DOM by a tick (see
+    // `watching` above), and the read was of the run the deep link arrived on
+    // — the previous value — so the assertion below was about the wrong run.
+    // Two in three runs failed on it before this was fixed.
+    const room = (await (await page.request.get('/api/delegate/facilitator')).json()) as {
+      rows: Array<{ participant: string; runId?: string }>;
+    };
+    const firstRunId = room.rows.find((row) => row.participant === firstName)?.runId;
+    expect(firstRunId, `no run in the room for the first displayed row (${firstName})`).toBeTruthy();
+    await expect.poll(() => new URL(page.url()).searchParams.get('watch')).toBe(firstRunId);
+
+    await page.keyboard.press('Control+KeyK');
+    const search = page.getByPlaceholder('Type a command or search…');
+    await expect(search).toBeFocused();
+    await search.fill('delegate');
+    await search.press('End');
+    await expect.poll(() => new URL(page.url()).searchParams.get('watch')).toBe(firstRunId);
+    await expect(search).toHaveValue('delegate');
+    await page.keyboard.press('Escape');
+  });
+
+  test('j and k walk the grid, and Enter or w watches the row you stopped on', async ({ page }) => {
+    // Five stamped rows so the walk has somewhere to go even on a cold
+    // store; this execution's rows are not necessarily rows 0-4 once the
+    // store has accumulated, so every name is read back off the DOM.
+    await startRun(page, `E2E ${STAMP} RowA`, 's1');
+    await startRun(page, `E2E ${STAMP} RowB`, 's2');
+    await startRun(page, `E2E ${STAMP} RowC`, 's3');
+    await startRun(page, `E2E ${STAMP} RowD`, 's4');
+    await startRun(page, `E2E ${STAMP} RowE`, 's5');
+
+    await page.goto('/delegate/facilitator');
+    const pane = page.locator('section[aria-label^="Watching run for"]');
+    // The grid owns these keys, so the table is where they are advertised.
+    const table = page.getByRole('table', { name: 'Participants' });
+    await expect(table).toHaveAttribute('aria-keyshortcuts', 'j k Enter w');
+    const rows = page.locator('tbody tr');
+    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+    const total = await rows.count();
+    expect(total).toBeGreaterThan(4);
+    const nameAt = async (i: number): Promise<string> =>
+      (await rows.nth(i).locator('td').first().innerText()).trim();
+    const [secondName, thirdName] = [await nameAt(1), await nameAt(2)];
+    // The cursor is the row the walk is on, carried by aria-current because
+    // the walk deliberately never moves DOM focus away from the grid's own
+    // controls. Exactly one row carries it. A CSS locator, not getByRole:
+    // the palette aria-hides the grid while it is open, and the cursor is
+    // exactly what has to be checked while that is true.
+    const cursored = page.locator('tbody tr[aria-current="true"]');
+
+    // Stage one: the walk is local. j moves the cursor and opens nothing,
+    // which is the whole point of splitting the flow in two.
+    await expect(pane).toHaveCount(0);
+    await page.keyboard.press('j');
+    await expect(cursored).toHaveCount(1);
+    await expect(rows.nth(0)).toHaveAttribute('aria-current', 'true');
+    await expect(pane).toHaveCount(0);
+    expect(new URL(page.url()).searchParams.get('watch')).toBeNull();
+
+    // j/k walk the displayed order in both directions, wrapping at the ends.
+    await page.keyboard.press('j');
+    await expect(rows.nth(1)).toHaveAttribute('aria-current', 'true');
+    await expect(rows.nth(0)).not.toHaveAttribute('aria-current', 'true');
+    await page.keyboard.press('k');
+    await expect(rows.nth(0)).toHaveAttribute('aria-current', 'true');
+
+    // Stage two: w commits the row the walk stopped on. Still no pane before
+    // the commit, and the URL only then carries ?watch=.
+    await page.keyboard.press('j');
+    await expect(rows.nth(1)).toHaveAttribute('aria-current', 'true');
+    await page.keyboard.press('w');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${secondName}`, { timeout: 10_000 });
+    await expect(pane.getByText(/^\d+ of \d+$/)).toHaveText(`2 of ${total}`);
+
+    // With the pane open the cursor IS the watch pointer, so the walk keeps
+    // sweeping the pane exactly as the arrow keys and the buttons do.
+    await page.keyboard.press('j');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${thirdName}`, { timeout: 10_000 });
+    await page.keyboard.press('k');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${secondName}`, { timeout: 10_000 });
+
+    // Closing the pane does not lose the place: the cursor stays on the row
+    // that was being watched, so the next commit picks up where it left off.
+    await page.getByRole('button', { name: 'Close watch pane' }).click();
+    await expect(pane).toHaveCount(0);
+    await expect(rows.nth(1)).toHaveAttribute('aria-current', 'true');
+
+    // Enter commits it too, and from a cold console it has a target: the
+    // first visible row, the same rule j enters on. This runs right after
+    // the pane's Close button was CLICKED, which is deliberate: the click
+    // focused a control of this console, and unmounting the pane then
+    // dropped focus to <body> without a blur event. If the console's Enter
+    // yield trusted onFocus/onBlur alone, the key would be dead here — a
+    // stale flag, not a race.
+    await page.keyboard.press('j');
+    await expect(rows.nth(2)).toHaveAttribute('aria-current', 'true');
+    await page.keyboard.press('Enter');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${thirdName}`, { timeout: 10_000 });
+    await expect(pane.getByText(/^\d+ of \d+$/)).toHaveText(`3 of ${total}`);
+
+    // Enter inside the grid belongs to the focused control, not the cursor:
+    // a focused row button must watch THAT row rather than the cursor's.
+    await page.getByRole('button', { name: 'Close watch pane' }).click();
+    await expect(pane).toHaveCount(0);
+    const otherName = await nameAt(4);
+    await rows.nth(4).getByRole('button', { name: `Watch ${otherName}` }).focus();
+    await page.keyboard.press('Enter');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${otherName}`, { timeout: 10_000 });
+    await expect(rows.nth(4)).toHaveAttribute('aria-current', 'true');
+
+    // Bare letters are the risk of the walk, so the palette gets a real
+    // query: the letters must type into the field as normal AND the cursor
+    // must not move behind the dialog. The guard protects the sweep, not
+    // the keystroke — a focused field still receives its characters.
+    const cursorBefore = (await cursored.locator('td').first().innerText()).trim();
+    expect(cursorBefore, 'the walk left a cursor to check').toBe(otherName);
+    await page.keyboard.press('Control+KeyK');
+    const search = page.getByPlaceholder('Type a command or search…');
+    await expect(search).toBeFocused();
+    await search.fill('jack');
+    await page.keyboard.press('j');
+    await page.keyboard.press('k');
+    await page.keyboard.press('w');
+    await expect(search).toHaveValue('jackjkw');
+    await page.waitForTimeout(400);
+    await expect(cursored).toHaveCount(1);
+    await expect(cursored.locator('td').first()).toHaveText(cursorBefore);
+    await page.keyboard.press('Escape');
+
+    // A genuinely cold console: reload so there is no cursor and nothing
+    // watched, which is the state neither key needs teaching in. k enters
+    // the walk at the far end and j wraps off it onto the first row —
+    // rows.first()/last() rather than an index, because the store keeps
+    // accumulating while the suite runs.
+    await page.getByRole('button', { name: 'Close watch pane' }).click();
+    await expect(pane).toHaveCount(0);
+    // Settled before the reload, because the URL trails the DOM: nuqs writes
+    // ?watch= away through history.replaceState, and a reload that beat that
+    // write would restore the run the close just dropped — which is how this
+    // failed once, with the pane back open on a row nobody had chosen and
+    // the cold-console case below asserting against a warm console.
+    await expect.poll(() => new URL(page.url()).searchParams.get('watch')).toBeNull();
+    await page.reload();
+    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+    await expect(cursored).toHaveCount(0);
+    const coldFirst = await rows.first().locator('td').first().innerText();
+    await page.keyboard.press('k');
+    await expect(rows.last()).toHaveAttribute('aria-current', 'true');
+    await page.keyboard.press('j');
+    await expect(rows.first()).toHaveAttribute('aria-current', 'true');
+    // w from a cold console opens the first row rather than doing nothing:
+    // with no cursor to commit, the fallback target is the first visible row.
+    await page.keyboard.press('w');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${coldFirst.trim()}`, { timeout: 10_000 });
+  });
+
+  test('g then i and g then n jump the walk to the ends of the room', async ({ page }) => {
+    // The chained jump (GitHub and Gmail bind `g` then a destination the
+    // same way): a chord is the only way to reach the ends of a long room
+    // without spending Home and End, which belong to the open pane.
+    await startRun(page, `E2E ${STAMP} JumpA`, 's1');
+    await startRun(page, `E2E ${STAMP} JumpB`, 's2');
+
+    await page.goto('/delegate/facilitator');
+    const pane = page.locator('section[aria-label^="Watching run for"]');
+    const rows = page.locator('tbody tr');
+    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+    // CSS locator, not getByRole: the palette aria-hides the grid, and the
+    // chord is checked while it is open.
+    const cursored = page.locator('tbody tr[aria-current="true"]');
+    expect(await rows.count()).toBeGreaterThan(1);
+
+    // g on its own is a prefix, not a command: nothing moves, nothing opens.
+    await page.keyboard.press('g');
+    await expect(cursored).toHaveCount(0);
+    await expect(pane).toHaveCount(0);
+
+    // An unbound second key falls through instead of being swallowed, so
+    // g j is not a chord: the walk happens exactly as a bare j would, and
+    // the still-armed g cannot eat the j on its way past.
+    await page.keyboard.press('j');
+    await expect(rows.first()).toHaveAttribute('aria-current', 'true');
+    await expect(pane).toHaveCount(0);
+
+    // The pair itself: g n is the far end of the displayed room, g i the
+    // near one. A jump moves the cursor and never opens the mirror.
+    await page.keyboard.press('g');
+    await page.keyboard.press('n');
+    await expect(rows.last()).toHaveAttribute('aria-current', 'true');
+    await expect(pane).toHaveCount(0);
+    await page.keyboard.press('g');
+    await page.keyboard.press('i');
+    await expect(rows.first()).toHaveAttribute('aria-current', 'true');
+
+    // A forgotten prefix lapses, so a stray i a moment later cannot fire
+    // a chord the facilitator has stopped thinking about.
+    await page.keyboard.press('j');
+    await expect(rows.nth(1)).toHaveAttribute('aria-current', 'true');
+    await page.keyboard.press('g');
+    await page.waitForTimeout(2200);
+    await page.keyboard.press('i');
+    await page.waitForTimeout(300);
+    await expect(rows.nth(1)).toHaveAttribute('aria-current', 'true');
+    await expect(pane).toHaveCount(0);
+
+    // With the pane open the chord moves the watch, like every other key
+    // on this surface. Names read fresh: the store keeps accumulating, so
+    // the ends of the room are not necessarily where they were above.
+    const firstName = (await rows.first().locator('td').first().innerText()).trim();
+    const lastName = (await rows.last().locator('td').first().innerText()).trim();
+    await page.keyboard.press('w');
+    await expect(pane).toBeVisible({ timeout: 10_000 });
+    await page.keyboard.press('g');
+    await page.keyboard.press('n');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${lastName}`, { timeout: 10_000 });
+    await page.keyboard.press('g');
+    await page.keyboard.press('i');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${firstName}`, { timeout: 10_000 });
+
+    // And the chord is inert where every shortcut is: the letters type into
+    // the palette search and the watch does not move behind the dialog.
+    // Settled before it is captured, then polled where it is asserted: the
+    // URL is written through history.replaceState and trails the DOM, so an
+    // immediate read here would capture the run the chord was about to
+    // leave and the assertion below would pass while the watch moved.
+    await page.waitForTimeout(400);
+    const watchBefore = new URL(page.url()).searchParams.get('watch');
+    await page.keyboard.press('Control+KeyK');
+    const search = page.getByPlaceholder('Type a command or search…');
+    await expect(search).toBeFocused();
+    await search.fill('jack');
+    await search.press('g');
+    await search.press('n');
+    await expect(search).toHaveValue('jackgn');
+    await page.waitForTimeout(400);
+    await expect.poll(() => new URL(page.url()).searchParams.get('watch')).toBe(watchBefore);
+    await page.keyboard.press('Escape');
+  });
+
+  test('the walk says the row it stopped on, and says nothing until it moves', async ({ page }) => {
+    // The walk is the one part of this console that is completely silent
+    // to a screen reader: it moves a ring and an aria-current, and neither
+    // is announced — aria-current is only read when you navigate to the row
+    // yourself, and the walk deliberately never moves DOM focus away from
+    // the grid controls. So the walk has to speak for itself.
+    await startRun(page, `E2E ${STAMP} VoiceA`, 's1');
+    await startRun(page, `E2E ${STAMP} VoiceB`, 's2');
+
+    await page.goto('/delegate/facilitator');
+    const pane = page.locator('section[aria-label^="Watching run for"]');
+    const rows = page.locator('tbody tr');
+    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+    // The screen-reader-only live region for the walk. Named, because the
+    // console carries three live regions on purpose (the walk, the last
+    // action, and the armed-chord chip, so none of them re-reads another).
+    const spoken = page.getByRole('status', { name: 'Cursor row' });
+    await expect(spoken).toHaveCount(1);
+
+    // Quiet on arrival. Nothing has been walked to, so there is nothing to
+    // say — a live region that greets a cold console with "the first
+    // participant" is a console talking over itself.
+    expect(((await spoken.textContent()) ?? '').trim()).toBe('');
+
+    // Participant and status are the two columns that decide pacing, and
+    // they are what the announcement is built from. Read off the row: the
+    // status cell wraps its word in a span behind a decorative orb, so the
+    // word itself is the inner span, not the cell.
+    const cellText = async (row: Locator, column: number): Promise<string> => {
+      const cell = row.locator('td').nth(column);
+      const word = cell.locator('span').last();
+      const target = (await word.count()) > 0 ? word : cell;
+      return (await target.innerText()).trim();
+    };
+    const firstName = await cellText(rows.first(), 0);
+    const firstStatus = await cellText(rows.first(), 3);
+    const lastName = await cellText(rows.last(), 0);
+    const lastStatus = await cellText(rows.last(), 3);
+    const secondName = await cellText(rows.nth(1), 0);
+    const secondStatus = await cellText(rows.nth(1), 3);
+
+    // j enters the walk at the first visible row and says who it is and
+    // what state they are in.
+    await page.keyboard.press('j');
+    await expect(spoken).toHaveText(`${firstName}, ${firstStatus}`);
+    await expect(rows.first()).toHaveAttribute('aria-current', 'true');
+
+    // k walks back and the words follow the cursor rather than latching:
+    // from the first row it wraps onto the last, and says so.
+    await page.keyboard.press('k');
+    await expect(spoken).toHaveText(`${lastName}, ${lastStatus}`);
+    await expect(rows.last()).toHaveAttribute('aria-current', 'true');
+
+    // A jump announces too: the chord crosses a long room in two
+    // keystrokes, and the ear should arrive with the ring.
+    await page.keyboard.press('g');
+    await page.keyboard.press('i');
+    await expect(spoken).toHaveText(`${firstName}, ${firstStatus}`);
+    await page.keyboard.press('g');
+    await page.keyboard.press('n');
+    await expect(spoken).toHaveText(`${lastName}, ${lastStatus}`);
+
+    // And so does the open pane's own transport: one walk, one voice, so
+    // arrow-sweeping the watched room announces the row it lands on. Open
+    // on the first row again, then step to the second.
+    await page.keyboard.press('g');
+    await page.keyboard.press('i');
+    await page.keyboard.press('w');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${firstName}`, { timeout: 10_000 });
+    await page.keyboard.press('ArrowRight');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${secondName}`, { timeout: 10_000 });
+    await expect(spoken).toHaveText(`${secondName}, ${secondStatus}`);
+
+    // The elapsed clock stays out of it. The grid repolls every 4s and
+    // every row's clock moves every second, so an announcement built from
+    // the whole row would re-speak on every tick and become noise — this
+    // is the assertion that keeps it two columns wide.
+    await page.waitForTimeout(5_000);
+    await expect(spoken).toHaveText(`${secondName}, ${secondStatus}`);
+  });
+
+  test('the shortcut sheet lists every key, dims the dead ones, and quiets the room while it is open', async ({ page }) => {
+    // The sheet has to be true, not decorative. A legend that lists keys
+    // which are not bound in the current state is worse than none, because
+    // it teaches a facilitator to press things that do nothing — so the
+    // dimming is derived from the same gates that mount the bindings, and
+    // the test reads the sheet as the surface it documents.
+    await startRun(page, `E2E ${STAMP} LegendA`, 's1');
+    await startRun(page, `E2E ${STAMP} LegendB`, 's2');
+
+    await page.goto('/delegate/facilitator');
+    const pane = page.locator('section[aria-label^="Watching run for"]');
+    const rows = page.locator('tbody tr');
+    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+    const cursored = page.locator('tbody tr[aria-current="true"]');
+    const chip = page.locator('[role="status"]').filter({ has: page.locator('kbd') });
+    const sheet = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
+    // A list item by its text, not by accessible name: `listitem` is not a
+    // name-from-content role, so getByRole({ name }) can never match one —
+    // the snapshot prints the content under `listitem:` and looks like it
+    // should work, which is exactly the trap.
+    const entry = (label: string) => sheet.locator('li', { hasText: label });
+
+    // Nothing on arrival: a console that opened its own modal would put the
+    // grid behind a focus trap before anyone had asked for one.
+    await expect(sheet).toHaveCount(0);
+
+    // ? opens it. Everything after this point uses CSS locators for the
+    // page behind, because the dialog aria-hides it, exactly as the palette
+    // does.
+    await page.keyboard.press('?');
+    await expect(sheet).toBeVisible();
+    // Modality, measured the way this codebase measures it: Radix 1.1.23
+    // does NOT stamp aria-modal (the same finding the overlay clause in
+    // shortcuts.ts records for the popover), it moves focus in and hides
+    // the rest of the page from the accessibility tree. Both halves are
+    // asserted rather than an attribute that is not there.
+    await expect(sheet.locator(':focus')).toHaveCount(1);
+    await expect(page.getByRole('table', { name: 'Participants' })).toHaveCount(0);
+
+    // Every binding the console ships, spelled the way it is typed: single
+    // keys, alternatives with or, and the chords as a real two-key
+    // sequence with the word between them (flex gaps alone would read as
+    // "gi" to a screen reader). The chords are NOT written into the sheet:
+    // they arrive from the page that binds them, so this is the same list
+    // the hook dispatches from.
+    await expect(entry('Walk down one row')).toHaveText('j Walk down one row, wrapping at the ends');
+    await expect(entry('Walk up one row')).toHaveText('k Walk up one row, wrapping at the ends');
+    await expect(entry('jump to the first row')).toHaveText('g then i jump to the first row');
+    await expect(entry('jump to the last row')).toHaveText('g then n jump to the last row');
+    await expect(entry('watch the cursor row')).toHaveText('g then w watch the cursor row');
+    await expect(entry('copy the cursor row')).toContainText('g then l copy the cursor row');
+    await expect(entry('open the saved views')).toHaveText('g then v open the saved views');
+    await expect(entry('Open the watch pane')).toHaveText(
+      'Enter or w Open the watch pane on the row the walk stopped on',
+    );
+    await expect(entry('Open the command palette')).toHaveText(
+      '⌘K Open the command palette (Ctrl+K on PC keyboards)',
+    );
+    await expect(entry('Open this sheet')).toHaveText('? Open this sheet');
+    // Escape, once per layer it can close. The console binds it to the
+    // topmost thing it opened, so which one a press reaches depends on what
+    // is open — which is exactly why one combined "Esc, or the views
+    // panel" line could not be true, and why the other two are dimmed here.
+    await expect(entry('Close this sheet')).toHaveText('Esc Close this sheet');
+    await expect(entry('Close the views panel')).toHaveText(
+      'Esc Close the views panel (not available right now)',
+    );
+    await expect(entry('Close the watch pane')).toHaveText(
+      'Esc Close the watch pane (not available right now)',
+    );
+
+    // The dead ones, and only the dead ones. Nothing is watched yet, so the
+    // pane transport is unbound and says so — in words, not just in gray,
+    // because a dimmed row with no explanation reads as a rendering bug.
+    await expect(entry('Step the watched room')).toHaveText(
+      '← or → Step the watched room back and forward (not available right now)',
+    );
+    await expect(entry('Jump the watched room')).toHaveText(
+      'Home or End Jump the watched room to its ends (not available right now)',
+    );
+    await expect(sheet.getByText('(not available right now)')).toHaveCount(4);
+
+    // While the sheet is open the room underneath is inert, and it costs
+    // nothing: a dialog is an overlay, and the shared shortcut policy
+    // already refuses every key whose target is inside one. The walk, the
+    // commit and the chord all go quiet — and nothing arms behind the modal,
+    // so the chord chip never appears either.
+    await page.keyboard.press('j');
+    await page.keyboard.press('k');
+    await page.keyboard.press('w');
+    await page.keyboard.press('g');
+    await page.waitForTimeout(300);
+    await expect(sheet).toBeVisible();
+    await expect(cursored).toHaveCount(0);
+    await expect(pane).toHaveCount(0);
+    await expect(chip).toHaveCount(0);
+
+    // Escape closes it (the dialog primitive owns that dismissal) and the
+    // keys come straight back — nothing needed suspending to get here.
+    await page.keyboard.press('Escape');
+    await expect(sheet).toHaveCount(0);
+    await page.keyboard.press('j');
+    await expect(rows.first()).toHaveAttribute('aria-current', 'true');
+
+    // The gates are read live, not baked in: open a run and the transport
+    // becomes available while the commit goes away, because the row the
+    // walk stopped on is what is already being watched.
+    await page.keyboard.press('w');
+    await expect(pane).toBeVisible({ timeout: 10_000 });
+    await page.keyboard.press('?');
+    await expect(sheet).toBeVisible();
+    await expect(entry('Step the watched room')).toHaveText(
+      '← or → Step the watched room back and forward',
+    );
+    await expect(entry('Jump the watched room')).toHaveText('Home or End Jump the watched room to its ends');
+    // The pane is open, so the key that closes it went live with it — the
+    // same gate the binding reads, read back off the sheet.
+    await expect(entry('Close the watch pane')).toHaveText('Esc Close the watch pane');
+    await expect(entry('Open the watch pane')).toContainText('(not available right now)');
+    // The chord for the same action greys out with it: g w watches the
+    // cursor row, and the cursor row is what is already being watched. The
+    // third is Escape for the views panel, which is shut — so the count is
+    // read as "only the dead ones" rather than as a number that happens to
+    // have held: Esc-to-close-the-pane went live above because the pane is.
+    await expect(entry('watch the cursor row')).toContainText('(not available right now)');
+    await expect(sheet.getByText('(not available right now)')).toHaveCount(3);
+
+    // A mouse user has no ? key, so the toolbar legend is a real button —
+    // and because it is one, Enter on it must open the sheet rather than
+    // the watch pane. The console's Enter yields to whatever control of its
+    // own holds the keyboard, and that includes the ones BESIDE the grid:
+    // the facet chips, the sort buttons and this legend all sit outside the
+    // table, and none of them should have to be reached with the mouse
+    // because a global keybinding ate their activation.
+    await page.keyboard.press('Escape');
+    await expect(sheet).toHaveCount(0);
+    // Close the pane first, so Enter is pressed while the commit key is
+    // actually live — with a run already watched there is nothing for it
+    // to commit, and the assertion would pass for the wrong reason.
+    await page.getByRole('button', { name: 'Close watch pane' }).click();
+    await expect(pane).toHaveCount(0);
+    const legend = page.getByRole('button', { name: /j\/k to walk/ });
+    await legend.focus();
+    await expect(legend).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(sheet).toBeVisible();
+    await expect(pane).toHaveCount(0);
+  });
+
+  test('a half-typed chord shows what completes it, and the console forgets on its own', async ({ page }) => {
+    // How fast the chip has to be gone before "gone" is believed: inside
+    // the 1500ms prefix window, so a chip that only disappears when the
+    // lapse timer fires is a failure, not a pass.
+    const PROMPT_MS = 500;
+    // Long enough to watch the prefix window (1500ms in the hook) lapse,
+    // which is what a fresh arm needs to be a fresh arm.
+    const PREFIX_MS = 2_500;
+    // The affordance half of the chord. A prefix key does nothing on
+    // purpose, so without this the press is invisible: nothing moves and
+    // nothing opens, and a facilitator cannot tell a chord they have not
+    // finished from one the console never heard. The chip names the half
+    // that is waiting, and it must not lie in either direction — it
+    // appears the moment g arms, it clears the moment the chord resolves
+    // OR lapses, and it never appears where the letters are being typed.
+    await startRun(page, `E2E ${STAMP} ArmedA`, 's1');
+    await startRun(page, `E2E ${STAMP} ArmedB`, 's2');
+
+    await page.goto('/delegate/facilitator');
+    const pane = page.locator('section[aria-label^="Watching run for"]');
+    const rows = page.locator('tbody tr');
+    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+    // A role filter with a kbd inside, not getByRole('status') alone: the
+    // palette aria-hides the toolbar, and the chip has to stay silent
+    // there too — which a role-based locator could not see to prove.
+    const chip = page.locator('[role="status"]').filter({ has: page.locator('kbd') });
+    const cursored = page.locator('tbody tr[aria-current="true"]');
+    expect(await rows.count()).toBeGreaterThan(1);
+
+    // At rest: no chip, and no half-typed chord left over from the
+    // session that loaded the page. The bound is the point of every
+    // toHaveCount(0) here: an unbounded one is satisfied by a chip that
+    // finally goes away a second and a half later, which is the LAPSE
+    // timer doing the work the assertion is supposed to prove this code
+    // did. PROMPT (500ms) is far inside the 1500ms prefix window, so
+    // "gone now" cannot quietly become "gone eventually".
+    await expect(chip).toHaveCount(0, { timeout: PROMPT_MS });
+
+    // g arms the namespace and acts on nothing — but says so, naming the
+    // key that was pressed and every destination it opens. The text is
+    // read off the same list the hook dispatches from, so it cannot name a
+    // key that is not bound. All five are live on a cold console: rows to
+    // walk, a row to commit, a row to copy, and a views panel that is
+    // always there.
+    await page.keyboard.press('g');
+    await expect(chip).toBeVisible();
+    await expect(chip.locator('kbd')).toHaveText(['g', 'i', 'n', 'w', 'l', 'v']);
+    // The caps are the eye's short answer; the sentence underneath them is
+    // what a screen reader gets, because "i n w l v" is a menu nobody can
+    // read. It names what each destination DOES, from the same list.
+    await expect(chip).toContainText(
+      'then i to jump to the first row, n to jump to the last row, w to watch the cursor row',
+    );
+    await expect(chip).toContainText('v to open the saved views');
+    // Announced, not just drawn: the live region is the only way a screen
+    // reader learns a chord is half-typed.
+    await expect(chip).toHaveAttribute('role', 'status');
+    // Still inert — the chip is an announcement, not an action.
+    await expect(cursored).toHaveCount(0);
+    await expect(pane).toHaveCount(0);
+
+    // Resolving the chord takes the chip down with it — armed again first,
+    // and the re-arm has to wait for an empty state: pressing g while g is
+    // still armed is not a fresh arm but an unbound second key (g g), which
+    // disarms the prefix and leaves the n below orphaned. So this waits the
+    // prefix's window out rather than assuming the assertions above took
+    // longer than it lasts, which is a thing that used to be true of a room
+    // of thousands of rows and is not true of a room of tens. Waiting is
+    // the deterministic form of the same intent: the test is about
+    // RESOLUTION, not about whether three assertions fit inside a timer.
+    await expect(chip).toHaveCount(0, { timeout: PREFIX_MS });
+    await page.keyboard.press('g');
+    await page.keyboard.press('n');
+    await expect(chip).toHaveCount(0, { timeout: PROMPT_MS });
+    await expect(rows.last()).toHaveAttribute('aria-current', 'true');
+    await expect(pane).toHaveCount(0);
+
+    // So does an unbound second key: g j is not a chord, the walk still
+    // happens, and the console is no longer waiting for anything. This is
+    // the one that matters most — a prefix left armed here would swallow
+    // the NEXT key as a chord, which is exactly the bug the bound above
+    // is here to catch.
+    await page.keyboard.press('g');
+    await expect(chip).toBeVisible();
+    await page.keyboard.press('j');
+    await expect(chip).toHaveCount(0, { timeout: PROMPT_MS });
+    await expect(rows.first()).toHaveAttribute('aria-current', 'true');
+
+    // And so does the lapse — the same timer the hook already relies on to
+    // stop a forgotten g firing at a stray letter, now visible as the chip
+    // going out on its own.
+    await page.keyboard.press('g');
+    await expect(chip).toBeVisible();
+    await page.waitForTimeout(2200);
+    await expect(chip).toHaveCount(0);
+    await page.keyboard.press('i');
+    await page.waitForTimeout(300);
+    await expect(rows.first()).toHaveAttribute('aria-current', 'true');
+    await expect(pane).toHaveCount(0);
+
+    // Inside the palette the letters belong to the field, so no chord arms
+    // and no chip appears to describe one.
+    await page.keyboard.press('Control+KeyK');
+    const search = page.getByPlaceholder('Type a command or search…');
+    await expect(search).toBeFocused();
+    await search.press('g');
+    await expect(chip).toHaveCount(0, { timeout: PROMPT_MS });
+    await expect(search).toHaveValue('g');
+    await page.keyboard.press('Escape');
+    // Wait for the dialog to detach before pressing again: Radix closes it
+    // asynchronously, and a key pressed while the input is still focused
+    // on its way out belongs to the field, not the grid. The affordance
+    // returns WITH the keyboard — the silence inside was the policy, not a
+    // dead hint.
+    await expect(search).toHaveCount(0);
+    await page.keyboard.press('g');
+    // Back on the grid the affordance returns with the keyboard: the
+    // silence inside was the policy, not a dead hint. All five destinations
+    // are on offer here — nothing is watched, so g w still has a row to
+    // watch, and the chip offers exactly what the hook can run.
+    await expect(chip.locator('kbd')).toHaveText(['g', 'i', 'n', 'w', 'l', 'v']);
+    await page.keyboard.press('Escape');
+  });
+
+  test('the g namespace reaches the watch, the link, and the views panel', async ({ page }) => {
+    // `g` stopped being a shortcut and became a namespace. The claim under
+    // test is not that these keys exist, it is that a destination acts on
+    // the CURSOR — the row the walk stopped on — rather than on whatever
+    // row happens to be convenient, and that each one says what it did.
+    await startRun(page, `E2E ${STAMP} GSpaceA`, 's1');
+    await startRun(page, `E2E ${STAMP} GSpaceB`, 's2');
+
+    await page.goto('/delegate/facilitator');
+    const pane = page.locator('section[aria-label^="Watching run for"]');
+    const rows = page.locator('tbody tr');
+    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+    const cursored = page.locator('tbody tr[aria-current="true"]');
+    const chip = page.locator('[role="status"]').filter({ has: page.locator('kbd') });
+    // The transient region: what the console just did, as opposed to where
+    // the cursor is. Nothing here moves focus, so without it every chord
+    // except the walk would be silent.
+    const actions = page.getByRole('status', { name: 'Console action' });
+    const lastName = (await rows.last().locator('td').first().innerText()).trim();
+
+    // g l copies the cursor row's run link. Walk to the far end first, so
+    // the clipboard has to hold THAT row's run: an implementation that
+    // quietly grabbed the first visible row would pass a lazier test.
+    await page.keyboard.press('g');
+    await page.keyboard.press('n');
+    await expect(cursored).toHaveCount(1);
+    await expect(rows.last()).toHaveAttribute('aria-current', 'true');
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.keyboard.press('g');
+    await page.keyboard.press('l');
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()), { timeout: 5_000 })
+      .toContain('/delegate?run=');
+    // Confirmed in words, because the row's own Copied flash is the only
+    // other feedback and nobody sees it when the row is scrolled away.
+    await expect(actions).toHaveText(`Run link copied for ${lastName}`);
+
+    // g w watches the same row — the identical action to w, reached from
+    // the namespace instead of the bare key.
+    await page.keyboard.press('g');
+    await page.keyboard.press('w');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${lastName}`, { timeout: 10_000 });
+    await expect(actions).toHaveText(`Watching ${lastName}`);
+
+    // g v opens the views panel from something that is not its trigger,
+    // which is the only reason that popover is controlled at all.
+    await page.getByRole('button', { name: 'Close watch pane' }).click();
+    await expect(pane).toHaveCount(0);
+    await expect(actions).toHaveText('Watch pane closed');
+    await page.keyboard.press('g');
+    await page.keyboard.press('v');
+    const views = page.getByRole('dialog');
+    await expect(views).toBeVisible();
+    const cursorBefore = (await cursored.locator('td').first().innerText()).trim();
+    expect(cursorBefore, 'the walk left a cursor to check').toBe(lastName);
+
+    // The namespace is a keyboard layer like any other, so the open panel
+    // shields it: nothing arms behind the overlay, and no destination moves
+    // the cursor underneath it.
+    await page.keyboard.press('g');
+    await page.waitForTimeout(300);
+    await expect(chip).toHaveCount(0);
+    await expect(cursored.locator('td').first()).toHaveText(cursorBefore);
+    await expect(pane).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(views).toHaveCount(0);
+
+    // And the namespace works again once the panel is gone — a chord that
+    // died with an overlay would be a bug of its own.
+    await page.keyboard.press('g');
+    await page.keyboard.press('i');
+    await expect(rows.first()).toHaveAttribute('aria-current', 'true');
+  });
+
+  test('Escape closes the topmost layer the console opened, and only that', async ({ page }) => {
+    // The key everyone already expects to mean "get rid of what is on top of
+    // this page", so a facilitator closing a panel has to learn no chord.
+    // Two layers can be open at once here, which is the whole point: the
+    // property is not that Escape closes something, it is that it closes
+    // ONE of them. Two window listeners would both fire on a single press
+    // and cost the room the mirror they were reading at the same time.
+    const a = await startRun(page, `E2E ${STAMP} EscA`, 's1');
+    await startRun(page, `E2E ${STAMP} EscB`, 's2');
+    await page.goto(`/delegate/facilitator?watch=${a.runId}`);
+
+    const pane = page.locator('section[aria-label^="Watching run for"]');
+    await expect(pane).toBeVisible({ timeout: 15_000 });
+    const actions = page.getByRole('status', { name: 'Console action' });
+    const views = page.getByRole('dialog');
+    const watching = () => new URL(page.url()).searchParams.get('watch');
+
+    // The pane is the only thing open, so Escape takes it — and says so,
+    // because nothing else on screen moved. The pane advertises the key too:
+    // a region that can be closed this way and does not name it is asking to
+    // be hunted for with the mouse.
+    await expect(pane).toHaveAttribute('aria-keyshortcuts', /Escape/);
+    await page.keyboard.press('Escape');
+    await expect(actions).toHaveText('Watch pane closed');
+    await expect.poll(watching).toBe(null);
+    await expect(pane).toHaveCount(0);
+
+    // Nothing open, nothing dismissed: a console that answers every Escape
+    // with something would be eating a key the browser and the OS also use.
+    await page.keyboard.press('Escape');
+    await expect(views).toHaveCount(0);
+    await expect(pane).toHaveCount(0);
+    expect(watching()).toBeNull();
+
+    // The layering, with both open. The panel is a floating layer on top of
+    // the grid; the pane is a section of the page. So the panel goes, and
+    // the mirror underneath is left exactly where it was — asserted on both
+    // the panel being gone and the pane still being there, because "the
+    // pane closed too" is exactly what a shortcut firing through a layer
+    // that has already started dismissing itself looks like.
+    await page.keyboard.press('w');
+    await expect(pane).toBeVisible({ timeout: 10_000 });
+    await page.keyboard.press('g');
+    await page.keyboard.press('v');
+    await expect(views).toBeVisible();
+    const held = views.locator(':focus');
+    await expect(held).toHaveCount(1);
+    expect(await held.evaluate((el) => el.tagName), 'the panel holds the keyboard').toBe('BUTTON');
+    await page.keyboard.press('Escape');
+    await expect(actions).toHaveText('Saved views closed');
+    await expect(views).toHaveCount(0);
+    await expect(pane).toBeVisible();
+    expect(watching(), 'the pane survived the panel closing').not.toBeNull();
+
+    // And with the panel gone the same key reaches the pane, because that is
+    // now the topmost thing the console opened.
+    await page.keyboard.press('Escape');
+    await expect(actions).toHaveText('Watch pane closed');
+    await expect.poll(watching).toBe(null);
+    await expect(pane).toHaveCount(0);
+
+    // The panel on its own, dismissed by the key it is holding: Radix
+    // listens in the capture phase, so by the time the page's listener runs
+    // the layer has already closed and only the FOCUS says who owned the
+    // key. It still closes, still says so, and still closes ONCE — the
+    // closing comes back through the same funnel the outside click and the
+    // trigger use, which is what makes one announcement rather than two.
+    await page.keyboard.press('g');
+    await page.keyboard.press('v');
+    await expect(views).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(views).toHaveCount(0);
+    await expect(actions).toHaveText('Saved views closed');
+  });
+
+  test('the walk scrolls the cursor row into view, and only when it is off-screen', async ({ page }) => {
+    // The walk is a cursor the eye has to be able to follow, and every key
+    // the console binds suppresses the browser's own scrolling — so without
+    // a scroll the ring would keep travelling below the fold: announced to
+    // a screen reader, never seen. `g n` is where it is most obvious, being
+    // one key that lands on the last row of a room nobody can see.
+    //
+    // A deliberately short window and a handful of seeded rows, so the claim
+    // is about scrolling rather than about a room that happens to fit: a
+    // fresh store and an accumulated one both overflow a 300px window, and
+    // the store is long past the point where a seeded room would change
+    // anything. The labels sort AFTER every other row, so this test's own
+    // block is the tail of the grid either way — its geometry is the test's
+    // own, not the store's. Seeded as few rows as the window needs: the
+    // store accumulates, and every row here is permanent junk every later
+    // run has to re-render.
+    await page.setViewportSize({ width: 900, height: 300 });
+    const seeded: Array<{ label: string; runId: string }> = [];
+    for (let i = 0; i < 8; i += 1) {
+      const label = `zz E2E ${STAMP} Scroll${i}`;
+      const run = await startRun(page, label, 's1');
+      seeded.push({ label, runId: run.runId });
+    }
+
+    await page.goto('/delegate/facilitator');
+    const rows = page.locator('tbody tr');
+    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+    const cursored = page.locator('tbody tr[aria-current="true"]');
+    const fullyInView = (row: Locator) =>
+      row.evaluate((el) => {
+        const box = el.getBoundingClientRect();
+        return box.top >= 0 && box.bottom <= window.innerHeight;
+      });
+    const scrollY = () => page.evaluate(() => Math.round(window.scrollY));
+    // Exact, by cell: the labels are Scroll1 / Scroll10 / Scroll11…, so a
+    // substring filter would match five rows at once.
+    const rowFor = (label: string) =>
+      rows.filter({ has: page.getByRole('cell', { name: label, exact: true }) });
+
+    // The room really is taller than the window, and its top is on screen:
+    // both halves of the precondition, so a pass cannot mean "everything
+    // fitted anyway". A cold console has no cursor at all — arriving does
+    // not walk anywhere — so nothing is marked yet, which is the state the
+    // first key starts from.
+    const rowCount = await rows.count();
+    expect(rowCount, 'the grid overflows the window').toBeGreaterThan(4);
+    await expect(cursored).toHaveCount(0);
+    await expect.poll(() => fullyInView(rows.first())).toBe(true);
+    await expect.poll(() => fullyInView(rows.last())).toBe(false);
+    // One of this test's own rows, below the fold, kept for the last step.
+    const seen = await Promise.all(seeded.map((s) => fullyInView(rowFor(s.label))));
+    const offScreen = seeded[seen.indexOf(false)];
+    expect(offScreen, 'this test seeded a row below the fold').toBeTruthy();
+
+    // g n: one chord to the last row, and the page follows it there. This is
+    // the whole feature — the destination is a row, so landing on it has to
+    // be a row you can see.
+    await page.keyboard.press('g');
+    await page.keyboard.press('n');
+    await expect(cursored).toHaveCount(1);
+    await expect(cursored).toHaveAttribute('aria-current', 'true');
+    await expect.poll(() => fullyInView(cursored)).toBe(true);
+    const atEnd = await scrollY();
+    expect(atEnd, 'the page moved to the end of the room').toBeGreaterThan(0);
+
+    // j from the last row wraps to the first, so the walk scrolls back up as
+    // readily as it scrolls down. Not necessarily to 0: `nearest` stops at
+    // the minimum scroll that reveals the row, and the toolbar above the
+    // grid means the first row is not the top of the document.
+    await page.keyboard.press('j');
+    await expect
+      .poll(async () => (await rows.first().getAttribute('aria-current')) === 'true')
+      .toBe(true);
+    await expect.poll(() => fullyInView(rows.first())).toBe(true);
+    const backAtTop = await scrollY();
+    expect(backAtTop, 'the page came back up to the top of the room').toBeLessThan(atEnd);
+
+    // A step INSIDE the visible room must not move the page at all: this is
+    // `block: "nearest"`, not `center`. A facilitator scanning a run of
+    // working participants would otherwise have the whole grid sliding
+    // under the cursor on every keystroke.
+    await page.keyboard.press('j');
+    await expect
+      .poll(async () => (await rows.nth(1).getAttribute('aria-current')) === 'true')
+      .toBe(true);
+    expect(await scrollY(), 'a step within the visible room left the page where it was').toBe(backAtTop);
+    await expect.poll(() => fullyInView(rows.nth(1))).toBe(true);
+
+    // And the decision the keying encodes: ARRIVING is not walking. A shared
+    // ?watch= link points at a row below the fold, and the pane opens at the
+    // top of the page — the page must stay where the reader found it, or
+    // every shared link would yank the window away from the pane someone
+    // just asked to watch. (The outcome, not the mechanism: the effect is
+    // keyed on the walked run, and a deep link also mounts an empty grid, so
+    // the two cannot be told apart from out here. See the effect's comment.)
+    await page.goto(`/delegate/facilitator?watch=${offScreen.runId}`);
+    await expect(page.locator('section[aria-label^="Watching run for"]')).toBeVisible({ timeout: 15_000 });
+    await expect.poll(() => fullyInView(rowFor(offScreen.label))).toBe(false);
+    expect(await scrollY(), 'opening a shared link left the page where the reader found it').toBe(0);
+  });
+
+  test('the saved-views popover shields the room from j, k, and w', async ({ page }) => {
+    // A popover is the overlay the sweep must not fire through: it is open
+    // on top of the grid, portaled onto the end of <body> rather than
+    // nested under its trigger, and taking focus. The policy-level proof
+    // of the role-less variant lives in delegate-shortcuts.spec.ts; this
+    // is the behaviour, on the panel the console actually ships. Two
+    // stamped rows so the sweep has somewhere to go once it is let loose.
+    await startRun(page, `E2E ${STAMP} PopA`, 's1');
+    await startRun(page, `E2E ${STAMP} PopB`, 's2');
+
+    await page.goto('/delegate/facilitator');
+    const pane = page.locator('section[aria-label^="Watching run for"]');
+    const rows = page.locator('tbody tr');
+    await expect(rows.first()).toBeVisible({ timeout: 15_000 });
+    // Nothing is watched yet, so any pane at all means a key leaked through.
+    await expect(pane).toHaveCount(0);
+
+    // exact: the store's accumulated ViewS5-style names contain "views"
+    // case-insensitively, and getByRole's default match is a substring.
+    await page.getByRole('button', { name: 'Views', exact: true }).click();
+    const panel = page.locator('[data-radix-popper-content-wrapper] [data-state="open"]');
+    await expect(panel).toBeVisible();
+    // What the policy actually matches on, read off the live app rather
+    // than assumed. Radix 1.1.23 stamps role="dialog" on popover content
+    // whatever its modality, so the saved-views panel is a dialog by the
+    // time it reaches the DOM and the dialog clause already covers it; the
+    // popper wrapper is the second clause behind it, for a panel that
+    // claims no role. Pinned here so the transcribed fixtures in
+    // delegate-shortcuts.spec.ts cannot drift from the app silently.
+    await expect(panel).toHaveAttribute('role', 'dialog');
+    await expect(panel).toHaveAttribute('data-state', 'open');
+
+    // Focus is inside the panel (Radix moves it on open), so these land on
+    // the panel's own buttons — no field swallows them, and neither the walk
+    // nor the commit key may act behind it.
+    await page.keyboard.press('j');
+    await page.keyboard.press('k');
+    await page.keyboard.press('w');
+    await page.waitForTimeout(400);
+    await expect(pane).toHaveCount(0);
+    expect(new URL(page.url()).searchParams.get('watch')).toBeNull();
+
+    // Positive control: closing the panel hands the keys straight back —
+    // the walk moves the cursor, then w opens the pane on it — so the guard
+    // above is not simply "ignore the keys while a panel exists".
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+    await page.keyboard.press('j');
+    const firstName = await rows.nth(0).locator('td').first().innerText();
+    await expect(rows.nth(0)).toHaveAttribute('aria-current', 'true');
+    await page.keyboard.press('w');
+    await expect(pane).toHaveAttribute('aria-label', `Watching run for ${firstName}`, { timeout: 10_000 });
+  });
+
+  test('a copied submitted-run link restores read-only in a fresh context', async ({ page, browser }) => {
+    const seeded = await startRun(page, SUBMITTED, 's5');
+    const submit = await page.request.post('/api/delegate/submit', {
+      data: { runId: seeded.runId, answer: MIN_40_WORDS },
+    });
+    expect(submit.ok()).toBeTruthy();
+
+    await page.goto('/delegate/facilitator');
+    const link = await copyRunLink(page, SUBMITTED);
+
+    const receiverContext = await browser.newContext();
+    const receiver = await receiverContext.newPage();
+    await receiver.goto(link);
+    await receiver.getByRole('button', { name: 'Reopen previous session' }).click();
+
+    // Submitted runs restore read-only: the detection result and the
+    // scores-reveal notice render, there is no Submit button, and the
+    // composer is disabled (placeholder flips to "Scenario submitted").
+    await expect(receiver.getByText('Defect detected: your answer named it')).toBeVisible();
+    await expect(receiver.getByText('Scores are revealed together')).toBeVisible();
+    await expect(receiver.getByRole('button', { name: 'Submit answer' })).toHaveCount(0);
+    await expect(receiver.locator('input[placeholder="Scenario submitted"]')).toBeDisabled();
+
+    await receiverContext.close();
+
+    // The row's Open action restores the same read-only view in a tab
+    // spawned by the grid itself.
+    const [popup] = await Promise.all([
+      page.waitForEvent('popup'),
+      page
+        .getByRole('row')
+        .filter({ hasText: SUBMITTED })
+        .getByRole('link', { name: `Open run for ${SUBMITTED}` })
+        .click(),
+    ]);
+    await expect(popup.getByPlaceholder('e.g. Jordan')).toBeVisible();
+    await popup.getByRole('button', { name: 'Reopen previous session' }).click();
+    await expect(popup.getByText('Defect detected: your answer named it')).toBeVisible();
+    await expect(popup.locator('input[placeholder="Scenario submitted"]')).toBeDisabled();
+    await popup.close();
+  });
+});

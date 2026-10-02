@@ -1,6 +1,17 @@
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
+import {
+  CLOSE_SEARCH,
+  NEXT_RESULT,
+  PREV_RESULT,
+  SEARCH_SURFACE_ROWS,
+  SELECT_RESULT,
+  fieldRow,
+  liveShortcuts,
+  printableCap,
+  searchGates,
+} from '@/components/ui/companySearchKeys';
 import { Company } from '@/types';
 import { useGalaxyStore } from '@/store/galaxyStore';
 import { maturityColor } from '@/lib/constants';
@@ -14,6 +25,12 @@ const MAX_RESULTS = 8;
  * clicking one (or Enter) selects it; the camera flies in and the full
  * profile panel opens. The galaxy stays visible behind the panel, and the
  * transparent click-catcher closes it on any outside click (Esc too).
+ *
+ * Its keyboard is DECLARED in ./companySearchKeys: the field dispatches the
+ * keys it advertises (`fieldRow`), the attribute it advertises them in is
+ * built from the same rows, and the `esc` cap is the declared row rather than
+ * a word typed here — including the one key this field does not bind, which
+ * the galaxy page's own window listener answers.
  */
 export function CompanySearch({
   open,
@@ -67,15 +84,26 @@ export function CompanySearch({
     onClose();
   };
 
-  const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setActiveIndex((i) => (results.length ? Math.min(i + 1, results.length - 1) : 0));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
+  const gates = searchGates({ open, matches: results.length });
+
+  // One dispatch, read from the declaration: which of the keys the field
+  // advertises does this press belong to right now? A renamed row stops
+  // answering here and fails its coverage step rather than going on working in
+  // silence, and the gates are the same booleans the attribute is built from,
+  // so what the field claims and what it does cannot drift apart.
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    const row = fieldRow(event.key, gates);
+    if (row === undefined) return;
+    event.preventDefault();
+    if (row.id === NEXT_RESULT.id) {
+      setActiveIndex((i) => Math.min(i + 1, results.length - 1));
+      return;
+    }
+    if (row.id === PREV_RESULT.id) {
       setActiveIndex((i) => Math.max(i - 1, 0));
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
+      return;
+    }
+    if (row.id === SELECT_RESULT.id) {
       const hit = results[activeIndex];
       if (hit) selectCompany(hit);
     }
@@ -122,6 +150,9 @@ export function CompanySearch({
                     results[activeIndex] ? `search-opt-${results[activeIndex].id}` : undefined
                   }
                   aria-autocomplete="list"
+                  aria-keyshortcuts={
+                    liveShortcuts(SEARCH_SURFACE_ROWS.field, gates) || undefined
+                  }
                   placeholder={`Search ${companies.length} companies…`}
                   value={query}
                   onChange={(e) => {
@@ -135,7 +166,7 @@ export function CompanySearch({
                   aria-hidden="true"
                   className="shrink-0 rounded border border-border-subtle px-1.5 py-0.5 text-[10px] font-medium text-ui-muted"
                 >
-                  esc
+                  {printableCap(CLOSE_SEARCH)}
                 </kbd>
               </div>
 

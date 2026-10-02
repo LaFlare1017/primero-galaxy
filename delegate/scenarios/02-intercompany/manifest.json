@@ -1,0 +1,44 @@
+{
+  "id": "s2",
+  "order": 2,
+  "slug": "02-intercompany",
+  "title": "Why doesn't intercompany balance?",
+  "skills": ["context_provision", "iterative_narrowing"],
+  "timeBudgetMinutes": 20,
+  "entity": "HLI-US + HLI-CA",
+  "period": "2026-03",
+  "learnerBrief": "Intercompany doesn't balance at March close: the US↔CA receivable and payable don't match by $4,182. Find out why. The answer needs to name the root cause, not just the amount.",
+  "tools": ["query_gl", "get_record", "list_records", "get_fx_rates"],
+  "detection": {
+    "groundTruth": {
+      "defectType": "fx_timing",
+      "variance": 4182.0,
+      "caEntryId": "JE-S2-IC-CA",
+      "usEntryId": "JE-S2-IC-US",
+      "caRate": 0.769,
+      "usRate": 0.739,
+      "cadAmount": 139400,
+      "explanation": "Both sides booked defensibly: CA at the 3/15 transaction-date rate, US at the 3/31 month-end rate. The variance is pure FX timing on a CAD-denominated parent charge."
+    },
+    "answerSignals": {
+      "strong": [
+        "fx timing",
+        "rate.*timing",
+        "transaction date.*rate",
+        "different.*rate",
+        "rates? at (the )?(different|transaction|close)",
+        "remeasur",
+        "translated at",
+        "converted at"
+      ],
+      "partial": [
+        "fx",
+        "exchange rate",
+        "rate mismatch",
+        "currency",
+        "cad",
+        "conversion"
+      ]
+    }
+  }
+}

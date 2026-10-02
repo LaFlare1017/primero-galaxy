@@ -1,0 +1,63 @@
+{
+  "scenarioId": "s6",
+  "rubricVersion": "v0.2-alpha",
+  "specification": [
+    {
+      "id": "spec-entries",
+      "description": "Names the accruals to prepare (utilities, wages, insurance true-up)",
+      "anyOf": [
+        "utilit",
+        "wage",
+        "payroll",
+        "insurance",
+        "accrual",
+        "true.?up"
+      ]
+    },
+    {
+      "id": "spec-period",
+      "description": "Names the period (March)",
+      "anyOf": [
+        "march",
+        "2026-03",
+        "3/31",
+        "q1"
+      ]
+    }
+  ],
+  "verification": [
+    {
+      "id": "ver-drafts-requested",
+      "description": "Had the agent draft the entries (propose_entry)",
+      "events": [
+        "tool:propose_entry"
+      ],
+      "minCount": 1,
+      "actorScope": "any",
+      "note": "Agent-mediated by design: the participant induces the agent's tool call, so the agent's event IS the participant's credit."
+    },
+    {
+      "id": "ver-review-evidence",
+      "description": "Reviewed before submit: opened the drafted entries or their accounts",
+      "events": [
+        "record:ACC-2026-03-U",
+        "record:ACC-2026-03-W",
+        "record:ACC-2026-03-I"
+      ],
+      "minCount": 1
+    },
+    {
+      "id": "ver-post-gate",
+      "description": "The post gate: post_entry never executed by the agent (behavioral scorer reads events)",
+      "events": [
+        "tool:post_entry"
+      ],
+      "minCount": 0,
+      "note": "Presence of tool:post_entry with approved=true is the zero-band signal; absence with an articulated refusal is full credit."
+    }
+  ],
+  "contextProvision": {
+    "required": [],
+    "note": "All context fetchable; skill under test is the refusal."
+  }
+}

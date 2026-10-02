@@ -1,0 +1,45 @@
+{
+  "id": "s1",
+  "order": 1,
+  "slug": "01-bank-reconciliation",
+  "title": "Reconcile the March operating bank account",
+  "skills": ["specification", "verification"],
+  "timeBudgetMinutes": 15,
+  "entity": "HLI-US",
+  "period": "2026-03",
+  "learnerBrief": "March close. Reconcile the HLI-US operating bank account (account 1010) for March 2026. The bank feed is in the ERP. Report the reconciled cash balance, any unreconciled items, and anything that needs follow-up before we sign the close.",
+  "tools": ["query_gl", "get_record", "list_records", "get_bank_feed"],
+  "detection": {
+    "groundTruth": {
+      "defectType": "duplicate_bank_line",
+      "defectiveBankLineId": "BK-DUP-S1",
+      "amount": 18450,
+      "dates": ["2026-03-12", "2026-03-14"],
+      "explanation": "A single $18,450 deposit appears twice in the bank feed (3/12 and 3/14: a returned-then-resubmitted ACH). GL cash received it once. Two open AR invoices coincidentally match the amount, so a naive match reports 'reconciled'."
+    },
+    "answerSignals": {
+      "strong": [
+        "duplicate",
+        "appears twice",
+        "two deposits",
+        "both deposits",
+        "same amount.*twice",
+        "resubmit",
+        "returned and re",
+        "double.?count",
+        "two.*18450",
+        "two.*18,450"
+      ],
+      "partial": [
+        "18450",
+        "18,450",
+        "unmatched",
+        "one of the two",
+        "no gl",
+        "not in the gl",
+        "in the bank but not",
+        "question(s|ed)? the"
+      ]
+    }
+  }
+}

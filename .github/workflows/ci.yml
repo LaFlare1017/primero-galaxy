@@ -4,10 +4,31 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Re-measuring the worker curve on demand. The `E2E worker curve` job below
+  # runs it on main pushes anyway; this is for the moment somebody wants the
+  # number without waiting for a push — after changing the pin, or after moving
+  # the suite to a runner class with different cores.
+  workflow_dispatch:
+  # Weekly, because the premise of the curve is that it rots silently: the
+  # runner's hardware is not the runner it was, and a pin chosen for four vCPUs
+  # stays green on six. ~25 minutes of runner time a week. Delete this and the
+  # job still runs on every push to main.
+  schedule:
+    - cron: '17 6 * * 1'
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+# The store job runs against a Neon branch it creates for the run and drops
+# after, rather than one shared database. That is not a nicety: the gate calls
+# clearAll, so two runs sharing a database clear each other's rows and fail in a
+# way that reads like a store bug. This job used to serialise itself against
+# every other ref to prevent that, with cancel-in-progress off so a cancelled run
+# could not leave the next one a half-seeded room. A branch per run removes both
+# constraints — nothing is shared, so nothing needs serialising, and a cancelled
+# run leaves at most a branch that expires on its own.
+
 
 jobs:
   checks:
@@ -19,20 +40,280 @@ jobs:
     env:
       NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
     steps:
+      # The full history, not the default one-commit clone: these checks read git
+      # as its own record — the LinkedIn assets count the era as a range between
+      # two commits — and a shallow checkout that cannot see it is reported as a
+      # reader that could not count, since `--strict` treats that as a failure.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # One entry point for the repo's own checks: the same script a commit runs
+      # (`.githooks/pre-commit` calls it with `--fast`) and a developer runs by
+      # hand. A tracked path that a rule also covers is invisible to `git status`
+      # and to the rule's reader alike, so the gitignore gate and the hook check
+      # reach CI through the modules that own them rather than through steps of
+      # their own. The hook check runs the tracked hook the way a commit does —
+      # twice, the second time against a rule planted in the working .gitignore
+      # that it has to refuse — because a hook that was emptied in a refactor, or
+      # that quietly lost its executable bit, passes a plain run by doing nothing
+      # at all.
+      # `--strict` because the states the local run calls warnings — an
+      # uninstalled hook, a missing .env.local, an unbuilt workspace — are not
+      # choices on a fresh checkout, and the checks that would report them as
+      # such stand down instead.
+      - name: Repo checks
+        run: node scripts/doctor.mjs --strict
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+
+  delegate:
+    name: Delegate gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # The workspace's own suite, on a Linux runner, which is the only place most
+    # of it had ever been executed. It was a local-only gate: nine files behind
+    # `npm test` in delegate/, none of which CI ran, so a change that broke the
+    # scenario contract, the scorer, the readout or the reset tool merged on the
+    # strength of a build and a browser suite that never load them.
+    #
+    # Deliberately hermetic — no secrets, no database, and no root install. The
+    # workspace declares everything it imports, so `npm ci` here is the whole
+    # dependency graph; the `store` job is the one that needs a database, and
+    # DELEGATE_STORE_TEST_URL is cleared rather than merely absent so this job
+    # can never be the thing that empties a shared Neon project, however it is
+    # configured. That also means no concurrency group of its own: nothing here
+    # is shared with another run.
+    #
+    # It does write to the checkout — the week-4 smoke gate seeds cohort data
+    # into delegate/data/ so the readout has something to read — which is
+    # harmless on a throwaway runner and is why this job runs the suite rather
+    # than any single gate of it.
+    env:
+      DELEGATE_STORE_TEST_URL: ''
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          # This job never installs the root, so the root lockfile would cache
+          # the wrong graph.
+          cache-dependency-path: delegate/package-lock.json
+      - run: npm --prefix delegate ci
+      # The gates are TypeScript compiled to delegate/dist, and the script is
+      # `node dist/…` — so a build failure here is a gate failure, not a
+      # separate concern to notice later.
+      - run: npm --prefix delegate run build
+      - run: npm --prefix delegate test
+
+      # The `store` job's seven steps, walked in order against a console on
+      # localhost. It is not in the `store` job because that job is gated on
+      # NEON_API_KEY, which this repository does not have — a step there would
+      # never run, and a rehearsal that never runs is a comment. Here it runs on
+      # every push and every fork PR, hermetically, with no account and no
+      # database: the resolve/create/uri/drop/report steps, the `$GITHUB_ENV`
+      # hand-off between them, and the in-process gate leg. The remote leg is
+      # named as unreached on every run — the fake console serves the management
+      # API and there is no Postgres behind its URI — which is why the `store`
+      # job still exists.
+      #
+      # It reads `.github/workflows/ci.yml` back and fails if it finds a Neon
+      # command line CI depends on that this rehearsal does not run, so a renamed
+      # mode breaks here rather than silently un-rehearsing the job.
+      - name: Rehearse the store job
+        run: node scripts/store-job-rehearsal.mjs
+
+  store:
+    name: Store gate (real Postgres)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # No concurrency group of its own: every run gets its own branch, so there is
+    # nothing here for two runs to collide on. The workflow's per-ref group above
+    # still cancels a superseded run of the same ref, and cancelling is now safe
+    # — the abandoned branch expires by itself rather than stranding the next run
+    # in a half-seeded room.
+    #
+    # The store's SQL is proved on an in-process Postgres; the ADAPTER above it is
+    # not, and an in-process engine never goes near it. `neonQuery` — the HTTP
+    # driver that is the only reason a serverless function can hold a Postgres
+    # connection at all — is the one piece of the deployment path a local run
+    # cannot execute, so it is executed here against a real database.
+    #
+    # One secret is needed, and the two ids it used to need alongside it are
+    # settled by the job itself:
+    #   NEON_API_KEY           a Neon API key. It authorises the management
+    #                          calls and reaches no gate.
+    #   NEON_PROJECT_ID        optional. The project these branches live in; the
+    #                          resolve step finds or creates one by name when it
+    #                          is not set.
+    #   NEON_PARENT_BRANCH_ID  optional. A branch kept EMPTY for CI to branch
+    #                          from (br-…). Also found or created. Named rather
+    #                          than defaulted to the project's default branch
+    #                          because a branch copies its parent's state:
+    #                          branching from a default branch that holds a real
+    #                          room would hand the gate somebody's schema.
+    #
+    # A key cannot be minted by a job — it is a credential, so creating one means
+    # handling an account password — which is why that one is still a person. The
+    # two ids are not credentials: they are addresses, and a job that knows the
+    # key can find or create them. That is the whole difference between one
+    # manual step and three.
+    #
+    # The gate still reads DELEGATE_STORE_TEST_URL and not DATABASE_URL, and the
+    # URL is built here rather than stored — a gate that changed substrate on the
+    # app's own configuration could be pointed at production by a deploy setting
+    # rather than by a deliberate act, and these gates call clearAll.
+    env:
+      NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+      NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+      NEON_PARENT_BRANCH_ID: ${{ secrets.NEON_PARENT_BRANCH_ID }}
+      # One branch per run attempt. The name is what somebody sees in the Neon
+      # console when a run leaves one behind, so it carries the run it came from
+      # and nothing else. The URL starts EMPTY and is filled in below by the step
+      # that resolves this branch — which is also what the remote leg's condition
+      # asks about, so a run that could not get a URI skips the leg rather than
+      # running it against nothing.
+      BRANCH_NAME: ci-${{ github.run_id }}-${{ github.run_attempt }}
+      DELEGATE_STORE_TEST_URL: ''
+    steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
       - run: npm ci
-      - run: npm run lint
-      - run: npm run typecheck
-      - run: npm run build
+      # The gates are TypeScript compiled to delegate/dist, and that build needs
+      # the nested workspace's own dependencies — the root install does not
+      # provide them, which is what the doctor's delegate check reports.
+      - run: npm --prefix delegate ci
+      - run: npm --prefix delegate run build
+
+      # ── the addresses, settled before anything is created ───────────────
+      #
+      # Prints the two ids as KEY=value for $GITHUB_ENV and makes NO call when
+      # both are already set, so a repository that has them behaves exactly as it
+      # did before this step existed. When they are absent it finds the project
+      # and the branch by name, or creates each once — so a first run needs only
+      # the key, and a hundredth run reuses what the first one made.
+      #
+      # The step runs this repository's own code with the key in its
+      # environment, which the gate steps already do, so it introduces no new
+      # exposure. A FORK pull request is the case worth naming: GitHub passes it
+      # no secrets at all, so NEON_API_KEY is empty, this step is skipped by the
+      # same condition as the ones below it, and nothing is ever created for one.
+      - name: Resolve the Neon project and parent branch
+        if: env.NEON_API_KEY != ''
+        run: node scripts/neon-secrets.mjs --resolve
+
+      # ── the database, created for this run and destroyed by it ──────────
+      #
+      # This was ninety lines of shell in this file, which meant the whole
+      # lifecycle had never been executed: this repository has no
+      # NEON_API_KEY, so every run so far has skipped all three of these steps
+      # and the code that does any of it has never run. It is `neon-branch.mjs`
+      # now, which means the create, the readiness wait, the URI and the delete
+      # are all covered by `--self-test-e2e` against a console on localhost —
+      # including the part no stub ever modelled, which is a branch that answers
+      # `current_state: init` for a while before its compute starts.
+      #
+      # The refusals came with it, and each is a decision somebody will want to
+      # make again: a create that fails exits loudly rather than leaving an empty
+      # BRANCH_ID, because an empty variable is exactly what the last step reads
+      # as "the remote leg did not run"; a delete that fails is a warning, not a
+      # failure, so untidiness cannot bury the gate's verdict; and the URI's
+      # password is handed to ::add-mask:: and never printed.
+      - name: Create a Neon branch for this run
+        if: env.NEON_API_KEY != ''
+        run: node scripts/neon-branch.mjs create
+      - name: Resolve this branch's connection URI
+        if: env.NEON_API_KEY != ''
+        run: node scripts/neon-branch.mjs uri
+
+      # The in-process leg FIRST, and unconditionally: it is the leg that can
+      # prove the one check a shared database cannot — the guard that refuses a
+      # `delegate_rows` table this store did not create, which needs an engine
+      # it may create and drop a table in. A remote-only run would skip exactly
+      # the check that matters most about running against somebody's database.
+      #
+      # The variable is CLEARED here, at the step, and that is not tidiness. It
+      # is set at the job, so without this the "in-process" leg read it too and
+      # ran against Neon — testing the SQL twice, over one shared database, and
+      # never once against the engine that costs nothing and needs no secret.
+      # The gate picks its substrate from this variable and nothing else, so an
+      # empty value is how a step says which one it means.
+      - name: Store gate on an in-process Postgres
+        env:
+          DELEGATE_STORE_TEST_URL: ''
+        run: node delegate/dist/store/test-store-backends.js
+      # Then the same gate, same assertions, over the serverless driver.
+      #
+      # This was a `run:` block of five lines, and two of them were shell
+      # features standing in for correctness claims. It piped the gate into
+      # `tee` and read `${PIPESTATUS[0]}` — a BASH array, so the step's verdict
+      # depended on the runner's default shell rather than on the gate. And the
+      # engine line was checked by grepping a log file, which is a claim about a
+      # file rather than about a run.
+      #
+      # Both claims are made in `store-gate-remote.mjs` now: it reads the gate's
+      # own exit status from the child process, asserts the gate reported a
+      # REMOTE engine, and turns a failure into an annotation. Nothing here
+      # depends on which shell GitHub picked.
+      - name: Store gate over the Neon serverless driver
+        if: env.DELEGATE_STORE_TEST_URL != ''
+        env:
+          # The gate refuses a database whose name carries no ci/test/ephemeral/
+          # scratch marker, which is the right rule for a person pointing a
+          # destructive tool at a URL they typed. This database is a branch this
+          # run created a minute ago and drops a minute from now, so ownership
+          # is a stronger guarantee than a name — and the branch's database name
+          # is whatever the CI parent branch was created with, which is not ours
+          # to choose. The guard stays armed for the local path, where the URL
+          # is a human's to name.
+          DELEGATE_STORE_TEST_ALLOW_ANY: '1'
+        run: node scripts/store-gate-remote.mjs
+      # ── and the branch goes away with it ─────────────────────────────────
+      - name: Drop this run's branch
+        # `always()` so a failing gate still cleans up after itself, and the
+        # BRANCH_ID test so a run that never got that far does not try to delete
+        # an empty path. The expiry set at creation is the backstop for the one
+        # case this cannot cover: a cancelled job, whose later steps never run.
+        if: always() && env.NEON_API_KEY != '' && env.BRANCH_ID != ''
+        run: node scripts/neon-branch.mjs drop
+      # No connection URI has two meanings and they are not the same severity. A
+      # FORK pull request gets no secrets from GitHub, so the remote leg cannot
+      # run there and saying so is the whole job; every other event — a
+      # same-repository pull request, a push to main — is supposed to get a
+      # branch, and one that did not is a misconfiguration that would leave the
+      # driver untested behind a green tick. Keyed on the URI rather than on the
+      # secret so that a failed create is reported as the failure it is, instead
+      # of reading as a run that never had credentials.
+      #
+      # The words are `neon-branch.mjs report`, not this file, because a refusal
+      # nothing reads back is prose: this is the message the job goes red with on
+      # every push while there is no Neon account, and a check now asserts that it
+      # names all three secrets, says which one of them alone is enough, and says
+      # what went untested. An edit that dropped one of those used to be invisible.
+      - name: Say whether the remote leg ran
+        if: always() && env.DELEGATE_STORE_TEST_URL == ''
+        run: >-
+          node scripts/neon-branch.mjs report
+          ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && '--fork-pr' || '' }}
 
   e2e:
     name: E2E (Playwright)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # Raised alongside the move to per-worker servers, which took this job from
+    # one file at a time to the runner's width. A parallel suite is bounded by
+    # its slowest test rather than its average, and the galaxy specs drive WebGL
+    # and camera transitions that only finish when the CPU is free — so the wall
+    # clock did not fall by the same factor the worker count rose by.
+    timeout-minutes: 40
     env:
       NEXT_PUBLIC_SITE_URL: ${{ secrets.NEXT_PUBLIC_SITE_URL }}
     steps:
@@ -43,18 +324,151 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      # e2e/delegate-store-remote.spec.ts runs the store gate BINARY over the
+      # real Neon driver, so the gate has to exist before the suite starts. It
+      # refuses to skip when it does not, on the grounds that a skipped spec
+      # reads as coverage of a thing nobody ran — which is exactly how this
+      # job's first run with it failed, in a job whose other 133 specs passed
+      # and went green in parallel for the first time. The same two steps the
+      # Delegate gates and Store gate jobs run, for the same reason.
+      - run: npm --prefix delegate ci
+      - run: npm --prefix delegate run build
       # The playwright.config webServer builds + starts the production build
-      # itself, so no separate server step is needed here.
+      # itself, so no separate server step is needed here. CI=1 enables the
+      # config's retries (2) and the JSON reporter that feeds the flaky
+      # report below.
+      #
+      # ANTHROPIC_API_KEY is set on this STEP, not the job, because exactly one
+      # spec reads it: e2e/delegate-cold-chat.spec.ts. That spec RUNS either way
+      # — with no key it replays a recorded transcript against a fake Anthropic
+      # on localhost, so the restart assertion is proved on every push rather
+      # than only on the machines that happen to have a key — and a key turns the
+      # replay into a live call. Scoped to the step so no other test, and nothing
+      # the build touches, can reach the key.
+      #
+      # E2E_WORKERS is pinned rather than inherited. Each worker is a `next start`
+      # AND a Chromium with its own store (e2e/worker-server.ts), so the number
+      # that is safe is a fact about the machine: this runner has four vCPUs,
+      # against the fourteen-core laptop the default and the ceiling in
+      # e2e/workers.ts were measured on. Past a point the galaxy specs stop
+      # finishing inside their timeouts rather than running in parallel, so the
+      # local default cannot be assumed to hold here. The `E2E worker curve` job
+      # below measures the curve on this same runner class and puts the result in
+      # its summary, with this number read back out of the workflow by
+      # scripts/e2e-workers-bench.mjs — so the pin is a measurement rather than
+      # an argument from a laptop. Change it here and that job says whether the
+      # change was an improvement.
       - run: npm run test:e2e
-      - name: Upload Playwright report on failure
+        env:
+          CI: '1'
+          E2E_WORKERS: '3'
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      # A flaky test PASSES under retries, so failure-gated artifacts never
+      # show it. Parse the JSON report, write the flaky table into the job
+      # summary, and expose flaky_count as a step output.
+      - name: Surface flaky tests in the job summary
+        if: always() && !cancelled()
+        id: flaky
+        run: node scripts/flaky-report.mjs test-results/results.json
+      # The same report, read for what it is NOT saying. A skipped test is not a
+      # failed one, so the run above reads green either way: it prints
+      # `-  1 e2e/some.spec.ts:110:7` with no reason, and the count line says
+      # `132 passed` whether or not something ran. This step names every skip,
+      # with the reason the spec recorded for it.
+      #
+      # It started as one filename, and that is the version that would have been
+      # quietly wrong the day a second spec was written behind a key. So it is
+      # general now, with three verdicts rather than one:
+      #
+      #   - a skip with NO recorded reason FAILS, always. An unexplained skip is
+      #     a hole nobody can see, including whoever wrote it.
+      #   - a skip for want of a SECRET fails on an event that should have had
+      #     one, and is a notice on a fork pull request, where GitHub sends no
+      #     secrets at all. Nothing in this suite needs a key now — the
+      #     cold-process chat replays a transcript — so a secret-gated skip
+      #     anywhere else is a spec that has not caught up.
+      #   - any other skip is named and nothing more: it was a decision somebody
+      #     wrote down, and the job's business is to make it visible.
+      #
+      # The cold-process chat spec is still called out on its own, because it is
+      # the one assertion a mock cannot fake, and because "ran" alone does not
+      # say whether a live model or a recorded transcript answered it.
+      - name: Say what did not run
+        if: always() && !cancelled()
+        run: >-
+          node scripts/e2e-coverage.mjs test-results/results.json
+          ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork && '--fork-pr' || '' }}
+      - name: Upload Playwright report and traces
+        # Not failure-gated: a green run with flaky tests still ships the
+        # html report plus the retry-attempt traces (trace: on-all-retries).
+        if: always() && !cancelled()
         uses: actions/upload-artifact@v7
-        if: failure()
         with:
           name: playwright-report
           path: |
             playwright-report/
             test-results/
           retention-days: 7
+
+  curve:
+    name: E2E worker curve
+    # The e2e job above runs the suite at `E2E_WORKERS: 3`, a number chosen by
+    # comparing a fourteen-core laptop to a four-vCPU runner in prose. This job
+    # stops doing that by comparison: it runs the whole suite at 2, 3 and 4
+    # workers ON THE RUNNER and writes the curve into this job's summary, next
+    # to the pin read back out of the workflow by the bench itself.
+    #
+    # Main pushes and manual runs only, deliberately. Three full suite runs is
+    # real runner time on every pull request, and a curve does not change
+    # because a spec was edited — it changes when the suite's shape does, which
+    # is what landing on main is. The e2e job above remains the thing that says
+    # whether the suite passes.
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    # Three full suite runs plus a build each. The e2e job's 40 is for one run;
+    # this is three, on a runner with four vCPUs, and the point of measuring the
+    # curve is not to have the measurement time out.
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      # The suite contains a spec that runs the store gate BINARY, so the gate
+      # has to exist here as it does in the e2e job above. Same two steps.
+      - run: npm --prefix delegate ci
+      - run: npm --prefix delegate run build
+      # No secrets at all, and that is the point of the bench's own environment
+      # handling: it clears ANTHROPIC_API_KEY from every run it makes, because a
+      # live call spends money and its latency belongs to a network rather than
+      # to the machine being measured. So this job measures the machine, and a
+      # job that needs no credentials is one that can also run anywhere.
+      - name: Measure the suite at each worker count
+        run: node scripts/e2e-workers-bench.mjs --workers=2,3,4 --json="$RUNNER_TEMP/worker-curve.json"
+      - name: Upload the raw measurements and any retry forensics
+        # Not failure-gated, and not conditional on the step above passing: the
+        # numbers are the record even when a count timed out, which is a result
+        # rather than an error. Comparing this file across weeks is how a change
+        # in the runner gets noticed.
+        #
+        # `test-results/` rides along because `trace: 'on-all-retries'` puts the
+        # trace of a failed attempt exactly where the bench reads the fact that
+        # it happened: a run that hid a test behind a retry names it in its
+        # output, and the trace is what turns that name into a cause. A stable
+        # run writes nothing there, which is why this is not a cost on the runs
+        # that are fine.
+        if: always() && !cancelled()
+        uses: actions/upload-artifact@v7
+        with:
+          name: worker-curve
+          path: |
+            ${{ runner.temp }}/worker-curve.json
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 90
 
   lighthouse:
     name: Lighthouse a11y + SEO gate
@@ -71,23 +485,11 @@ jobs:
       - run: npm ci
       - uses: browser-actions/setup-chrome@v2
       - run: npm run build
+      # Starts the server, waits for it with a real request and a real deadline,
+      # audits both routes, and stops the server in a `finally`. The shell version
+      # of this had two bugs that a reader could not see: a server that never came
+      # up fell through to the audits, whose empty reports the gate read as a
+      # pass; and `kill $SERVER` sat AFTER the audits, so a lighthouse failure —
+      # the case this gate exists to catch — skipped the cleanup.
       - name: Audit both routes and enforce the 100/100 gate
-        run: |
-          npm run start -- -p 3100 > /tmp/lh-server.log 2>&1 &
-          SERVER=$!
-          # Wait until the server answers before auditing.
-          for i in $(seq 1 30); do
-            curl -sf -o /dev/null http://localhost:3100/ && break
-            sleep 1
-          done
-          npx lighthouse http://localhost:3100/ --output=json \
-            --output-path=/tmp/lh-root.json \
-            --only-categories=accessibility,seo \
-            --chrome-flags="--headless=new --no-sandbox" --quiet
-          npx lighthouse http://localhost:3100/galaxy --output=json \
-            --output-path=/tmp/lh-galaxy.json \
-            --only-categories=accessibility,seo \
-            --chrome-flags="--headless=new --no-sandbox" --quiet \
-            --max-wait-for-load=60000
-          kill $SERVER 2>/dev/null || true
-          node scripts/lighthouse-gate.mjs /tmp/lh-root.json /tmp/lh-galaxy.json
+        run: node scripts/lighthouse-run.mjs

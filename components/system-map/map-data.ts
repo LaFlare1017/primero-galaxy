@@ -294,7 +294,7 @@ export const NODES: MapNode[] = [
     layer: 'ops',
     role: 'Build & runtime config',
     detail:
-      'next.config.js isolates the e2e build to .next-e2e via NEXT_E2E_DIST_DIR and whitelists the favicon domain; tailwind.config.js holds the design tokens; playwright.config.ts runs e2e against a production build on 3100.',
+      'next.config.js isolates the e2e build to .next-e2e via NEXT_E2E_DIST_DIR and whitelists the favicon domain; tailwind.config.js holds the design tokens; the Playwright suite serves that build once and gives each worker its own server and store.',
     grid: [0, 5],
     height: 2,
   },

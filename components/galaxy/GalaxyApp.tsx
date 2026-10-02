@@ -12,6 +12,13 @@ import { CompanySearch } from '@/components/ui/CompanySearch';
 import { ToastStack } from '@/components/ui/ToastStack';
 import { canUseWebGL, WebGLFallback } from '@/components/galaxy/WebGLFallback';
 import { GalaxyErrorBoundary } from '@/components/galaxy/GalaxyErrorBoundary';
+import {
+  CLEAR_SELECTION,
+  CLOSE_ADD_FORM,
+  CLOSE_SEARCH,
+  dismissalRow,
+  galaxyGates,
+} from '@/components/galaxy/galaxyKeys';
 
 // Three.js must never run on the server; load it client-side only.
 const GalaxyScene = dynamic(() => import('./GalaxyScene'), {
@@ -21,6 +28,10 @@ const GalaxyScene = dynamic(() => import('./GalaxyScene'), {
 
 export default function GalaxyApp({ companies: baseCompanies }: { companies: Company[] }) {
   const userStars = useGalaxyStore((s) => s.userStars);
+  // The ladder's bottom rung reads this: Escape drops the selection only when
+  // there is one to drop, which is the difference between a key that returns to
+  // the galaxy and one that does nothing there.
+  const hasSelection = useGalaxyStore((s) => s.selectedStar !== null);
   const [addOpen, setAddOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [webglOk, setWebglOk] = useState<boolean | null>(null);
@@ -60,23 +71,30 @@ export default function GalaxyApp({ companies: baseCompanies }: { companies: Com
   );
 
   // Esc: close the search palette or add form first, otherwise return to the
-  // galaxy
+  // galaxy. WHICH press does what is the declaration's answer rather than this
+  // listener's — components/galaxy/galaxyKeys.ts holds the ladder, its order
+  // included, so the rung a press reaches cannot differ from the one the
+  // coherence checks walked.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape') return;
-      if (searchOpen) {
+      const row = dismissalRow(
+        e.key,
+        galaxyGates({ search: searchOpen, add: addOpen, selection: hasSelection }),
+      );
+      if (row === undefined) return;
+      if (row.id === CLOSE_SEARCH.id) {
         setSearchOpen(false);
         return;
       }
-      if (addOpen) {
+      if (row.id === CLOSE_ADD_FORM.id) {
         setAddOpen(false);
         return;
       }
-      useGalaxyStore.getState().clearSelection();
+      if (row.id === CLEAR_SELECTION.id) useGalaxyStore.getState().clearSelection();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [searchOpen, addOpen]);
+  }, [searchOpen, addOpen, hasSelection]);
 
   // Debug handle (harmless in prod): drive/observe the store from the console
   useEffect(() => {

@@ -4,6 +4,7 @@ import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Company } from '@/types';
 import { COLORS, maturityColor } from '@/lib/constants';
+import { usePrefersReducedMotion } from '@/components/ui/useReducedMotion';
 
 const UP = new THREE.Vector3(0, 1, 0);
 const DRAW_DURATION = 2; // seconds
@@ -22,6 +23,7 @@ export function TrajectoryPath({ company }: { company: Company }) {
   const orbRef = useRef<THREE.Mesh>(null);
   const ghostRef = useRef<THREE.Mesh>(null);
   const startDraw = useRef(0); // clock time when drawing began (delay per star)
+  const reducedMotion = usePrefersReducedMotion();
 
   const { curve, geometry, vertexCount, milestonePoints } = useMemo(() => {
     const start = new THREE.Vector3(
@@ -76,6 +78,19 @@ export function TrajectoryPath({ company }: { company: Company }) {
     const t = state.clock.elapsedTime;
     if (startDraw.current === 0) startDraw.current = t;
     const elapsed = t - startDraw.current;
+
+    // Reduced motion: render the trajectory as a static diagram — the full
+    // line, no traveling orb, no ghost breathe. The path carries the info.
+    if (reducedMotion) {
+      if (drawProgress.current < 1) {
+        drawProgress.current = 1;
+        geometry.setDrawRange(0, vertexCount);
+        orbProgress.current = 0;
+      }
+      if (orbRef.current) orbRef.current.scale.setScalar(0);
+      if (ghostRef.current) ghostRef.current.scale.setScalar(ghostScale);
+      return;
+    }
 
     // 1. Draw on
     if (drawProgress.current < 1) {

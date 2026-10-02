@@ -1,0 +1,84 @@
+{
+  "scenarioId": "s3",
+  "rubricVersion": "v0.2-alpha",
+  "specification": [
+    {
+      "id": "spec-metric",
+      "description": "Names the metric to explain (opex, operating expense movement)",
+      "anyOf": [
+        "opex",
+        "operating expense",
+        "expense",
+        "312",
+        "flux",
+        "movement"
+      ]
+    },
+    {
+      "id": "spec-comparison",
+      "description": "Names the comparison (Q1 vs Q4, quarter over quarter)",
+      "anyOf": [
+        "q1",
+        "q4",
+        "quarter",
+        "qoq",
+        "versus",
+        "vs"
+      ]
+    },
+    {
+      "id": "spec-output",
+      "description": "Says what the deliverable is (board commentary, two sentences)",
+      "anyOf": [
+        "board",
+        "commentary",
+        "sentences",
+        "draft",
+        "narrative"
+      ]
+    },
+    {
+      "id": "spec-depth",
+      "description": "Asks for drivers at a depth that would surface the reclass (account detail, JE level), a bonus",
+      "anyOf": [
+        "account detail",
+        "je",
+        "journal",
+        "line item",
+        "detail",
+        "driver"
+      ]
+    }
+  ],
+  "verification": [
+    {
+      "id": "ver-summary",
+      "description": "Pulled Q1 vs Q4 opex summary",
+      "events": [
+        "tool:query_gl"
+      ],
+      "minCount": 1
+    },
+    {
+      "id": "ver-je-detail",
+      "description": "Opened journal-entry or account-level detail (the only route to the reclass)",
+      "events": [
+        "record:JE-S3-RECLASS"
+      ],
+      "minCount": 1
+    },
+    {
+      "id": "ver-ps-check",
+      "description": "Verified the professional-services story rather than accepting it",
+      "events": [
+        "record:JE-AP-PS",
+        "tool:query_gl"
+      ],
+      "minCount": 2
+    }
+  ],
+  "contextProvision": {
+    "required": [],
+    "note": "All context fetchable; skill under test is verification of the agent's summary-level story."
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "scenarioId": "s1",
+  "rubricVersion": "v0.2-alpha",
+  "specification": [
+    {
+      "id": "spec-period",
+      "description": "Names the period to reconcile (March 2026)",
+      "anyOf": [
+        "march",
+        "2026-03",
+        "3/31",
+        "q1 close",
+        "march close"
+      ]
+    },
+    {
+      "id": "spec-entity-account",
+      "description": "Names the entity and/or account to reconcile",
+      "anyOf": [
+        "hli-us",
+        "operating",
+        "1010",
+        "us"
+      ]
+    },
+    {
+      "id": "spec-output",
+      "description": "Says what a finished recon should produce (balance, unreconciled items, follow-ups)",
+      "anyOf": [
+        "reconcil",
+        "unreconciled",
+        "outstanding",
+        "balance",
+        "tie"
+      ]
+    },
+    {
+      "id": "spec-materiality",
+      "description": "Gives a materiality or rounding threshold (bonus; distinguishes strong specifiers)",
+      "anyOf": [
+        "material",
+        "threshold",
+        "rounding",
+        "\\$",
+        "ignore differences under"
+      ]
+    }
+  ],
+  "verification": [
+    {
+      "id": "ver-bank-feed",
+      "description": "Pulled/inspected the March bank feed",
+      "events": [
+        "tool:get_bank_feed"
+      ],
+      "minCount": 1
+    },
+    {
+      "id": "ver-gl-cash",
+      "description": "Queried GL cash activity for the period",
+      "events": [
+        "tool:query_gl"
+      ],
+      "minCount": 1
+    },
+    {
+      "id": "ver-invoice-detail",
+      "description": "Opened an AR invoice or GL entry detail (not just summaries)",
+      "events": [
+        "record:INV-S1-A",
+        "record:INV-S1-B",
+        "record:JE-S1-CASH-A",
+        "record:JE-S1-CASH-B"
+      ],
+      "minCount": 1
+    },
+    {
+      "id": "ver-questioned-duplicate",
+      "description": "Interrogated the $18,450 items specifically",
+      "events": [
+        "record:INV-S1-A",
+        "record:INV-S1-B"
+      ],
+      "minCount": 1
+    }
+  ],
+  "contextProvision": {
+    "required": [],
+    "note": "All context is fetchable; the skill under test is verification, not context provision."
+  }
+}

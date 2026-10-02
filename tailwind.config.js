@@ -18,6 +18,33 @@ module.exports = {
         'ui-muted': '#8E8EAE', // ≥4.5:1 on void/nebula (was #6B6B8A @ 4.0:1)
         'ui-dim': '#B0B0C8',
         'border-subtle': '#1A1A3A',
+        // shadcn-compatible token layer (Circle extraction): standard names so
+        // vendored shadcn/ui components work verbatim. Dark values at :root
+        // (Galaxy/FinBench chrome), light values under .delegate-light — see
+        // the :root/.delegate-light blocks in app/globals.css.
+        background: 'var(--sc-background)',
+        foreground: 'var(--sc-foreground)',
+        card: 'var(--sc-card)',
+        'card-foreground': 'var(--sc-card-foreground)',
+        popover: 'var(--sc-popover)',
+        'popover-foreground': 'var(--sc-popover-foreground)',
+        primary: 'var(--sc-primary)',
+        'primary-foreground': 'var(--sc-primary-foreground)',
+        secondary: 'var(--sc-secondary)',
+        'secondary-foreground': 'var(--sc-secondary-foreground)',
+        muted: 'var(--sc-muted)',
+        'muted-foreground': 'var(--sc-muted-foreground)',
+        accent: 'var(--sc-accent)',
+        'accent-foreground': 'var(--sc-accent-foreground)',
+        destructive: 'var(--sc-destructive)',
+        border: 'var(--sc-border)',
+        input: 'var(--sc-input)',
+        ring: 'var(--sc-ring)',
+      },
+      borderRadius: {
+        lg: 'var(--sc-radius)',
+        md: 'calc(var(--sc-radius) - 2px)',
+        sm: 'calc(var(--sc-radius) - 4px)',
       },
       fontFamily: {
         sans: ['var(--font-geist-sans)', 'Geist', 'system-ui', 'sans-serif'],
@@ -62,5 +89,5 @@ module.exports = {
       },
     },
   },
-  plugins: [],
+  plugins: [require('tailwindcss-animate')],
 };

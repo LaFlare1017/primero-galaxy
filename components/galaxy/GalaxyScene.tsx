@@ -4,6 +4,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Company } from '@/types';
 import { useGalaxyStore } from '@/store/galaxyStore';
+import { usePrefersReducedMotion } from '@/components/ui/useReducedMotion';
 import { StarField } from './StarField';
 import { StarLabels } from './StarLabels';
 import { DustParticles } from './DustParticles';
@@ -30,15 +31,19 @@ function GalaxyGroup({ companies }: { companies: Company[] }) {
   const selectStar = useGalaxyStore((s) => s.selectStar);
   const selectedStar = useGalaxyStore((s) => s.selectedStar);
   const showTrajectory = useGalaxyStore((s) => s.showTrajectory);
+  const reducedMotion = usePrefersReducedMotion();
 
-  // The galaxy rotates very slowly (imperceptible drift, adds life)
+  // The galaxy rotates very slowly (imperceptible drift, adds life).
+  // Pure idle decoration — skipped entirely under prefers-reduced-motion.
   useFrame((_, delta) => {
+    if (reducedMotion) return;
     if (groupRef.current) groupRef.current.rotation.y += delta * 0.008;
   });
 
   return (
     <>
-      <group ref={groupRef}>
+      {/* Named for the reduced-motion e2e probe (window.__galaxy). */}
+      <group ref={groupRef} name="galaxy-group">
         <StarField companies={companies} onStarHover={hoverStar} onStarSelect={selectStar} />
         <ConstellationLines companies={companies} />
         <StarLabels companies={companies} groupRef={groupRef} />

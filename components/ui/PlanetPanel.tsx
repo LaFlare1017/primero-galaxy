@@ -38,9 +38,17 @@ export function PlanetPanel() {
   return (
     <AnimatePresence>
       {selected && (
+        // The drawer stops where the bottom bar begins (`--bottom-bar-h`,
+        // declared in app/globals.css) rather than reaching bottom-0. It is
+        // z-30 against the bar's z-20, so a full-height panel simply COVERED
+        // that end of the bar: with a profile open, Reset view, Search, Add
+        // Company and Share were all behind an opaque drawer, unclickable by
+        // pointer and reachable only by tab order. Bar height in one place
+        // means the two can move together; the panel owns the offset so the
+        // chrome is never what has to give way.
         <motion.aside
           key={selected.id}
-          className="fixed bottom-0 right-0 top-0 z-30 flex w-[400px] max-w-[92vw] flex-col overflow-y-auto border-l border-border-subtle bg-void/95 backdrop-blur-xl"
+          className="fixed bottom-[var(--bottom-bar-h)] right-0 top-0 z-30 flex w-[400px] max-w-[92vw] flex-col overflow-y-auto border-l border-border-subtle bg-void/95 backdrop-blur-xl"
           initial={{ x: '100%' }}
           animate={{ x: 0 }}
           exit={{ x: '100%' }}
@@ -155,7 +163,7 @@ export function PlanetPanel() {
                 />
               </div>
               {!selected.isUserAdded && (
-                <p className="mt-1.5 text-[10px] text-ui-muted/60">
+                <p className="mt-1.5 text-[10px] text-ui-muted">
                   Directional estimate from public AI disclosures (research use only)
                 </p>
               )}
@@ -166,7 +174,7 @@ export function PlanetPanel() {
               <div className="flex justify-center">
                 <RadarChart company={selected} />
               </div>
-              <div className="mt-1 flex items-center justify-center gap-1.5 text-[10px] text-ui-muted/70">
+              <div className="mt-1 flex items-center justify-center gap-1.5 text-[10px] text-ui-muted">
                 <svg width="18" height="8" aria-hidden="true">
                   <line
                     x1="0"
@@ -188,7 +196,7 @@ export function PlanetPanel() {
                 <span className="text-[11px] font-medium uppercase tracking-label text-ui-muted">
                   Maturity dimensions
                 </span>
-                <span className="flex items-center gap-1.5 text-[10px] text-ui-muted/70">
+                <span className="flex items-center gap-1.5 text-[10px] text-ui-muted">
                   <button
                     onClick={() => setShowMethodology(!showMethodology)}
                     className="rounded-sm px-1 py-0.5 text-[10px] text-ui-muted transition-colors hover:text-star-bright"
@@ -220,7 +228,7 @@ export function PlanetPanel() {
                       {DIMENSIONS.map((d) => (
                         <div key={d.key}>
                           <div className="text-[11px] font-medium text-ui-dim">{d.label}</div>
-                          <p className="mt-0.5 text-[10px] leading-relaxed text-ui-muted/80">
+                          <p className="mt-0.5 text-[10px] leading-relaxed text-ui-muted">
                             {d.description}
                           </p>
                         </div>

@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>A keyboard is data — LinkedIn carousel</title>
+    <!--
+      Self-contained LinkedIn carousel: 10 slides at 1080x1080, in the palette of
+      the product this is about (app/globals.css).
+
+      Export: node linkedin/render.mjs   → linkedin/export/carousel.pdf (upload as
+      a LinkedIn document) plus one PNG per slide.
+
+      Editing: every slide is a <section class="slide" data-name="…">, so a slide
+      can be re-ordered or replaced without touching CSS. Keep body copy short —
+      these are read on a phone.
+    -->
+    <style>
+      :root {
+        --void: #030308;
+        --nebula: #0a0a1a;
+        --star: #ffffff;
+        --star-dim: #4a4a6a;
+        --ui-dim: #b0b0c8;
+        --ui-muted: #8e8eae;
+        --border: #1a1a3a;
+        --teal: #00d9c0;
+        --amber: #f7c548;
+        --orange: #ff6b35;
+        --violet: #7b61ff;
+        --sans: ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      }
+
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        background: #0b0b12;
+        font-family: var(--sans);
+        color: var(--star);
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .deck { display: flex; flex-direction: column; align-items: center; gap: 36px; padding: 36px; }
+
+      .slide {
+        position: relative;
+        width: 1080px;
+        height: 1080px;
+        overflow: hidden;
+        /* Keep the dark panels and accents in the exported PDF. */
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        background:
+          radial-gradient(ellipse 70% 55% at 50% 34%, rgba(10, 10, 26, 0.95) 0%, rgba(3, 3, 8, 0) 72%),
+          var(--void);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        gap: 40px;
+        padding: 78px 80px 66px;
+      }
+
+      /* A few stars, placed by hand so the field never crowds the type. */
+      .slide::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background-image:
+          radial-gradient(1.6px 1.6px at 12% 18%, rgba(255, 255, 255, 0.55), transparent),
+          radial-gradient(1.4px 1.4px at 82% 12%, rgba(255, 255, 255, 0.4), transparent),
+          radial-gradient(1.8px 1.8px at 68% 78%, rgba(255, 255, 255, 0.32), transparent),
+          radial-gradient(1.3px 1.3px at 24% 88%, rgba(255, 255, 255, 0.3), transparent),
+          radial-gradient(1.5px 1.5px at 92% 56%, rgba(255, 255, 255, 0.26), transparent),
+          radial-gradient(1.2px 1.2px at 44% 8%, rgba(255, 255, 255, 0.22), transparent);
+      }
+
+      .slide > * { position: relative; z-index: 1; }
+
+      .top { display: flex; align-items: center; justify-content: space-between; }
+      .label {
+        font-family: var(--mono);
+        font-size: 22px;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        color: var(--ui-muted);
+      }
+      .count { font-family: var(--mono); font-size: 22px; color: var(--star-dim); }
+
+      h1 { font-size: 92px; line-height: 1.02; letter-spacing: -0.03em; font-weight: 700; }
+      h2 { font-size: 70px; line-height: 1.06; letter-spacing: -0.025em; font-weight: 700; }
+      .accent { color: var(--teal); }
+      .amber { color: var(--amber); }
+      .warn { color: var(--orange); }
+      .violet { color: var(--violet); }
+
+      p { font-size: 36px; line-height: 1.4; color: var(--ui-dim); }
+      p.lead { font-size: 42px; color: var(--star); }
+      .small { font-size: 30px; color: var(--ui-muted); line-height: 1.45; }
+
+      .kbd {
+        font-family: var(--mono);
+        font-size: 30px;
+        color: var(--star);
+        background: var(--nebula);
+        border: 1px solid #2a2a4a;
+        border-radius: 10px;
+        padding: 8px 18px;
+        white-space: nowrap;
+      }
+
+      .card {
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        background: rgba(10, 10, 26, 0.72);
+        padding: 26px 30px;
+      }
+
+      .body { display: flex; flex-direction: column; gap: 34px; justify-content: center; flex: 1; }
+      .center { align-items: center; text-align: center; }
+
+      .stats { display: flex; gap: 28px; }
+      .stat { flex: 1; }
+      .stat b { display: block; font-size: 62px; letter-spacing: -0.03em; font-weight: 700; }
+      .stat span { font-family: var(--mono); font-size: 21px; letter-spacing: 0.1em; color: var(--ui-muted); text-transform: uppercase; }
+
+      /* Slide 2 / 4 — fan-out diagrams */
+      .fan { display: flex; align-items: center; gap: 26px; }
+      .fan .spine { flex: 0 0 300px; }
+      .fan .arrow { flex: 0 0 40px; color: var(--star-dim); font-size: 40px; text-align: center; }
+      .fan .readers { flex: 1; display: grid; gap: 14px; }
+      .reader { display: flex; align-items: center; gap: 16px; }
+      .dot { width: 12px; height: 12px; border-radius: 99px; flex: 0 0 12px; }
+      .reader span { font-size: 32px; color: var(--star); }
+      .reader em { font-family: var(--mono); font-size: 22px; color: var(--ui-muted); font-style: normal; }
+      /* The fan's four readers read as a list, not a 2x2 grid: one of them is the
+         odd one out and a wrapped label makes it look like two. */
+      .stack4 { display: flex; flex-direction: column; gap: 18px; }
+
+      /* Slide 3 — the layer stack */
+      .layers { display: flex; flex-direction: column; gap: 12px; }
+      .layer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 20px 26px;
+        font-size: 30px;
+        background: rgba(10, 10, 26, 0.6);
+      }
+      .layer.hit { border-color: var(--orange); background: rgba(255, 107, 53, 0.09); }
+      .layer.hit .verdict { color: var(--orange); font-family: var(--mono); font-size: 24px; }
+
+      /* Slide 5 — three questions */
+      .three { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+      .col { display: flex; flex-direction: column; gap: 14px; }
+      .col h3 { font-size: 30px; letter-spacing: -0.01em; }
+      .col p { font-size: 26px; line-height: 1.35; }
+      .cannot { color: var(--ui-muted); font-size: 24px; line-height: 1.35; border-top: 1px solid var(--border); padding-top: 12px; }
+      .cannot b { color: var(--orange); font-weight: 600; }
+
+      /* Slide 6 — the sequence */
+      .seq { display: flex; flex-direction: column; gap: 18px; }
+      .step { display: flex; gap: 20px; align-items: flex-start; }
+      .step .n {
+        flex: 0 0 46px; height: 46px; border-radius: 99px;
+        border: 1px solid var(--border); color: var(--ui-muted);
+        font-family: var(--mono); font-size: 22px;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .step .txt { font-size: 30px; line-height: 1.4; }
+      .muted-step .txt { color: var(--ui-muted); }
+      .muted-step .n { opacity: 0.5; }
+
+      /* Slide 8 — the ledger */
+      .ledger { display: flex; flex-direction: column; gap: 14px; }
+      .row { display: flex; gap: 20px; align-items: baseline; border-bottom: 1px solid var(--border); padding-bottom: 14px; }
+      .row:last-child { border-bottom: none; }
+      .row .sym { flex: 0 0 300px; font-size: 26px; color: var(--star); }
+      .row .cause { font-size: 25px; color: var(--ui-muted); }
+
+      /* Slide 9 — the recipe */
+      .steps { display: flex; flex-direction: column; gap: 20px; }
+      .recipe { display: flex; gap: 22px; align-items: baseline; }
+      .recipe .k { font-family: var(--mono); font-size: 24px; color: var(--teal); flex: 0 0 150px; }
+      .recipe .v { font-size: 30px; color: var(--star); }
+
+      .footer-note { font-size: 26px; color: var(--ui-muted); }
+
+      @page { size: 1080px 1080px; margin: 0; }
+
+      @media print {
+        body { background: #fff; }
+        .deck { padding: 0; gap: 0; display: block; }
+        .slide { page-break-after: always; break-after: page; }
+        .slide:last-child { page-break-after: auto; break-after: auto; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="deck">
+      <!-- 1 -->
+      <section class="slide" data-name="01-cover">
+        <div class="top">
+          <span class="label">Build notes · <span data-stat="date"></span></span>
+          <span class="count" data-count></span>
+        </div>
+        <div class="body" style="justify-content: center; gap: 44px">
+          <h1>A keyboard<br />is data.</h1>
+          <p class="lead">
+            <span data-stat="eraCommits"></span> commits to make an invisible interface
+            checkable — and the <span data-stat="surfacesOfDeclared"></span> surfaces whose
+            keyboard turned out to be the bug.
+          </p>
+        </div>
+        <div class="stats">
+          <div class="stat"><b class="accent" data-stat="declaredKeyboards"></b><span>declared keyboards</span></div>
+          <div class="stat"><b data-stat="states"></b><span>states enumerated</span></div>
+          <div class="stat"><b data-stat="tests"></b><span>end-to-end tests</span></div>
+        </div>
+      </section>
+
+      <!-- 2 -->
+      <section class="slide" data-name="02-four-copies">
+        <div class="top">
+          <span class="label">The problem</span>
+          <span class="count" data-count></span>
+        </div>
+        <div class="body">
+          <h2>One key, written down<br />four times.</h2>
+          <div class="fan">
+            <div class="spine card" style="text-align: center">
+              <span class="kbd">⌘K</span>
+              <p class="small" style="margin-top: 14px">the binding</p>
+            </div>
+            <div class="arrow">→</div>
+            <div class="readers stack4">
+              <div class="reader"><span class="dot" style="background: var(--teal)"></span><span>the event handler</span></div>
+              <div class="reader"><span class="dot" style="background: var(--amber)"></span><span>the aria string</span></div>
+              <div class="reader"><span class="dot" style="background: var(--violet)"></span><span>the shortcut sheet</span></div>
+              <div class="reader"><span class="dot" style="background: var(--orange)"></span><span>the chord menu</span></div>
+            </div>
+          </div>
+          <p>Four copies that agreed by discipline — and nothing that could tell when they stopped.</p>
+        </div>
+        <p class="footer-note">
+          The aria string is the one nobody notices: it is a claim about the element it sits on.
+        </p>
+      </section>
+
+      <!-- 3 -->
+      <section class="slide" data-name="03-two-layers">
+        <div class="top">
+          <span class="label">The bug that started it</span>
+          <span class="count" data-count></span>
+        </div>
+        <div class="body">
+          <h2>One Escape<br />closed two layers.</h2>
+          <div class="layers">
+            <div class="layer hit"><span>shortcut sheet</span><span class="verdict">closed ✗</span></div>
+            <div class="layer hit"><span>watch pane</span><span class="verdict">closed ✗</span></div>
+            <div class="layer"><span>the grid</span><span style="color: var(--ui-muted); font-size: 24px">untouched</span></div>
+          </div>
+          <p>
+            A layer flips to <span style="font-family: var(--mono); font-size: 30px">closed</span> before the
+            page asks who owns the key — so the answer was “nobody”, and the press fell through.
+          </p>
+        </div>
+        <p class="footer-note">Ordering that lives in the DOM's timing cannot be reviewed. It has to be asked about state.</p>
+      </section>
+
+      <!-- 4 -->
+      <section class="slide" data-name="04-one-declaration">
+        <div class="top">
+          <span class="label">The move</span>
+          <span class="count" data-count></span>
+        </div>
+        <div class="body">
+          <h2>One declaration,<br />read four ways.</h2>
+          <div class="fan">
+            <div class="spine card">
+              <span class="label" style="font-size: 19px">declaration</span>
+              <p style="font-size: 26px; color: var(--star); margin-top: 12px; line-height: 1.5">
+                id · keys · gate<br />mount · under · yields
+              </p>
+              <p class="small" style="margin-top: 10px">no React · no DOM · no imports</p>
+            </div>
+            <div class="arrow">→</div>
+            <div class="readers stack4">
+              <div class="reader"><span class="dot" style="background: var(--teal)"></span><span>dispatch <em>what runs</em></span></div>
+              <div class="reader"><span class="dot" style="background: var(--amber)"></span><span>aria <em>what is claimed</em></span></div>
+              <div class="reader"><span class="dot" style="background: var(--violet)"></span><span>the sheet <em>what is shown</em></span></div>
+              <div class="reader"><span class="dot" style="background: var(--orange)"></span><span>the menu <em>what is offered</em></span></div>
+            </div>
+          </div>
+          <p class="lead">
+            The surface supplies <span class="accent">behaviour</span>, keyed by row id. That is all.
+          </p>
+        </div>
+        <p class="footer-note">Add a row without behaviour and the menu can’t offer it. Add behaviour without a row and the sheet can’t show it.</p>
+      </section>
+
+      <!-- 5 -->
+      <section class="slide" data-name="05-three-questions">
+        <div class="top">
+          <span class="label">The checks</span>
+          <span class="count" data-count></span>
+        </div>
+        <div class="body">
+          <h2>Three questions one<br />declaration can’t ask itself.</h2>
+          <div class="three">
+            <div class="col card">
+              <h3 class="accent">Coherence</h3>
+              <p>Does it agree with itself, in <em>every</em> state it can be in?</p>
+              <p class="cannot"><b>Can’t see:</b> the page. It assumes the whole declaration is implemented.</p>
+            </div>
+            <div class="col card">
+              <h3 class="amber">Agreement</h3>
+              <p>Do two declarations of one binding describe it the same way?</p>
+              <p class="cannot"><b>Can’t see:</b> each surface’s own words — ids and labels stay out.</p>
+            </div>
+            <div class="col card">
+              <h3 class="violet">Coverage</h3>
+              <p>Does pressing it actually do something visible?</p>
+              <p class="cannot"><b>Can’t see:</b> whether the declaration is right. Only what it declares.</p>
+            </div>
+          </div>
+        </div>
+        <p class="footer-note">Coherence and agreement run in node, in milliseconds. Only coverage needs a browser.</p>
+      </section>
+
+      <!-- 6 -->
+      <section class="slide" data-name="06-capture-phase">
+        <div class="top">
+          <span class="label">One browser detail</span>
+          <span class="count" data-count></span>
+        </div>
+        <div class="body">
+          <h2>The DOM’s timing is<br />part of your interface.</h2>
+          <div class="seq">
+            <div class="step">
+              <span class="n">1</span>
+              <span class="txt"><span class="kbd">Esc</span> reaches <span style="font-family: var(--mono)">document</span> in the <b class="warn">capture</b> phase.</span>
+            </div>
+            <div class="step">
+              <span class="n">2</span>
+              <span class="txt">The overlay library calls <span style="font-family: var(--mono)">onEscapeKeyDown</span> — and dismisses unless someone claims it.</span>
+            </div>
+            <div class="step muted-step">
+              <span class="n">3</span>
+              <span class="txt">Our handler on the input runs in the <b>bubble</b> phase. It runs <em>after</em>, so it never mattered.</span>
+            </div>
+          </div>
+          <p>
+            The branch was dead from the day it was written. The fix was one prop — and then saying
+            <span class="accent"> in the declaration</span> that the two Escapes are one key in two states.
+          </p>
+        </div>
+        <p class="footer-note">When a library owns an overlay, its dismissal path is an API.</p>
+      </section>
+
+      <!-- 7 -->
+      <section class="slide" data-name="07-check-that-passed">
+        <div class="top">
+          <span class="label">The lesson that cost the most</span>
+          <span class="count" data-count></span>
+        </div>
+        <div class="body">
+          <h2>The check that<br />failed to fail.</h2>
+          <div class="card" style="display: flex; align-items: center; gap: 26px">
+            <span style="font-size: 54px">✅</span>
+            <p style="color: var(--star)">
+              Mutation applied: a binding’s keys emptied, so it does nothing.<br />
+              The check <b>passed</b>.
+            </p>
+          </div>
+          <p>
+            Our coverage runner iterates a binding’s declared <b>keys</b>. With none declared, it walks
+            straight past — no press, no exercise, no failure. The check that looked like it covered the
+            case compared <em>ids</em>, which were still fine.
+          </p>
+          <p class="small">
+            Now refused before a browser opens: “no declared binding may name zero keys, and be exercised by
+            nobody.”
+          </p>
+        </div>
+        <p class="footer-note">A check you have never seen fail is a claim, not a check.</p>
+      </section>
+
+      <!-- 8 -->
+      <section class="slide" data-name="08-what-it-found">
+        <div class="top">
+          <span class="label">The surprise</span>
+          <span class="count" data-count></span>
+        </div>
+        <div class="body">
+          <h2>Declaring a surface<br />finds bugs.</h2>
+          <div class="ledger">
+            <div class="row"><span class="sym warn">A dead Escape branch</span><span class="cause">the dismissal key was handled in the bubble phase</span></div>
+            <div class="row"><span class="sym warn">A form that closed the panel</span><span class="cause">one press dismissed two layers</span></div>
+            <div class="row"><span class="sym warn">A documented key the row lacked</span><span class="cause">the sheet promised Ctrl+K; the binding had one spelling</span></div>
+            <div class="row"><span class="sym warn">A duplicated listener</span><span class="cause">two components, one key, no owner</span></div>
+          </div>
+          <p class="lead"><span data-stat="surfacesWithBugs"></span> of <span data-stat="declaredKeyboards"></span> surfaces produced a real defect on the day they were declared.</p>
+        </div>
+        <p class="footer-note">Declaring an interface isn’t documentation. It’s a debugging instrument.</p>
+      </section>
+
+      <!-- 9 -->
+      <section class="slide" data-name="09-recipe">
+        <div class="top">
+          <span class="label">Steal this</span>
+          <span class="count" data-count></span>
+        </div>
+        <div class="body">
+          <h2>Five steps, in this order.</h2>
+          <div class="steps">
+            <div class="recipe"><span class="k">declare</span><span class="v">rows, gates, mounts, stacking — as data</span></div>
+            <div class="recipe"><span class="k">read</span><span class="v">the page dispatches <em>from</em> it; aria is built <em>from</em> it</span></div>
+            <div class="recipe"><span class="k">enumerate</span><span class="v">the states it can be in, and the invariant that filters them</span></div>
+            <div class="recipe"><span class="k">press</span><span class="v">every binding, from a state where it is live, demanding a visible effect</span></div>
+            <div class="recipe"><span class="k">mutate</span><span class="v">break it on purpose, until the check dies on the assertion it was aimed at</span></div>
+          </div>
+        </div>
+        <p class="footer-note">The step people skip is the last one — and it is the only one that tells you the check works.</p>
+      </section>
+
+      <!-- 10 -->
+      <section class="slide" data-name="10-close">
+        <div class="top">
+          <span class="label">Takeaway</span>
+          <span class="count" data-count></span>
+        </div>
+        <div class="body" style="justify-content: center; gap: 40px">
+          <h1>
+            Write down what<br />you believe.<br />
+            <span class="accent">Then make the test<br />fail on purpose.</span>
+          </h1>
+          <p class="lead">
+            Which claim in your codebase is written down in more than one place? Start there.
+          </p>
+        </div>
+        <p class="footer-note">Full write-up in the comments · <span data-stat="tests"></span> tests · <span data-stat="declaredKeyboards"></span> declared keyboards · <span data-stat="surfacesOfDeclared"></span> surfaces found a bug by declaring</p>
+      </section>
+    </div>
+  </body>
+</html>

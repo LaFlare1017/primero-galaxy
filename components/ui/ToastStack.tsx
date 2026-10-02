@@ -48,7 +48,10 @@ export function ToastStack() {
   }, []);
 
   return (
-    <div className="fixed bottom-20 left-1/2 z-50 flex -translate-x-1/2 flex-col items-center gap-2">
+    // Clears the bottom bar by a gap rather than by a number of its own: the
+    // toasts belong above the chrome, and `1.5rem` over `--bottom-bar-h` is
+    // what that has always measured (3.5 + 1.5 = the old bottom-20).
+    <div className="fixed bottom-[calc(var(--bottom-bar-h)_+_1.5rem)] left-1/2 z-50 flex -translate-x-1/2 flex-col items-center gap-2">
       <AnimatePresence>
         {toasts.map((toast) => (
           <motion.div

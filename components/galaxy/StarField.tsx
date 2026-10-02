@@ -4,6 +4,7 @@ import { useFrame, type ThreeEvent } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Company } from '@/types';
 import { useGalaxyStore } from '@/store/galaxyStore';
+import { usePrefersReducedMotion } from '@/components/ui/useReducedMotion';
 import { smoothstep } from '@/lib/utils';
 import { breathFrequency, breathPhase, maturityColor, starBreath } from '@/lib/constants';
 
@@ -67,6 +68,7 @@ export function StarField({ companies, onStarHover, onStarSelect }: StarFieldPro
 
   const mode = useGalaxyStore((s) => s.mode);
   const selectedId = useGalaxyStore((s) => s.selectedStar?.id);
+  const reducedMotion = usePrefersReducedMotion();
 
   const { baseScales, appearDelays, baseColors, featured, phases } = useMemo(() => {
     const baseScales = new Float32Array(companies.length);
@@ -147,16 +149,20 @@ export function StarField({ companies, onStarHover, onStarSelect }: StarFieldPro
       let scale = baseScales[i] * appear;
 
       // Every star breathes, phase- and frequency-offset so the whole field
-      // undulates organically instead of pulsing in lockstep.
-      scale *= 1 + starBreath.core.amplitude * Math.sin(t * breathFrequency(i, starBreath.core) + phases[i]);
+      // undulates organically instead of pulsing in lockstep. Breathing and
+      // flicker are pure idle decoration — frozen under prefers-reduced-motion
+      // (appear stagger and hover/selection feedback below stay live).
+      if (!reducedMotion) {
+        scale *= 1 + starBreath.core.amplitude * Math.sin(t * breathFrequency(i, starBreath.core) + phases[i]);
 
-      if (featured[i]) {
-        // Featured stars breathe a little stronger (extra bloom drive)
-        scale *= 1 + 0.05 * Math.sin(t * 1.57 + phases[i] * 1.3);
-      } else {
-        // Subtle irregular flicker on low-maturity stars (simulated instability)
-        const m = companies[i].maturity.overall;
-        if (m <= 40) scale *= 1 + 0.05 * Math.sin(t * (2.2 + (i % 5) * 0.35) + phases[i] * 3);
+        if (featured[i]) {
+          // Featured stars breathe a little stronger (extra bloom drive)
+          scale *= 1 + 0.05 * Math.sin(t * 1.57 + phases[i] * 1.3);
+        } else {
+          // Subtle irregular flicker on low-maturity stars (simulated instability)
+          const m = companies[i].maturity.overall;
+          if (m <= 40) scale *= 1 + 0.05 * Math.sin(t * (2.2 + (i % 5) * 0.35) + phases[i] * 3);
+        }
       }
 
       if (i === hoveredIndex.current) scale *= 1.3;
@@ -170,9 +176,14 @@ export function StarField({ companies, onStarHover, onStarSelect }: StarFieldPro
       mesh.setMatrixAt(i, dummy.matrix);
 
       // Color: base * dim, with a gentle universal shimmer and a stronger
-      // featured pulse to drive bloom
-      let b = dim * (0.92 + 0.08 * Math.sin(t * 1.3 + phases[i] * 1.7));
-      if (featured[i]) b *= 0.85 + 0.15 * Math.sin(t * 1.57 + phases[i]);
+      // featured pulse to drive bloom (shimmer frozen under reduced motion)
+      let b = dim;
+      if (!reducedMotion) {
+        b *= 0.92 + 0.08 * Math.sin(t * 1.3 + phases[i] * 1.7);
+        if (featured[i]) b *= 0.85 + 0.15 * Math.sin(t * 1.57 + phases[i]);
+      } else if (featured[i]) {
+        b *= 1.0; // keep featured stars at full base brightness
+      }
       color.setRGB(baseColors[i * 3] * b, baseColors[i * 3 + 1] * b, baseColors[i * 3 + 2] * b);
       mesh.setColorAt(i, color);
 
@@ -183,11 +194,13 @@ export function StarField({ companies, onStarHover, onStarSelect }: StarFieldPro
         const haloScale =
           scale *
           HALO_RATIO *
-          (1 +
-            starBreath.halo.amplitude *
-              Math.sin(
-                t * breathFrequency(i, starBreath.halo) + phases[i] + starBreath.halo.phaseBias
-              ));
+          (reducedMotion
+            ? 1
+            : 1 +
+              starBreath.halo.amplitude *
+                Math.sin(
+                  t * breathFrequency(i, starBreath.halo) + phases[i] + starBreath.halo.phaseBias
+                ));
         dummy.position.set(p.x, p.y, p.z);
         dummy.quaternion.copy(camQuat);
         dummy.scale.setScalar(haloScale);
@@ -197,9 +210,11 @@ export function StarField({ companies, onStarHover, onStarSelect }: StarFieldPro
         let hb =
           dim *
           HALO_BRIGHTNESS *
-          (starBreath.halo.brightnessBase +
-            starBreath.halo.brightnessAmplitude *
-              Math.sin(t * starBreath.halo.baseFrequency + phases[i] + starBreath.halo.phaseBias));
+          (reducedMotion
+            ? starBreath.halo.brightnessBase
+            : starBreath.halo.brightnessBase +
+              starBreath.halo.brightnessAmplitude *
+                Math.sin(t * starBreath.halo.baseFrequency + phases[i] + starBreath.halo.phaseBias));
         if (featured[i]) hb *= 1.2;
         color.set(maturityColor(companies[i].maturity.overall)).multiplyScalar(hb);
         halo.setColorAt(i, color);

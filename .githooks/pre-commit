@@ -1,0 +1,25 @@
+#!/bin/sh
+#
+# Commit-time half of the repo checks (scripts/doctor.mjs --fast).
+#
+# CI runs the whole doctor (`node scripts/doctor.mjs --strict`); this runs the
+# subset whose subject is the commit being made, because both of those are
+# cheapest to fix at the moment they are written and neither is visible
+# afterwards: `git status` stays quiet about a path a rule also covers, since
+# the file is committed, and git *skips* a hook whose executable bit drifted,
+# printing a hint and carrying the commit on.
+#
+# Going through the doctor rather than a gate script of its own is what keeps
+# one definition of each invariant: the gitignore gate, and whether this commit
+# would carry a hook git can run, are the same code the CI run and `npm run
+# doctor` use.
+#
+# Install once per clone:  npm run hooks:install
+# Skip a single commit:    git commit --no-verify
+#
+# A check that cannot run must not read as a pass, so a missing `node` or script
+# fails the commit loudly rather than letting it through.
+set -e
+
+root="$(git rev-parse --show-toplevel)"
+exec node "$root/scripts/doctor.mjs" --fast
