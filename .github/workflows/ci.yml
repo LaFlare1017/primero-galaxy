@@ -448,16 +448,26 @@ jobs:
       # job that needs no credentials is one that can also run anywhere.
       - name: Measure the suite at each worker count
         run: node scripts/e2e-workers-bench.mjs --workers=2,3,4 --json="$RUNNER_TEMP/worker-curve.json"
-      - name: Upload the raw measurements
+      - name: Upload the raw measurements and any retry forensics
         # Not failure-gated, and not conditional on the step above passing: the
         # numbers are the record even when a count timed out, which is a result
         # rather than an error. Comparing this file across weeks is how a change
         # in the runner gets noticed.
+        #
+        # `test-results/` rides along because `trace: 'on-all-retries'` puts the
+        # trace of a failed attempt exactly where the bench reads the fact that
+        # it happened: a run that hid a test behind a retry names it in its
+        # output, and the trace is what turns that name into a cause. A stable
+        # run writes nothing there, which is why this is not a cost on the runs
+        # that are fine.
         if: always() && !cancelled()
         uses: actions/upload-artifact@v7
         with:
           name: worker-curve
-          path: ${{ runner.temp }}/worker-curve.json
+          path: |
+            ${{ runner.temp }}/worker-curve.json
+            test-results/
+          if-no-files-found: ignore
           retention-days: 90
 
   lighthouse:

@@ -303,7 +303,7 @@ function runOnce(count, index, dir) {
 
 /** The report, or a reason there is not one. Silence is never read as a fast run. */
 function readReport(path, broken) {
-  const empty = { suite: null, expected: null, unexpected: null, flaky: null, skipped: null, timeouts: [], files: [], readable: false, why: null };
+  const empty = { suite: null, expected: null, unexpected: null, flaky: null, flakyTests: [], skipped: null, timeouts: [], files: [], readable: false, why: null };
   if (broken !== null) return { ...empty, why: `the run could not be started (${broken})` };
   let text;
   try {
@@ -343,6 +343,7 @@ function readReport(path, broken) {
 
   const perFile = new Map();
   const timeouts = [];
+  const flakyTests = [];
   for (const spec of specs) {
     const file = String(spec.file ?? '(unknown file)');
     let spent = 0;
@@ -352,6 +353,25 @@ function readReport(path, broken) {
         if (result.status === 'timedOut' || result.status === 'timeout') {
           timeouts.push(`${file} › ${spec.title}`);
         }
+      }
+      // Asked of the TEST, not of a result: a test that failed and then passed
+      // is `flaky` here while its results read `failed` and `passed`, so a walk
+      // that only looked at results would never see one. Which is the whole
+      // point — under `retries: 2` this is the only place the flakiness is
+      // still written down, and the reporter writes it as a COUNT.
+      //
+      // The reason comes with it, because the question behind "two tests needed
+      // a retry" is never "which two" alone: a timeout says the count was too
+      // high for this machine, and an assertion that never became true says
+      // something is racing. Those are different bugs and the count cannot tell
+      // them apart.
+      if (test.status === 'flaky') {
+        const first = (test.results ?? [])[0];
+        const message = first?.error?.message ?? (first?.errors ?? [])[0]?.message;
+        flakyTests.push({
+          test: `${file} › ${spec.title}`,
+          why: typeof message === 'string' ? message.split('\n')[0].slice(0, 200) : null,
+        });
       }
     }
     perFile.set(file, (perFile.get(file) ?? 0) + spent);
@@ -364,6 +384,7 @@ function readReport(path, broken) {
     flaky: report.stats.flaky ?? null,
     skipped: report.stats.skipped ?? null,
     timeouts,
+    flakyTests,
     files: [...perFile.entries()].map(([file, ms]) => ({ file, ms })).sort((a, b) => b.ms - a.ms),
     readable: true,
     why: null,
@@ -391,8 +412,17 @@ function summarise(count, runs) {
     slowest: runs[0]?.files?.[0] ?? null,
     // Retries are 2 under CI, so a test that failed and passed on its second
     // attempt exits 0 and reads green — the same hole `scripts/flaky-report.mjs`
-    // exists to report. Counted here so a green row can say what it cost.
+    // exists to report. Counted here so a green row can say what it cost, and
+    // NAMED, because a count of two without the two is the shape of thing this
+    // repo keeps refusing: a number that says something happened without saying
+    // what, which is a fact nobody can act on.
     flaky: runs.reduce((total, run) => total + (run.flaky ?? 0), 0),
+    // Deduped by name, keeping the first reason seen: the same test flaking in
+    // two of three runs is one flaky test, not two, and reporting it twice
+    // would make a count of two out of one cause.
+    flakyTests: [
+      ...new Map(runs.flatMap((run) => run.flakyTests ?? []).map((entry) => [entry.test, entry])).values(),
+    ],
     timeouts: [...new Set(runs.flatMap((run) => run.timeouts))],
     why: runs.find((run) => run.why !== null)?.why ?? null,
   };
@@ -511,7 +541,7 @@ const cells = rows.map((row, at) => {
         ? 'unmeasurable'
         : row.green
           ? row.flaky > 0
-            ? `green, but ${row.flaky} needed a retry`
+            ? `green, but ${row.flaky} needed a retry${row.flakyTests.length === 1 ? `: ${row.flakyTests[0].test}` : ''}`
             : 'green'
           : `failed: ${row.timeouts.length} timeout(s), ${row.runs[0]?.unexpected ?? '?'} unexpected`,
   };
@@ -569,6 +599,14 @@ if (pin !== null) {
   }
 }
 
+for (const row of rows.filter((row) => row.flaky > 0)) {
+  // Named in full, in the order the report lists them, because the question a
+  // reader brings to "two tests needed a retry" is "which two", and answering
+  // it is the difference between a number and a finding.
+  for (const entry of row.flakyTests) {
+    say(`${row.count} workers`, `needed a retry — ${entry.test}${entry.why === null ? '' : ` — ${entry.why}`}`);
+  }
+}
 for (const row of failedRows) {
   const named = row.timeouts.slice(0, 4).join('; ');
   say(`${row.count} workers`, `did not finish green — ${row.timeouts.length} timeout(s)${named ? `: ${named}${row.timeouts.length > 4 ? `; and ${row.timeouts.length - 4} more` : ''}` : ''}`);
