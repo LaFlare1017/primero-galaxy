@@ -10,6 +10,7 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test:e2e": "playwright test",
+    "e2e:bench": "node scripts/e2e-workers-bench.mjs --workers=1,2,3,4,6",
     "doctor": "node scripts/doctor.mjs",
     "hooks:install": "node scripts/hooks-install.mjs",
     "secrets:neon": "node scripts/neon-secrets.mjs",

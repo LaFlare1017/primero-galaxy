@@ -270,6 +270,27 @@ of them will run out of budget. If a galaxy spec fails on a timeout here, try th
 same file at `E2E_WORKERS=1` before believing it — that is how the difference
 between "this broke" and "the runner was full" is told apart.
 
+The four-worker ceiling above is a measurement somebody took once, on one
+machine. To take it again — and to see what each worker actually buys — time the
+suite at each count:
+
+```bash
+npm run e2e:bench                      # 1, 2, 3, 4 and 6 workers, one full run each
+npm run e2e:bench -- --repeat=3        # three runs each; the median is what gets reported
+npm run e2e:bench -- --workers=2,3 --json=/tmp/bench.json   # --workers= wins over the list above
+```
+
+It prints the curve (time, what failed, the slowest file, and what one more
+worker bought over the last one) and then compares the fastest green count
+against the number `.github/workflows/ci.yml` pins. CI runs the same shape
+(`CI=1`, retries 2) with `ANTHROPIC_API_KEY` removed, so what is timed is the
+machine rather than a network. A count that times out is recorded as a broken
+count, not a slow one — that is the datapoint that keeps the ceiling honest.
+
+It measures **this** machine, which is the limit of it: GitHub's runner has four
+vCPUs, so a curve here justifies the local default and the shape of the knee,
+and the pin itself is only settled on the runner.
+
 ## 12. When something is wrong
 
 | What you see | What it means | Do this |

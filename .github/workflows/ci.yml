@@ -332,7 +332,10 @@ jobs:
       # against the fourteen-core laptop the default and the ceiling in
       # e2e/workers.ts were measured on. Past a point the galaxy specs stop
       # finishing inside their timeouts rather than running in parallel, so the
-      # local default cannot be assumed to hold here.
+      # local default cannot be assumed to hold here. `npm run e2e:bench`
+      # (scripts/e2e-workers-bench.mjs) re-measures the curve and reads this
+      # number back out of the workflow, so the pin can be checked against data
+      # instead of re-argued from a laptop.
       - run: npm run test:e2e
         env:
           CI: '1'
