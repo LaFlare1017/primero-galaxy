@@ -1059,6 +1059,71 @@ async function selfTestE2e() {
         `${(left.branches ?? []).map((b) => b.name).join(', ') || 'no branches'} left`,
       );
 
+      // And the OTHER half of the drop step: one the console refuses.
+      //
+      // This is the severity split the job lives on, and it is the reason
+      // `warn()` exists separately from `fail()`. By the time this step runs the
+      // gate has already answered; a cleanup that fails afterwards has nothing
+      // left to say about the run's verdict, and a red job for it would bury
+      // the one annotation somebody needs. What it must do instead is be loud
+      // enough to be noticed and harmless enough not to stop anything.
+      //
+      // So the claim is three things together, and any one of them alone would
+      // be the wrong thing to assert: the annotation is a `::warning` and not a
+      // `::error` (the severity is the whole point — an error here would fail
+      // the job over untidiness), the process still exits 0, and the message
+      // says the branch expires on its own so the leak is bounded.
+      //
+      // `dropBranch` returning `{ ok: false }` is already asserted above, in
+      // this program's stub mode, and that is a weaker claim by a long way: a
+      // function that returns a failure nobody renders is not a warning, it is
+      // an ignored result.
+      {
+        const doomed = await createBranch(ctx, {
+          name: 'ci-cli-undroppable',
+          parentId: 'br-parent',
+          expires: expiresAt(),
+        });
+        const faultsBefore = fake.faults().length;
+        // `on: 'DELETE'` — a method on its own, so this is every delete rather
+        // than one of them. It is also the spelling that silently matched
+        // nothing until the check that wanted it was written, which is why the
+        // fired-fault assertion below is not ceremony.
+        fake.failNext({ on: 'DELETE', status: 500 });
+        const stuck = await runCli('drop', {
+          BRANCH_ID: doomed.id,
+          BRANCH_NAME: 'ci-cli-undroppable',
+        });
+        const firedNow = fake.faults().slice(faultsBefore);
+        const survivors = await fetch(`${base}/projects/proj-1/branches`, {
+          headers: { Authorization: 'Bearer test-key' },
+        }).then((r) => r.json());
+        check(
+          'the console was actually asked to fail the delete, so this is about a refused drop',
+          firedNow.length === 1 && firedNow[0].status === 500,
+          firedNow.length === 0
+            ? 'the 500 never arrived — the drop succeeded and the assertions below would have passed anyway'
+            : `${firedNow[0].status} answered ${firedNow[0].call}`,
+        );
+        check(
+          'a drop the console refuses is a ::warning and the step still exits 0',
+          stuck.status === 0 &&
+            stuck.stderr.startsWith('::warning title=Store gate::') &&
+            !stuck.stderr.includes('::error') &&
+            /HTTP 500/.test(stuck.stderr) &&
+            /it expires on its own/.test(stuck.stderr) &&
+            stuck.stdout === '',
+          `exit ${stuck.status}, ${
+            stuck.stderr.split('\n')[0]?.replace('::warning title=Store gate::', '').slice(0, 88) ?? '(it said nothing)'
+          }${stuck.stdout === '' ? '' : `; WROTE ${stuck.stdout.split('\n')[0]}`}`,
+        );
+        check(
+          'and the branch really is still there, so the warning is about a cleanup that did not happen',
+          (survivors.branches ?? []).some((b) => b.id === doomed.id),
+          `console holds ${(survivors.branches ?? []).map((b) => b.name).join(', ') || 'nothing'}`,
+        );
+      }
+
       // And a run with no addresses at all says which are missing, rather than
       // reaching the console with an empty project id.
       const bare = await runCli('create', {

@@ -131,11 +131,17 @@ const METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD']);
  * all because it looks armed.
  */
 function faultMatches(fault, method, pathname) {
-  const at = fault.on.search(/\s/);
-  if (at < 0) return pathname.includes(fault.on);
-  const wanted = fault.on.slice(0, at).toUpperCase();
+  const on = fault.on.trim();
+  // A method ON ITS OWN first, because a bare `DELETE` is the way to ask for
+  // every delete rather than one, and the version before this checked the path
+  // for it — so `on: 'DELETE'` matched nothing at all and the fault sat there
+  // looking armed. It was found by writing the drop check that wanted it.
+  if (METHODS.has(on.toUpperCase())) return on.toUpperCase() === method;
+  const at = on.search(/\s/);
+  if (at < 0) return pathname.includes(on);
+  const wanted = on.slice(0, at).toUpperCase();
   if (!METHODS.has(wanted)) return false;
-  return wanted === method && pathname.includes(fault.on.slice(at + 1).trim());
+  return wanted === method && pathname.includes(on.slice(at + 1).trim());
 }
 
 export async function startFakeNeon({ apiKey = 'test-key', readyAfter = 0, dataPlane = false } = {}) {
