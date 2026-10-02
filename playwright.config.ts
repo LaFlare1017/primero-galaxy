@@ -61,10 +61,13 @@ export default defineConfig({
       ]
     : [['list']],
   use: {
-    // The port every worker uses is set per worker, by a fixture that knows its
-    // own `parallelIndex`. This value is only what a test sees if it somehow
-    // escapes that fixture, so it stays the first worker's port rather than
-    // being absent.
+    // Every worker's real port is set per worker, by a fixture that knows its
+    // own `parallelIndex`. This value is what a test sees ONLY if it somehow
+    // escaped that fixture — so it is a port no worker can be given: workers
+    // take theirs from the OS's ephemeral range and never from a fixed one, so
+    // this cannot accidentally be a live worker's server. A spec that skipped
+    // the fixture fails to connect, which says what is wrong, rather than
+    // reaching whatever happens to be listening on a well-known port.
     baseURL: 'http://127.0.0.1:3100',
     headless: true,
     viewport: { width: 1440, height: 900 },

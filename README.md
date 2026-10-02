@@ -58,7 +58,7 @@ npm run build      # production build
 npm run start      # serve the production build
 npm run lint       # ESLint
 npm run typecheck  # tsc --noEmit
-npm run test:e2e   # Playwright E2E against a production build on :3100
+npm run test:e2e   # Playwright E2E, one server and one store per worker
 npm run doctor     # every check this checkout can run on itself, in one pass
 ```
 

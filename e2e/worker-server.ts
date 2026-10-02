@@ -101,10 +101,10 @@ interface WorkerFixtures {
  * The suite's `test`, with the per-worker server attached.
  *
  * Every spec imports from here rather than from `@playwright/test` directly, and
- * that is the whole coupling this design has: one import line per file, and a
- * spec that imports the bare `test` would silently get the base URL of whatever
- * ran before it — which, on a machine where 3100 is free, is a server serving
- * somebody else's room, and a failure that reads like a console bug.
+ * that is the whole coupling this design has: one import line per file. A spec
+ * that imported the bare `test` would get the config's `baseURL` — a port no
+ * worker is ever given — and fail to connect at its first `page.goto`, which
+ * names the mistake rather than looking like a console bug.
  */
 export const test = base.extend<{}, WorkerFixtures>({
   // The number every other per-worker thing is derived from, hoisted out so the

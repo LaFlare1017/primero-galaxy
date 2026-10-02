@@ -16,8 +16,9 @@ import { NextResponse, type NextRequest } from "next/server";
  *
  * Off unless `DELEGATE_ONLY=1` is in the environment, which is what keeps
  * local development, CI and the Playwright suite (which drives /galaxy against
- * a production build on :3100) reading the whole app. Set it in the Vercel
- * project's environment and nothing else changes.
+ * its own production build, on a port each worker takes from the OS) reading
+ * the whole app. Set it in the Vercel project's environment and nothing else
+ * changes.
  */
 const DELEGATE_ONLY = process.env.DELEGATE_ONLY === "1";
 
