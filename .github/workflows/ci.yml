@@ -458,6 +458,20 @@ jobs:
         # file. The bench writes the compact committed shape for this path and
         # the full diagnostic anywhere else; see scripts/e2e-pin.mjs.
         run: node scripts/e2e-workers-bench.mjs --workers=2,3,4 --json=e2e/worker-curve.json
+      - name: Commit the measurement and open a PR, so the pin is re-checked
+        # The bench writes e2e/worker-curve.json regardless of whether a count
+        # timed out — a failed count is a result, and its knee is still the
+        # knee. So this step runs whenever the file exists, not only when the
+        # bench exited green.
+        #
+        # The script opens a PR only when the measurement differs from what main
+        # already carries, so a re-measurement that lands on the same numbers
+        # does not open a fresh PR every week. The PR triggers the checks job on
+        # pull_request, which runs worker-pin against the new measurement — that
+        # is the re-check this job exists to automate.
+        if: always() && !cancelled() && hashFiles('e2e/worker-curve.json') != ''
+        run: node scripts/curve-pr.mjs
+
       - name: Upload the raw measurements and any retry forensics
         # Not failure-gated, and not conditional on the step above passing: the
         # numbers are the record even when a count timed out, which is a result
