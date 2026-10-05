@@ -1,3 +1,20 @@
+/**
+ * The galaxy's declared keyboard surface, held to what it actually does.
+ *
+ * Two files' worth of checks that belong together: a declaration that has to
+ * agree with itself, and a test that presses every declared binding and proves
+ * each one did something visible.
+ *
+ * Measured, because the second of those is not a test, it is the suite's floor
+ * wearing a test's clothes. `pressEveryDeclaredBinding` is 13.5s serial and
+ * 168.4s at 4 workers on a loaded box — 12.5x, the worst ratio in the galaxy
+ * suite — while the two declaration tests beside it are 8ms and 2ms combined. So
+ * this file is 99.98% one test, and at 4 workers before the toast split it was
+ * 513s: longer than anything else in the suite.
+ * The budget under it is sized from that, but the file is the same shape
+ * galaxy-toast.spec.ts was, and splitting it the way that one was split is the
+ * fix that actually lowers the floor.
+ */
 import { expect, test } from './worker-server';
 import type { Page } from '@playwright/test';
 
@@ -271,7 +288,18 @@ test.describe('Galaxy dismissal ladder declaration', () => {
 
 test.describe('Galaxy dismissal ladder coverage', () => {
   test('every declared binding does something visible', async ({ page }) => {
-    test.setTimeout(240_000);
+    // 13.5s serial, and the slowest test in the suite by a wide margin — it
+    // presses every declared binding and each one may drive the camera. 168.4s
+    // at 4 workers on a loaded box, which is 12.5x the serial cost: the worst
+    // contention ratio measured anywhere in the galaxy suite, and worse than
+    // galaxy-scene's because every one of its steps re-projects the scene.
+    //
+    // 240s was not enough, and this is the measurement that says so rather than
+    // a guess: an earlier 4-worker run had this test hit the 240s cap, need a
+    // retry, and take 513s of wall time across the two attempts. One attempt
+    // needed more than 240s, so 600s is ~2.2x on the loaded figure and covers
+    // all three retries under CI's `retries: 2`.
+    test.setTimeout(600_000);
     await pressEveryDeclaredBinding<LadderShown>(page, {
       declared: GALAXY_KEYS.map((row) => ({ id: row.id, keys: row.keys })),
       exercises: EXERCISES,

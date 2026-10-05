@@ -18,6 +18,15 @@
  * because Playwright parallelises by FILE and one file is one worker. These
  * are the slow ones — hovering and double-clicking re-project a rotating mesh
  * under software WebGL — so this file is the one that most needed the split.
+ *
+ * Measured, because "slow" here is a number and the numbers are not what a
+ * reader would guess. Serially (`--workers=1 --only=e2e/galaxy`, so the suite
+ * does not contend with itself) this file is 74.5s across five tests — nothing
+ * here is one long test, which is why this file is a floor without being a
+ * problem. At 4 workers on a machine already carrying load 13 it is 367.8s.
+ * Roughly 4-5x per test, and the budgets below are set from the second figure
+ * rather than the first, because a budget sized on a quiet box is a budget that
+ * converts a loaded runner into a red run.
  */
 import { expect, test } from './worker-server';
 import type { Page } from '@playwright/test';
@@ -33,6 +42,9 @@ import {
 } from './galaxy-helpers';
 
 test('boots the galaxy and renders the Fortune 500 dataset', async ({ page }) => {
+  // 10.0s serial, 16.6s at 4 workers loaded. Nine times the margin on the 150s
+  // default, so this one gets a number rather than a budget — the point of
+  // writing the measurements down is that most tests here do not need one.
   await waitForApp(page);
 
   await expect(page.locator('canvas')).toBeVisible();
@@ -58,6 +70,10 @@ test('boots the galaxy and renders the Fortune 500 dataset', async ({ page }) =>
 });
 
 test('hovering a star shows the tooltip (raycast → store → UI)', async ({ page }) => {
+  // 13.3s serial, 60.6s at 4 workers loaded — 4.6x for a single hover, which is
+  // the cost of a mount plus a re-projection of a rotating mesh. 180s is ~3x
+  // the loaded figure.
+  test.setTimeout(180_000);
   await waitForApp(page);
   const company = await getTargetCompany(page);
   await lookAtStar(page, company.id);
@@ -78,6 +94,10 @@ test('hovering a star shows the tooltip (raycast → store → UI)', async ({ pa
 });
 
 test('double-clicking a star opens planet view; trajectory + reset complete the loop', async ({ page }) => {
+  // 21.5s serial, 91.2s at 4 workers loaded. Two camera flights and a panel,
+  // and 91.2s is 61% of the 150s default, which is not a margin — it is a
+  // measurement that happened to fit. 300s is ~3x the loaded figure.
+  test.setTimeout(300_000);
   await waitForApp(page);
   const company = await getTargetCompany(page);
   await lookAtStar(page, company.id);
@@ -205,6 +225,13 @@ async function hitTest(page: Page, name: string) {
  * broken cannot pass.
  */
 test('a company profile leaves the bottom bar’s controls clickable', async ({ page, context }) => {
+  // 16.3s serial, 131.2s at 4 workers loaded — 8.0x, the worst ratio in this
+  // file, because it opens a profile over a rotating mesh and checks the bar
+  // under it stays clickable. This was the one test here
+  // riding the 150s default at 87% of it, which is the failure mode this whole
+  // exercise is about: a budget chosen for the cost of the work, checked
+  // against the cost of the machine it actually runs on. 300s is ~2.3x loaded.
+  test.setTimeout(300_000);
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);
   await waitForApp(page);
 
@@ -251,7 +278,10 @@ test('a company profile leaves the bottom bar’s controls clickable', async ({ 
 });
 
 test('searching a company by name flies to its star and opens its profile', async ({ page }) => {
-  test.setTimeout(120_000);
+  // 13.4s serial, 68.2s at 4 workers loaded. Raised from 120s, which left 1.8x
+  // on the loaded figure — thinner than every sibling in this file, and thinner
+  // than the 4.5x the same machine gives the others.
+  test.setTimeout(180_000);
   await waitForApp(page);
 
   // Pick a distinctive dataset company (unique name → unambiguous result).

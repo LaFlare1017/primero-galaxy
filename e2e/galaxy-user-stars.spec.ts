@@ -11,6 +11,10 @@
  *
  * The delete half of the same journey is in galaxy-undo.spec.ts (sheet list)
  * and galaxy-planet-delete.spec.ts (planet panel).
+ *
+ * Measured: 31.2s serial (`--workers=1`), 112.0s at 4 workers on a loaded box.
+ * The add is 18.1s of the first and 66.0s of the second — 3.6x, the ratio every
+ * test here that mounts the galaxy and waits on a camera flight comes out at.
  */
 import { expect, test } from './worker-server';
 import {
@@ -22,16 +26,17 @@ import {
 } from './galaxy-helpers';
 
 test('adding a company creates a persistent star and flies to it', async ({ page }) => {
-  // This test used to be 445 lines and end in a delete, which is why it read as
-  // the suite's slowest test for as long as anyone measured. It is now only the
-  // add, and the measured number to hold it to is much smaller — see the
-  // numbers in the file header of galaxy-planet-delete.spec.ts.
+  // 18.1s serial, 66.0s at 4 workers on a loaded box. This test used to be 445
+  // lines and end in a delete, which is why it read as the suite's slowest test
+  // for as long as anyone measured — but that was the whole test, not this half.
   //
-  // 300s is left where it was rather than re-tuned to the shorter test. It was
-  // never the timeout that cost the suite time: Playwright only spends it when
-  // a test fails, and the failure this budget exists to stop is the camera
-  // settle taking longer on a loaded machine. Narrowing it would buy nothing
-  // and would re-open the failure it was raised to absorb.
+  // 300s stays where the 445-line version put it, and the reason is worth stating
+  // precisely because the loose version of it is wrong: a ceiling costs a run
+  // nothing until the machine is slow enough that the test would otherwise be
+  // killed, so raising it adds no time to a passing run. Narrowing it to 66s
+  // would add nothing either, and would re-open the failure it was raised to
+  // absorb — a camera settle slower than the day it was measured, which has not
+  // been fixed since.
   test.setTimeout(300_000);
   await waitForApp(page);
 
@@ -163,6 +168,7 @@ test('adding a company creates a persistent star and flies to it', async ({ page
 });
 
 test('the Add Company form rejects a duplicate company name', async ({ page }) => {
+  // 13.1s serial, 46.0s at 4 workers loaded. 120s is ~2.6x the loaded figure.
   test.setTimeout(120_000);
   await waitForApp(page);
 

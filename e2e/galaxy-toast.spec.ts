@@ -16,6 +16,10 @@
  * delete halves are in galaxy-undo.spec.ts and galaxy-planet-delete.spec.ts, and
  * the numbers behind that decision are in galaxy-planet-delete.spec.ts's header.
  *
+ * Measured: 42.2s serial (`--workers=1`), 298s at 4 workers on a loaded box —
+ * and that second figure is almost entirely one test's retries, which is what
+ * the budget under it is for.
+ *
  * Split out of the single 22-test `galaxy.spec.ts`; see galaxy-helpers.ts.
  */
 import { expect, test } from './worker-server';
@@ -28,7 +32,18 @@ import {
 } from './galaxy-helpers';
 
 test('a hydrated toast keeps only its remaining window (no fresh duration)', async ({ page }) => {
-  test.setTimeout(120_000);
+  // 16.8s serial. At 4 workers on a loaded box it produced no clean pass at all:
+  // 33.6s, 210.5s, 220.4s, all three failed. That is why this budget was 120s
+  // and is now 300s — not a suspicion of slowness, a measured failure three times
+  // over.
+  //
+  // Worth being clear that 300s does not fix it, and is not meant to. The real
+  // fault is described below and it is not a slow machine: the remaining window
+  // is 9s and the test needs a WebGL mount to finish inside it, so when the
+  // mount is slow the toast it exists to measure has already expired. The
+  // budget only stops the ceiling being the thing that fails first while the
+  // real cause is still open.
+  test.setTimeout(300_000);
   await waitForApp(page);
 
   // Seed a user star + an "added" toast whose window is already mostly gone.
@@ -148,6 +163,9 @@ test('a toast that expired while away does not resurrect on reload', async ({ pa
 });
 
 test('removing the same company twice keeps one Removed toast; Undo restores it', async ({ page }) => {
+  // 14.9s serial, 51.0s at 4 workers loaded. 120s is ~2.4x the loaded figure —
+  // the thinnest margin in this file, left alone because unlike the test above
+  // it has never actually been seen to want it.
   test.setTimeout(120_000);
   await waitForApp(page);
 

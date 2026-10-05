@@ -21,13 +21,16 @@ import {
 const MERIDIAN = 'Meridian Logistics';
 
 test('a removal survives a reload, Undo restores the star but not the view', async ({ page }) => {
-  // The same 300s the 445-line test it came out of carried, and deliberately
-  // not re-tuned downward. This is a mount, a reload and another reload, and
-  // every one of those is a WebGL boot on a machine that is also running three
-  // other workers; the budget exists for the case where the machine is full,
-  // and narrowing it to a number measured on an idle box would only convert a
-  // slow run into a red one.
-  test.setTimeout(300_000);
+  // 18.8s serial — a mount, a reload and another reload, and the serial figure
+  // says how cheap it is on a machine that is not also running three other
+  // workers. At 4 workers on a loaded box it is 253.3s: 13.5x, because every step
+  // waits on a WebGL boot and there are three of them.
+  //
+  // That is why this is 420s rather than the 300s the 445-line test it came out
+  // of carried. 300s left 1.2x on the loaded figure, which is not a margin, and
+  // the budget should be set from what the test needs on the machine it runs on
+  // rather than from what the test used to be bundled with.
+  test.setTimeout(420_000);
   await waitForApp(page);
 
   // Seed the user star the sheet's "Your stars" list is about to remove. It is

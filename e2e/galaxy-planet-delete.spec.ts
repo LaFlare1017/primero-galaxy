@@ -13,15 +13,18 @@
  * --only=galaxy-(toast|undo|user-stars|planet-delete)`), so the numbers are the
  * cost of the work rather than the cost of the contention:
  *
- *   galaxy-toast          42.2s   3 tests, longest 17.2s
- *   galaxy-user-stars     29.5s   2 tests, longest 17.0s
- *   galaxy-planet-delete  26.0s   1 test
- *   galaxy-undo           16.1s   1 test
+ *   galaxy-toast          42.2s   3 tests, longest 16.8s
+ *   galaxy-user-stars     31.2s   2 tests, longest 18.1s
+ *   galaxy-planet-delete  25.7s   1 test
+ *   galaxy-undo           18.8s   1 test
  *
- * 113.9s for all of it. The single test these four came out of cost 108.3s on
- * its own at 4 workers, so the work is essentially unchanged — what changed is
- * that it now belongs to four files, and under `fullyParallel: false` a file is
- * one worker's serial chunk. The floor for this group went 594.8s → 42.2s.
+ * 117.9s for all of it (113.9s on an earlier run of the same four, so a serial
+ * measurement of this group has about 4s of spread).
+ *
+ * The single test these four came out of cost 108.3s on its own at 4 workers, so
+ * the work is essentially unchanged — what changed is that it now belongs to four
+ * files, and under `fullyParallel: false` a file is one worker's serial chunk.
+ * The floor for this group went 594.8s → 42.2s.
  *
  * Split out of `galaxy-toast.spec.ts`; see galaxy-helpers.ts.
  */
@@ -34,7 +37,21 @@ import {
 } from './galaxy-helpers';
 
 test('removing from the planet panel offers Undo, and Undo restores the view', async ({ page }) => {
-  test.setTimeout(300_000);
+  // 25.7s serial — 25.2s and 26.0s on two earlier serial runs of it, which is the
+  // spread a serial measurement of this test actually has and is worth about
+  // half a second. 71.4s at 4 workers on a loaded box for a clean pass. The
+  // clean figure is not the one that sets this budget, though: the same test was
+  // seen at 157.5s, then 593.5s, then 71.4s across three attempts of one run on
+  // a machine carrying load 13, which is not a spread you can budget around — it
+  // is a spread that says the 300s ceiling was being hit and then not.
+  //
+  // 600s covers the worst of those three attempts outright and leaves room for
+  // the two retries CI allows. It is a wide ceiling on a test that usually takes
+  // 25s, and that asymmetry is deliberate: the ceiling is only ever reached when
+  // something has already gone wrong, and a budget that cuts off a slow
+  // camera flight cannot tell the reader whether the camera was slow or the
+  // test was broken. galaxy-keys.spec.ts is where the same shape costs most.
+  test.setTimeout(600_000);
   await waitForApp(page);
 
   // Add the star this test removes. It goes through the form rather than a

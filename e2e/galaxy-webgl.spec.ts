@@ -7,6 +7,11 @@
  * with rendering disabled, which is why they take `browser` rather than `page`.
  *
  * Split out of the single 22-test `galaxy.spec.ts`; see galaxy-helpers.ts.
+ *
+ * Measured: 36.5s serial (`--workers=1 --only=e2e/galaxy`), 152.9s at 4 workers
+ * on a loaded box. Almost all of it is one test — the brand-logo globe at 9.7s
+ * of the 36.5s — and the other nine are 0.6-9.5s and comfortably fit the 150s
+ * default. Only the one that needed it got a budget of its own.
  */
 import { expect, test } from './worker-server';
 import type { Page } from '@playwright/test';
@@ -122,6 +127,10 @@ test('brands without indexed favicons ship stable local logos instead of 404ing'
 });
 
 test('brands without indexed favicons ship stable local logos in the planet panel', async ({ page }) => {
+  // 9.7s serial, 63.8s at 4 workers loaded — 6.6x, because it boots a globe
+  // with every brand in it. The rest of this file is 3-8s serial and rides the
+  // 150s default comfortably; this one needs a budget of its own.
+  test.setTimeout(180_000);
   // Berkshire Hathaway has no favicon indexed by the favicon service, so its
   // planet-panel logo must load from /logos via the shared logoUrl helper,
   // and no favicon-service request may 404 while the profile is open.
