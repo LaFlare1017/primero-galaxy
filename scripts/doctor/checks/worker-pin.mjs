@@ -55,6 +55,11 @@ const MEASURE = 'npm run e2e:bench -- --workers=2,3,4 --json=e2e/worker-curve.js
  * When the suite or the pin last changed, as a date, or null when this
  * repository cannot say.
  *
+ * The measurement file itself is excluded, because committing a hosted
+ * measurement is how the pin gets its proof on disk — including the file
+ * would make every committed measurement stale against its own commit, which
+ * is the exact state this check exists to confirm.
+ *
  * Null rather than "now": a checkout with no history for these paths has not
  * proved the measurement is current, and it has not proved it is stale either.
  * Treating "cannot tell" as fresh would let a shallow clone quietly accept a
@@ -63,7 +68,12 @@ const MEASURE = 'npm run e2e:bench -- --workers=2,3,4 --json=e2e/worker-curve.js
 function suiteChangedAt(root) {
   let when;
   try {
-    when = gitHere(['log', '-1', '--format=%cI', '--', 'e2e', '.github/workflows/ci.yml'], { cwd: root });
+    // Exclude the measurement file: committing it is the proof step, and
+    // including it would mark every committed measurement as stale.
+    when = gitHere(
+      ['log', '-1', '--format=%cI', '--', ':!e2e/worker-curve.json', 'e2e', '.github/workflows/ci.yml'],
+      { cwd: root },
+    );
   } catch {
     return null;
   }

@@ -4,7 +4,7 @@
 
 <!-- stats:begin article.stats -->
 **The stats up front:**
-15 commits · 5 declared keyboards · 1,410 lines of declaration · 77 states enumerated · 136 e2e tests across 27 files · 4 of 5 surfaces produced a real defect on the day they were declared · 28 ways the checkers break a synthetic manifest · 1 test that passed when it should have failed
+15 commits · 5 declared keyboards · 1,410 lines of declaration · 77 states enumerated · 137 e2e tests across 28 files · 4 of 5 surfaces produced a real defect on the day they were declared · 28 ways the checkers break a synthetic manifest · 1 test that passed when it should have failed
 <!-- stats:end -->
 
 ---
