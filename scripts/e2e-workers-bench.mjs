@@ -65,6 +65,7 @@
  *   node scripts/e2e-workers-bench.mjs --workers=1,2,3,4,6 [--repeat=2]
  *   node scripts/e2e-workers-bench.mjs --workers=2,4 --only=e2e/galaxy
  *   node scripts/e2e-workers-bench.mjs --workers=3 --json=bench.json
+ *   node scripts/e2e-workers-bench.mjs --workers=2,3,4 --json=e2e/worker-curve.json
  *
  *   --workers=   the counts to time, ascending. Required: this costs one full
  *                suite run each, and a default nobody asked for is a default
@@ -74,8 +75,12 @@
  *   --only=      Playwright's file filter, for a fast shape check of this
  *                script. A filtered run is not a suite measurement and its rows
  *                say so.
- *   --json=      write the raw measurements here, for comparing two commits or
- *                two machines.
+ *   --json=      write the measurements here, for comparing two commits or two
+ *                machines. `e2e/worker-curve.json` is the path the `worker-pin`
+ *                doctor check reads, and it is where a runner's curve belongs:
+ *                written there the bench keeps the counts and the per-file times
+ *                and drops the per-test list and a temp path, so the committed
+ *                file is 10KB instead of 72KB. Anywhere else keeps everything.
  *   --local      run without CI=1 (retries 0, no CI reporter).
  *   --force      measure on a machine that is too busy to measure on.
  */
@@ -84,9 +89,9 @@ import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSyn
 import { arch, cpus, loadavg, platform, release, tmpdir, totalmem } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CURVE, committedCurve, pinnedWorkers } from './e2e-pin.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const WORKFLOW = join(ROOT, '.github', 'workflows', 'ci.yml');
 
 /** A count within this much of the fastest is not worth another process. */
 const WITHIN = 0.1;
@@ -242,20 +247,6 @@ const machine = {
   node: process.version,
   load: Math.round(loadavg()[0] * 10) / 10,
 };
-
-/**
- * The count CI runs with, read back out of the workflow.
- *
- * A transcription of the pin is a copy that rots, and a bench that reports
- * against a remembered number is a bench arguing with a stale one. If the
- * workflow cannot be read, the bench still measures — and says the pin is
- * unknown rather than guessing it.
- */
-function pinnedWorkers() {
-  if (!existsSync(WORKFLOW)) return null;
-  const match = readFileSync(WORKFLOW, 'utf8').match(/E2E_WORKERS:\s*'(\d+)'/);
-  return match === null ? null : Number(match[1]);
-}
 
 /** The environment one run gets: CI-shaped, spend-free, and unambiguous about the count. */
 function envFor(count) {
@@ -479,7 +470,7 @@ const hosted = process.env.RUNNER_ENVIRONMENT === 'github-hosted' || process.env
 
 const dir = join(tmpdir(), `e2e-workers-bench-${process.pid}`);
 mkdirSync(dir, { recursive: true });
-const pin = pinnedWorkers();
+const pin = pinnedWorkers(ROOT);
 const runs = options.counts.length * options.repeat;
 
 console.log('E2E workers bench');
@@ -581,13 +572,21 @@ const failedRows = rows.filter((row) => !row.green && row.why === null);
 const unreadable = rows.filter((row) => row.why !== null);
 const fastestOf = (list) => list.reduce((a, b) => (b.suite < a.suite ? b : a));
 
+// Hoisted out of the block below because a written measurement has to carry the
+// knee, not just the rows: the doctor check compares this number against the
+// committed pin, and a check that had to re-derive the knee from the runs would
+// be a second definition of "the knee" in a repo that already has one.
+const fastest = greenRows.length === 0 ? null : fastestOf(greenRows);
+const knee =
+  fastest === null
+    ? null
+    : greenRows
+        .filter((row) => row.suite <= fastest.suite * (1 + WITHIN))
+        .reduce((a, b) => (b.count < a.count ? b : a));
+
 if (greenRows.length === 0) {
   say('', 'No count finished green, so there is no fastest green count to report. The rows above are what happened.');
 } else {
-  const fastest = fastestOf(greenRows);
-  const knee = greenRows
-    .filter((row) => row.suite <= fastest.suite * (1 + WITHIN))
-    .reduce((a, b) => (b.count < a.count ? b : a));
   const workers = (count) => `${count} worker${count === 1 ? '' : 's'}`;
   say('fastest green', `${workers(fastest.count)} — suite ${clock(fastest.suite)}`);
   say('the knee', `${workers(knee.count)} — within ${Math.round(WITHIN * 100)}% of that (${clock(knee.suite)}), and one fewer process`);
@@ -598,7 +597,6 @@ if (greenRows.length === 0) {
 
 if (pin !== null) {
   const measured = rows.find((row) => row.count === pin);
-  const fastest = greenRows.length === 0 ? null : fastestOf(greenRows);
   if (measured === undefined) {
     say('the pin', `${pin} was not measured here (--workers did not include it), so this says nothing about the number CI uses.`);
   } else if (measured.why !== null) {
@@ -725,11 +723,34 @@ console.log(`\n  What this does not tell you: ${caveat}`);
 console.log(`  Raw reports: ${dir}`);
 
 if (options.json !== null) {
+  const measurement = {
+    recordedAt: new Date().toISOString(),
+    machine,
+    hosted,
+    pin,
+    // The two counts a later reader needs and cannot get from `runs` without
+    // redoing this file's arithmetic: the fastest green count, and the
+    // cheapest count within WITHIN of it. The doctor check reads exactly
+    // these two against the pin in ci.yml.
+    fastest: fastest === null ? null : fastest.count,
+    knee: knee === null ? null : knee.count,
+    within: WITHIN,
+    options,
+    runs: results,
+  };
+  const committed = options.json === CURVE;
   writeFileSync(
     options.json,
-    `${JSON.stringify({ recordedAt: new Date().toISOString(), machine, hosted, pin, options, runs: results }, null, 2)}\n`,
+    `${JSON.stringify(committed ? committedCurve(measurement) : measurement, null, 2)}\n`,
   );
   console.log(`  Measurements written to ${options.json}`);
+  // The doctor compares that file's knee against the pin, so a measurement
+  // written anywhere else settles nothing for anybody but this run.
+  if (committed) {
+    console.log('  — the per-test timings stay in the raw reports above; this file keeps what a later reader needs');
+  } else {
+    console.log(`  — ${CURVE} is where the \`worker-pin\` doctor check looks, so nothing else will read this`);
+  }
 }
 
 process.exit(unreadable.length === rows.length ? 1 : 0);

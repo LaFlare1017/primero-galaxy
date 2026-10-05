@@ -418,6 +418,11 @@ jobs:
     # workers ON THE RUNNER and writes the curve into this job's summary, next
     # to the pin read back out of the workflow by the bench itself.
     #
+    # It also writes e2e/worker-curve.json, and that file is what the
+    # `worker-pin` doctor check compares against the pin. Until one of these
+    # runs is committed into the repository, that check can only say the pin has
+    # not been examined — which is true, and is most of why this job exists.
+    #
     # Main pushes and manual runs only, deliberately. Three full suite runs is
     # real runner time on every pull request, and a curve does not change
     # because a spec was edited — it changes when the suite's shape does, which
@@ -447,7 +452,12 @@ jobs:
       # to the machine being measured. So this job measures the machine, and a
       # job that needs no credentials is one that can also run anywhere.
       - name: Measure the suite at each worker count
-        run: node scripts/e2e-workers-bench.mjs --workers=2,3,4 --json="$RUNNER_TEMP/worker-curve.json"
+        # Written to the path the `worker-pin` doctor check reads, not to a temp
+        # directory, so the artifact this job uploads is the file that check
+        # expects and putting one of these into the repository is copying one
+        # file. The bench writes the compact committed shape for this path and
+        # the full diagnostic anywhere else; see scripts/e2e-pin.mjs.
+        run: node scripts/e2e-workers-bench.mjs --workers=2,3,4 --json=e2e/worker-curve.json
       - name: Upload the raw measurements and any retry forensics
         # Not failure-gated, and not conditional on the step above passing: the
         # numbers are the record even when a count timed out, which is a result
@@ -465,7 +475,7 @@ jobs:
         with:
           name: worker-curve
           path: |
-            ${{ runner.temp }}/worker-curve.json
+            e2e/worker-curve.json
             test-results/
           if-no-files-found: ignore
           retention-days: 90

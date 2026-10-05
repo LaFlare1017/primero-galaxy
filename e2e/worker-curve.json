@@ -1,0 +1,428 @@
+{
+  "recordedAt": "2026-10-05T04:10:58.352Z",
+  "machine": {
+    "platform": "darwin 25.6.0 arm64",
+    "cores": 14,
+    "memoryGb": 51.5,
+    "node": "v22.23.1",
+    "load": 10.1
+  },
+  "hosted": false,
+  "pin": 3,
+  "fastest": 2,
+  "knee": 2,
+  "within": 0.1,
+  "options": {
+    "counts": [
+      2,
+      3,
+      4
+    ],
+    "repeat": 1,
+    "only": null,
+    "json": "/Users/leron.garriques/Library/CloudStorage/OneDrive-Slalom/Documents/AI Building/Experiments/Primero/Primero Insights/projects/galaxy/e2e/worker-curve.json",
+    "local": false,
+    "force": true,
+    "help": false
+  },
+  "runs": [
+    {
+      "count": 2,
+      "index": 1,
+      "wall": 310985,
+      "exit": 0,
+      "suite": 310584.24,
+      "expected": 134,
+      "unexpected": 0,
+      "flaky": 2,
+      "skipped": 0,
+      "timeouts": [],
+      "flakyTests": [
+        {
+          "test": "facilitator-keys.spec.ts › every declared binding does something visible",
+          "why": "Error: the cursor started away from the first row"
+        },
+        {
+          "test": "finbench-saved-views.spec.ts › saving the current filters creates a revisitable view",
+          "why": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m"
+        }
+      ],
+      "files": [
+        {
+          "file": "galaxy-scene.spec.ts",
+          "ms": 109712
+        },
+        {
+          "file": "galaxy-toast.spec.ts",
+          "ms": 55472
+        },
+        {
+          "file": "galaxy-webgl.spec.ts",
+          "ms": 47968
+        },
+        {
+          "file": "facilitator-run-link.spec.ts",
+          "ms": 45517
+        },
+        {
+          "file": "a11y.spec.ts",
+          "ms": 43738
+        },
+        {
+          "file": "galaxy-user-stars.spec.ts",
+          "ms": 40230
+        },
+        {
+          "file": "galaxy-planet-delete.spec.ts",
+          "ms": 37819
+        },
+        {
+          "file": "galaxy-keys.spec.ts",
+          "ms": 28390
+        },
+        {
+          "file": "galaxy-landing.spec.ts",
+          "ms": 21771
+        },
+        {
+          "file": "galaxy-undo.spec.ts",
+          "ms": 21621
+        },
+        {
+          "file": "command-palette.spec.ts",
+          "ms": 13458
+        },
+        {
+          "file": "company-search-keys.spec.ts",
+          "ms": 13234
+        },
+        {
+          "file": "reduced-motion.spec.ts",
+          "ms": 9213
+        },
+        {
+          "file": "facilitator-keys.spec.ts",
+          "ms": 9121
+        },
+        {
+          "file": "delegate-run-resume.spec.ts",
+          "ms": 8838
+        },
+        {
+          "file": "finbench-saved-views.spec.ts",
+          "ms": 8721
+        },
+        {
+          "file": "facilitator-window.spec.ts",
+          "ms": 8458
+        },
+        {
+          "file": "delegate-store-remote.spec.ts",
+          "ms": 8318
+        },
+        {
+          "file": "facilitator-grid.spec.ts",
+          "ms": 7892
+        },
+        {
+          "file": "delegate.spec.ts",
+          "ms": 5404
+        },
+        {
+          "file": "facilitator-saved-views.spec.ts",
+          "ms": 4828
+        },
+        {
+          "file": "finbench-filters.spec.ts",
+          "ms": 3686
+        },
+        {
+          "file": "delegate-cold-process.spec.ts",
+          "ms": 2374
+        },
+        {
+          "file": "delegate-cold-chat.spec.ts",
+          "ms": 1836
+        },
+        {
+          "file": "saved-views-keys.spec.ts",
+          "ms": 1282
+        },
+        {
+          "file": "delegate-shortcuts.spec.ts",
+          "ms": 827
+        },
+        {
+          "file": "keyboard-coherence.spec.ts",
+          "ms": 38
+        }
+      ],
+      "readable": true,
+      "why": null
+    },
+    {
+      "count": 3,
+      "index": 1,
+      "wall": 423900,
+      "exit": 0,
+      "suite": 423514.765,
+      "expected": 135,
+      "unexpected": 0,
+      "flaky": 1,
+      "skipped": 0,
+      "timeouts": [],
+      "flakyTests": [
+        {
+          "test": "galaxy-toast.spec.ts › a hydrated toast keeps only its remaining window (no fresh duration)",
+          "why": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeLessThan\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m"
+        }
+      ],
+      "files": [
+        {
+          "file": "galaxy-toast.spec.ts",
+          "ms": 228691
+        },
+        {
+          "file": "galaxy-scene.spec.ts",
+          "ms": 212303
+        },
+        {
+          "file": "galaxy-planet-delete.spec.ts",
+          "ms": 112040
+        },
+        {
+          "file": "galaxy-keys.spec.ts",
+          "ms": 68491
+        },
+        {
+          "file": "a11y.spec.ts",
+          "ms": 67825
+        },
+        {
+          "file": "galaxy-user-stars.spec.ts",
+          "ms": 63175
+        },
+        {
+          "file": "galaxy-webgl.spec.ts",
+          "ms": 63010
+        },
+        {
+          "file": "facilitator-run-link.spec.ts",
+          "ms": 55563
+        },
+        {
+          "file": "galaxy-undo.spec.ts",
+          "ms": 39140
+        },
+        {
+          "file": "company-search-keys.spec.ts",
+          "ms": 36713
+        },
+        {
+          "file": "galaxy-landing.spec.ts",
+          "ms": 26359
+        },
+        {
+          "file": "command-palette.spec.ts",
+          "ms": 25961
+        },
+        {
+          "file": "delegate-store-remote.spec.ts",
+          "ms": 22912
+        },
+        {
+          "file": "facilitator-window.spec.ts",
+          "ms": 20427
+        },
+        {
+          "file": "reduced-motion.spec.ts",
+          "ms": 15226
+        },
+        {
+          "file": "delegate-run-resume.spec.ts",
+          "ms": 11991
+        },
+        {
+          "file": "delegate-cold-chat.spec.ts",
+          "ms": 11560
+        },
+        {
+          "file": "facilitator-grid.spec.ts",
+          "ms": 9672
+        },
+        {
+          "file": "delegate-cold-process.spec.ts",
+          "ms": 7827
+        },
+        {
+          "file": "facilitator-saved-views.spec.ts",
+          "ms": 6851
+        },
+        {
+          "file": "delegate.spec.ts",
+          "ms": 6235
+        },
+        {
+          "file": "finbench-saved-views.spec.ts",
+          "ms": 5577
+        },
+        {
+          "file": "facilitator-keys.spec.ts",
+          "ms": 4339
+        },
+        {
+          "file": "finbench-filters.spec.ts",
+          "ms": 4182
+        },
+        {
+          "file": "saved-views-keys.spec.ts",
+          "ms": 2034
+        },
+        {
+          "file": "delegate-shortcuts.spec.ts",
+          "ms": 1728
+        },
+        {
+          "file": "keyboard-coherence.spec.ts",
+          "ms": 42
+        }
+      ],
+      "readable": true,
+      "why": null
+    },
+    {
+      "count": 4,
+      "index": 1,
+      "wall": 1561263,
+      "exit": 1,
+      "suite": 1560577.586,
+      "expected": 132,
+      "unexpected": 3,
+      "flaky": 1,
+      "skipped": 0,
+      "timeouts": [
+        "galaxy-planet-delete.spec.ts › removing from the planet panel offers Undo, and Undo restores the view",
+        "galaxy-undo.spec.ts › a removal survives a reload, Undo restores the star but not the view",
+        "galaxy-undo.spec.ts › a removal survives a reload, Undo restores the star but not the view"
+      ],
+      "flakyTests": [
+        {
+          "test": "galaxy-planet-delete.spec.ts › removing from the planet panel offers Undo, and Undo restores the view",
+          "why": "\u001b[31mTest timeout of 600000ms exceeded.\u001b[39m"
+        }
+      ],
+      "files": [
+        {
+          "file": "galaxy-planet-delete.spec.ts",
+          "ms": 1359827
+        },
+        {
+          "file": "galaxy-undo.spec.ts",
+          "ms": 1239372
+        },
+        {
+          "file": "galaxy-user-stars.spec.ts",
+          "ms": 888610
+        },
+        {
+          "file": "galaxy-toast.spec.ts",
+          "ms": 859517
+        },
+        {
+          "file": "galaxy-scene.spec.ts",
+          "ms": 385960
+        },
+        {
+          "file": "galaxy-webgl.spec.ts",
+          "ms": 126540
+        },
+        {
+          "file": "galaxy-keys.spec.ts",
+          "ms": 112224
+        },
+        {
+          "file": "a11y.spec.ts",
+          "ms": 98719
+        },
+        {
+          "file": "facilitator-run-link.spec.ts",
+          "ms": 65119
+        },
+        {
+          "file": "company-search-keys.spec.ts",
+          "ms": 64400
+        },
+        {
+          "file": "facilitator-window.spec.ts",
+          "ms": 56441
+        },
+        {
+          "file": "delegate-store-remote.spec.ts",
+          "ms": 47017
+        },
+        {
+          "file": "command-palette.spec.ts",
+          "ms": 41532
+        },
+        {
+          "file": "galaxy-landing.spec.ts",
+          "ms": 31597
+        },
+        {
+          "file": "delegate-cold-chat.spec.ts",
+          "ms": 30199
+        },
+        {
+          "file": "reduced-motion.spec.ts",
+          "ms": 29172
+        },
+        {
+          "file": "delegate-cold-process.spec.ts",
+          "ms": 21359
+        },
+        {
+          "file": "delegate-run-resume.spec.ts",
+          "ms": 21038
+        },
+        {
+          "file": "facilitator-grid.spec.ts",
+          "ms": 15724
+        },
+        {
+          "file": "facilitator-saved-views.spec.ts",
+          "ms": 11500
+        },
+        {
+          "file": "facilitator-keys.spec.ts",
+          "ms": 10017
+        },
+        {
+          "file": "finbench-saved-views.spec.ts",
+          "ms": 8797
+        },
+        {
+          "file": "delegate.spec.ts",
+          "ms": 8332
+        },
+        {
+          "file": "saved-views-keys.spec.ts",
+          "ms": 6467
+        },
+        {
+          "file": "finbench-filters.spec.ts",
+          "ms": 4976
+        },
+        {
+          "file": "delegate-shortcuts.spec.ts",
+          "ms": 4077
+        },
+        {
+          "file": "keyboard-coherence.spec.ts",
+          "ms": 65
+        }
+      ],
+      "readable": true,
+      "why": null
+    }
+  ]
+}
