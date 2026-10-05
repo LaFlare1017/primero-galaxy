@@ -278,7 +278,16 @@ suite at each count:
 npm run e2e:bench                      # 1, 2, 3, 4 and 6 workers, one full run each
 npm run e2e:bench -- --repeat=3        # three runs each; the median is what gets reported
 npm run e2e:bench -- --workers=2,3 --json=/tmp/bench.json   # --workers= wins over the list above
+npm run doctor                                           # the `worker-pin` check compares the pin against the measured knee
 ```
+
+Writing a measurement to `e2e/worker-curve.json` is what settles the pin: that
+is the file the `worker-pin` doctor check reads, and the path the `E2E worker
+curve` job writes on the runner. Anywhere else you are writing a diagnostic for
+yourself. The committed shape is the compact one — the two counts, the machine,
+and each run's verdict and per-file times — because the per-test list and a temp
+directory path are worth nothing to whoever opens the file next, and the full
+diagnostic is 72KB against the committed file's 10KB.
 
 It prints the curve (time, what failed, the slowest file, and what one more
 worker bought over the last one) and then compares the fastest green count
@@ -309,6 +318,17 @@ and the pin itself is only settled on the runner — which is why the
 demand (`workflow_dispatch`), and writes the curve into its job summary next to
 the pin read back out of the workflow. If that summary ever disagrees with the
 number in `ci.yml`, the summary is the newer truth.
+
+The `worker-pin` doctor check is the part of this that runs every day. It reads
+the pin out of `ci.yml` and the knee out of `e2e/worker-curve.json` and warns
+when they disagree — which is the one thing nobody was checking, since a curve
+lives in a job summary that only opens when somebody goes looking for it. Two
+states it deliberately refuses to call a pass: **no measurement**, and a
+measurement from a machine that is not the runner. A laptop's curve is a real
+number about a different computer, and comparing it to a four-vCPU pin would be
+inventing a fact — so locally that warns with the command to fix it, and on CI
+it stands down, because CI cannot run the bench either. Only a runner's
+measurement of the suite as it stands today is allowed to settle the pin.
 
 Read a local curve only if the machine is quiet. The bench prints the load and
 refuses a run whose load is at or above the core count without `--force`, because
