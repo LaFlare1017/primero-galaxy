@@ -282,7 +282,22 @@ npm run e2e:bench -- --workers=2,3 --json=/tmp/bench.json   # --workers= wins ov
 
 It prints the curve (time, what failed, the slowest file, and what one more
 worker bought over the last one) and then compares the fastest green count
-against the number `.github/workflows/ci.yml` pins. CI runs the same shape
+against the number `.github/workflows/ci.yml` pins.
+
+The slowest **file** it prints is the floor — `fullyParallel: false` makes a
+file one worker's serial chunk — but the findings underneath also say what
+that file is made of, because a file is not always the thing to go after. It
+distinguishes one test dominating its file ("splitting this file would not move
+the floor; splitting that test would"), a file genuinely spread over its tests
+("the file itself is the thing to split"), and a floor that is not even the
+suite's worst test. All three are true at different worker counts, and they
+point at different work.
+
+`galaxy-toast.spec.ts` was the second kind of puzzle for a long time. It was the
+slowest file at every worker count on both machines, which reads as "split the
+file" — and 91% of it was a single 445-line test, so splitting the file would
+have moved nothing. Cut at the four seams that test actually had, it is now four
+files whose slowest is 42.2s against the 594.8s it was. CI runs the same shape
 (`CI=1`, retries 2) with `ANTHROPIC_API_KEY` removed, so what is timed is the
 machine rather than a network. A count that times out is recorded as a broken
 count, not a slow one — that is the datapoint that keeps the ceiling honest.
@@ -294,6 +309,12 @@ and the pin itself is only settled on the runner — which is why the
 demand (`workflow_dispatch`), and writes the curve into its job summary next to
 the pin read back out of the workflow. If that summary ever disagrees with the
 number in `ci.yml`, the summary is the newer truth.
+
+Read a local curve only if the machine is quiet. The bench prints the load and
+refuses a run whose load is at or above the core count without `--force`, because
+the numbers stop being a property of the code at that point: one test of the
+galaxy split measured 26s on an idle box and 593s in one attempt under load. To
+price the work rather than the contention, measure it at `--workers=1`.
 
 ## 12. When something is wrong
 
