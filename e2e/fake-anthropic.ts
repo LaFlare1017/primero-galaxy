@@ -82,6 +82,17 @@ export interface FakeAnthropic {
   served: string[];
   /** Where the candidate was written, when this run was recording. `null` otherwise. */
   recorded: () => string | null;
+  /** How many requests this run sent to the real API, against `hopBudget`. */
+  forwarded: () => number;
+  /**
+   * The ceiling, or `Infinity` when not recording.
+   *
+   * Exposed so a spec can assert the thing that is otherwise invisible: that the
+   * run stopped. Without it, "the second hop was refused" and "the second hop
+   * was never attempted" look identical from outside, and only one of them saves
+   * anything.
+   */
+  hopBudget: number;
   close: () => Promise<void>;
 }
 
@@ -91,13 +102,21 @@ export interface FakeAnthropic {
  * this transcript gives only when the history is there.
  *
  * With `RECORD_TRANSCRIPT` set it stops being the model's answer and becomes a
- * PASSTHROUGH: every request is forwarded to the real Anthropic API and the
- * exchange is recorded, so the run exercises a real model and leaves behind a
- * candidate fixture shaped like the one this file replays. That is the only way
- * to get the expensive half of a fixture — the real tool calls and the real
- * answer text — without typing them, and the half that cannot be typed is the
- * `requires` clause, which is why the recording derives it and admits when it
- * could not.
+ * PASSTHROUGH: requests are forwarded to the real Anthropic API and the exchange
+ * is recorded, so the run exercises a real model and leaves behind a candidate
+ * fixture shaped like the one this file replays. That is the only way to get the
+ * expensive half of a fixture — the real tool calls and the real answer text —
+ * without typing them, and the half that cannot be typed is the `requires`
+ * clause, which is why the recording derives it and admits when it could not.
+ *
+ * One request, though, unless `RECORD_HOPS` says otherwise. Recording spends
+ * money, and what actually spends it is a rerun nobody meant to make — the
+ * variable left set in a shell, a second `npm run test:e2e`. A run that records
+ * the first exchange and refuses the next costs one request however many times
+ * it is repeated, which is a bound you can hold in your head; "however many hops
+ * the conversation turned out to need" is not one. The refusal is a 400 that
+ * names `RECORD_HOPS`, so the rerun ends with a message instead of an invoice,
+ * and what was recorded before the cap is still a file.
  */
 export async function startFakeAnthropic(
   transcript: Transcript,
@@ -122,6 +141,13 @@ export async function startFakeAnthropic(
         'key there is nothing to record and the run would write an empty fixture that reads like a real one.',
     );
   }
+  // Resolved here rather than at the first request so a misspelt budget is
+  // refused before anything can spend, for the same reason the destination is.
+  const budget = recording ? recordHopBudget(env) : Number.POSITIVE_INFINITY;
+  // Counted, not inferred from `recordedHops`: a request the upstream REFUSED
+  // costs a request too, and a budget that only counted successes would let a
+  // run retry against a rate limit for as long as the limit lasted.
+  let forwarded = 0;
   const upstream = (env.ANTHROPIC_UPSTREAM_URL ?? 'https://api.anthropic.com').replace(/\/$/, '');
   const upstreamKey = env.ANTHROPIC_API_KEY ?? '';
   let wrote: string | null = null;
@@ -210,6 +236,22 @@ export async function startFakeAnthropic(
       // answer — a real model's is. Serving the recorded turns here would record
       // a conversation with ourselves and call it a candidate.
       if (recording) {
+        if (forwarded >= budget) {
+          // No upstream call at all, so this is free. Synchronous and before the
+          // `await`, because two requests arriving together must not both read
+          // the counter before either of them has written to it.
+          send(400, {
+            error: {
+              message:
+                `recording spent its budget of ${budget} request${budget === 1 ? '' : 's'} to the real API and will not ` +
+                'make another. What was recorded so far is on disk. Set RECORD_HOPS=' +
+                `${budget + 1} or more to record a longer conversation — the default is one request, because a rerun ` +
+                'that costs a whole conversation by accident is the expensive way to learn you already had the file.',
+            },
+          });
+          return;
+        }
+        forwarded += 1;
         void forward(asked, serialized, req.url ?? '/v1/messages')
           .then((upstream_) => sendRaw(upstream_.status, upstream_.text))
           .catch((error: Error) =>
@@ -271,6 +313,8 @@ export async function startFakeAnthropic(
     requests,
     served,
     recorded: () => wrote,
+    forwarded: () => forwarded,
+    hopBudget: budget,
     /**
      * Stop answering, and — when recording — write the candidate FIRST.
      *
@@ -329,6 +373,41 @@ export function recordingRequested(env: NodeJS.ProcessEnv = process.env): boolea
   const raw = (env.RECORD_TRANSCRIPT ?? '').trim();
   if (raw === '') return false;
   return !['0', 'false', 'no', 'off'].includes(raw.toLowerCase());
+}
+
+/**
+ * How many requests to the real API one recording run may make.
+ *
+ * ONE, and that is the whole point of the function. Recording forwards to a paid
+ * API, and the thing that actually costs money is a rerun nobody meant to make:
+ * RECORD_TRANSCRIPT left set in a shell, a second `npm run test:e2e`, a stray
+ * CI invocation. A run that records the first exchange and then refuses to make
+ * another costs one request however many times it is repeated, and a recording
+ * that is one exchange long is not a loss — it is a candidate, and the
+ * `cold-chat-candidate` check says a single turn cannot prove anything about a
+ * restarted process, which is true and is better than finding out via an
+ * invoice.
+ *
+ * A full conversation needs more than one, so RECORD_HOPS asks for more
+ * explicitly. Defaulting it high would put the cost back where it was, and
+ * defaulting the limit high is the mistake this exists to stop.
+ *
+ * Refused loudly rather than coerced, for the same reason RECORD_TRANSCRIPT is
+ * read as a PATH when it is not a boolean: a typo in a spending control should
+ * stop the run, not quietly mean something else. `0` is refused for the same
+ * reason — it reads like "record less" and would mean "record nothing, having
+ * asked to record".
+ */
+export function recordHopBudget(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = (env.RECORD_HOPS ?? '').trim();
+  if (raw === '') return 1;
+  if (!/^\d+$/.test(raw) || Number(raw) < 1) {
+    throw new Error(
+      `RECORD_HOPS is ${JSON.stringify(raw)}, which is not a count of requests. It is the number of requests to the ` +
+        'real API one recording run may make, as a whole number of at least 1. Leave it unset for one.',
+    );
+  }
+  return Number(raw);
 }
 
 /** The candidate path for this run, resolved. Never the committed fixture. */

@@ -105,6 +105,7 @@ const REMOVED = [
   ['ANTHROPIC_BASE_URL', 'a base URL left over from a proxy run would send the suite somewhere else entirely'],
   ['ANTHROPIC_UPSTREAM_URL', 'the recorder\'s upstream, which is only ever read when recording is on'],
   ['RECORD_TRANSCRIPT', 'a recording run writes a fixture; this is not the place to make one'],
+  ['RECORD_HOPS', 'the recorder\'s budget, which is only ever read when recording is on'],
   ['E2E_WORKERS', 'the count under test is set per run, and an inherited one would disagree with it'],
 ];
 

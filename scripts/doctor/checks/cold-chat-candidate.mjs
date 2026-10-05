@@ -32,6 +32,15 @@
  * question, and turn one has no earlier question, so `turn-1` legitimately
  * carries none and is never listed.
  *
+ * Which makes a ONE-TURN candidate a special case worth naming: it has nothing
+ * wrong with it and can say nothing. Its only turn is turn one, so it is exempt,
+ * `$unproven` is empty, and every other check here passes — while the file proves
+ * no history was recovered, because proving that needs a SECOND turn, and a
+ * second turn is what has to carry the `requires`. This is the default shape a
+ * capped recording leaves behind (see RECORD_HOPS in `e2e/fake-anthropic.ts`),
+ * which is precisely why it is checked: cheap by design, and silent if nothing
+ * says so.
+ *
  * NOT checked here, and the reason is worth stating because it reads as an
  * oversight and is not. The COMMITTED fixture (`cold-chat-transcript.json`) has
  * a turn with no `requires` on purpose: its third turn is
@@ -138,6 +147,11 @@ export default {
       setup: (root) => candidate(root, { ...PROVEN, turn3: { requires: 'a question nobody asked' } }),
     },
     {
+      level: 'warn',
+      why: 'a one-turn candidate \u2014 exempt, empty $unproven, and no second turn whose `requires` could mean anything',
+      setup: (root) => candidate(root, { turns: 1 }),
+    },
+    {
       level: 'fail',
       why: 'the candidate is not JSON, which is the check unable to look rather than a candidate that is fine',
       setup: (root) => write(root, CANDIDATE, 'not json at all\n'),
@@ -181,6 +195,23 @@ export default {
     }
 
     const { turns, $unproven: unproven } = read.file;
+    if (turns.length < 2) {
+      return {
+        level: 'warn',
+        detail:
+          `the recorded candidate holds ${turns.length === 1 ? 'one turn' : 'no turns'}, and ` +
+          (turns.length === 1 ? 'that turn' : 'that') +
+          ' is turn one \u2014 exempt from `requires`, so $unproven is empty and nothing here can be wrong. ' +
+          'It also proves nothing: showing a restarted process recovered the conversation needs a SECOND turn, ' +
+          'and the second turn is the one that has to carry the `requires`.',
+        hint: [
+          'this is what a capped recording leaves behind, and the cap is the safe default',
+          'RECORD_HOPS=3 or more records a conversation long enough to mean something',
+          'RECORD_TRANSCRIPT=1 rewrites the candidate from a real run',
+        ],
+      };
+    }
+
     const faults = [];
     const questions = [];
     turns.forEach((turn, at) => {
@@ -229,7 +260,7 @@ function committedOnly(root) {
 }
 
 /** A three-turn candidate at the given shape, beside a committed fixture. */
-function candidate(root, { unproven = [], turn3 = {} }) {
+function candidate(root, { unproven = [], turn3 = {}, turns = 3 }) {
   committedOnly(root);
   const first = 'Reconcile the March operating bank account';
   const second = 'And what about April?';
@@ -242,7 +273,7 @@ function candidate(root, { unproven = [], turn3 = {} }) {
       { id: 'turn-1', when: first, hops: hop },
       { id: 'turn-2', when: second, requires: first, hops: hop },
       { id: 'turn-3', when: 'Summarise both', ...turn3, hops: hop },
-    ],
+    ].slice(0, turns),
   };
   write(root, CANDIDATE, `${JSON.stringify(file, null, 2)}\n`);
 }
