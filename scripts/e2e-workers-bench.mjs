@@ -303,7 +303,7 @@ function runOnce(count, index, dir) {
 
 /** The report, or a reason there is not one. Silence is never read as a fast run. */
 function readReport(path, broken) {
-  const empty = { suite: null, expected: null, unexpected: null, flaky: null, flakyTests: [], skipped: null, timeouts: [], files: [], readable: false, why: null };
+  const empty = { suite: null, expected: null, unexpected: null, flaky: null, flakyTests: [], skipped: null, timeouts: [], files: [], tests: [], readable: false, why: null };
   if (broken !== null) return { ...empty, why: `the run could not be started (${broken})` };
   let text;
   try {
@@ -342,14 +342,25 @@ function readReport(path, broken) {
   walk(report.suites);
 
   const perFile = new Map();
+  const perTest = [];
   const timeouts = [];
   const flakyTests = [];
   for (const spec of specs) {
     const file = String(spec.file ?? '(unknown file)');
     let spent = 0;
     for (const test of spec.tests ?? []) {
+      // Per TEST, not per file. The suite parallelises by FILE, so the slowest
+      // file is the floor — but a file's time is only a lever if you know which
+      // of its tests is carrying it. `galaxy-toast.spec.ts` read as the long
+      // pole at every worker count for weeks of measurements, and the reason
+      // turned out to be that 91% of it was ONE 445-line test: the file could
+      // have been split five ways and the floor would not have moved at all.
+      // A per-file number cannot say that. This one can.
+      let testMs = 0;
       for (const result of test.results ?? []) {
-        spent += Number(result.duration ?? 0);
+        const duration = Number(result.duration ?? 0);
+        spent += duration;
+        testMs += duration;
         if (result.status === 'timedOut' || result.status === 'timeout') {
           timeouts.push(`${file} › ${spec.title}`);
         }
@@ -365,6 +376,7 @@ function readReport(path, broken) {
       // high for this machine, and an assertion that never became true says
       // something is racing. Those are different bugs and the count cannot tell
       // them apart.
+      perTest.push({ test: `${file} › ${spec.title}`, ms: testMs });
       if (test.status === 'flaky') {
         const first = (test.results ?? [])[0];
         const message = first?.error?.message ?? (first?.errors ?? [])[0]?.message;
@@ -386,6 +398,7 @@ function readReport(path, broken) {
     timeouts,
     flakyTests,
     files: [...perFile.entries()].map(([file, ms]) => ({ file, ms })).sort((a, b) => b.ms - a.ms),
+    tests: perTest.sort((a, b) => b.ms - a.ms),
     readable: true,
     why: null,
   };
@@ -410,6 +423,10 @@ function summarise(count, runs) {
     suite: timed.length === runs.length ? median(timed.map((run) => run.suite)) : null,
     wall: timed.length === runs.length ? median(timed.map((run) => run.wall)) : null,
     slowest: runs[0]?.files?.[0] ?? null,
+    // The same run's slowest single test. See the note in readReport: without
+    // this the bench says WHICH FILE is the floor and not whether the file is
+    // the problem or one test inside it is.
+    slowestTest: runs[0]?.tests?.[0] ?? null,
     // Retries are 2 under CI, so a test that failed and passed on its second
     // attempt exits 0 and reads green — the same hole `scripts/flaky-report.mjs`
     // exists to report. Counted here so a green row can say what it cost, and
@@ -593,9 +610,41 @@ if (pin !== null) {
   } else if (fastest.count === pin) {
     say('the pin', `${pin} is both the fastest green count and the number CI pins. The pin is behind a measurement.${measured.flaky > 0 ? ` It is also the run that hid ${measured.flaky} retry-flown test(s) behind exit 0.` : ''}`);
   } else if (fastest.count > pin) {
-    say('the pin', `${pin} measured ${clock(measured.suite)}; ${fastest.count} measured ${clock(fastest.suite)}, ${clock(fastest.suite - measured.suite)} faster.${hosted ? ' Both ran where the pin runs, so this is the number to change the pin to.' : ' Whether CI can have that many is a question about four vCPUs, not about this machine.'}`);
+    // Signed, and the word follows the sign. `clock()` already prints its own
+    // sign, so an unsigned difference plus a fixed adjective printed the run
+    // 4:11.2 as "-0:20.3 faster" — a bench that cannot read its own comparison
+    // is worse than one that prints no comparison at all, because the reader
+    // trusts the number over the adjective.
+    const gain = fastest.suite - measured.suite;
+    say('the pin', `${pin} measured ${clock(measured.suite)}; ${fastest.count} measured ${clock(fastest.suite)}, ${clock(Math.abs(gain))} ${gain >= 0 ? 'faster' : 'slower'}.${hosted ? ' Both ran where the pin runs, so this is the number to change the pin to.' : ' Whether CI can have that many is a question about four vCPUs, not about this machine.'}`);
   } else {
     say('the pin', `${pin} measured ${clock(measured.suite)}, ${clock(measured.suite - fastest.suite)} slower than ${fastest.count} — so the pin is conservative here, which is the right direction to be wrong in.`);
+  }
+}
+
+/**
+ * What the floor is actually made of.
+ *
+ * The suite parallelises by file, so the slowest file sets the floor. That fact
+ * alone sends you to split the file — which is the wrong move when the file is
+ * just a long test wearing a filename, because splitting it puts the same test
+ * in a file of its own and the floor does not move. So this asks which of the
+ * two it is, and prints the share either way.
+ */
+for (const row of rows.filter((row) => row.slowest !== null && row.slowestTest !== null)) {
+  const { slowest, slowestTest } = row;
+  const inThisFile = slowestTest.test.startsWith(`${slowest.file} › `);
+  const share = Math.round((slowestTest.ms / slowest.ms) * 100);
+  if (inThisFile && share >= 60) {
+    say(
+      `${row.count} worker${row.count === 1 ? '' : 's'}`,
+      `the floor is ${slowest.file} (${clock(slowest.ms)}), and ${share}% of it is ONE test — ${slowestTest.test.split(' › ').slice(1).join(' › ')} (${clock(slowestTest.ms)}). Splitting this file would not move the floor; splitting that test would.`
+    );
+  } else if (inThisFile) {
+    const longest = `${slowestTest.test.split(' › ').slice(1).join(' › ')} (${clock(slowestTest.ms)}, ${share}% of the file)`;
+    say(`${row.count} worker${row.count === 1 ? '' : 's'}`, `the floor is ${slowest.file} (${clock(slowest.ms)}), spread over its tests — its longest is ${longest}, so the file itself is the thing to split.`);
+  } else {
+    say(`${row.count} worker${row.count === 1 ? '' : 's'}`, `the floor is ${slowest.file} (${clock(slowest.ms)}), whose longest test is ${clock(slowestTest.ms)} (${share}%) — the rest of the suite's slowest single test is ${slowestTest.test} (${clock(slowestTest.ms)}).`);
   }
 }
 
