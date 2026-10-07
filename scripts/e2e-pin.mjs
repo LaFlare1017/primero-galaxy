@@ -49,20 +49,30 @@ export function pinnedWorkers(root) {
 /**
  * What a committed curve keeps, and what it leaves in the run's own report file.
  *
- * The full `--json` is a diagnostic: 72KB for three runs, three quarters of it a
- * per-test timing list and a path to a temp directory that means nothing on the
- * machine reading it. None of that belongs in a file whose whole job is to be
- * read later by something else — the `worker-pin` check, and whoever opens it
- * next. So the committed shape keeps the two counts, the machine, and each run's
- * verdict and per-file times, and drops the rest. The bench writes both shapes
- * from the one object; only which path was asked for decides.
+ * The full `--json` is a diagnostic: 72KB for three runs, most of it per-test
+ * timing tables and a path to a temp directory that means nothing on the
+ * machine reading it. Most of that belongs in the job's artifact, not in a file
+ * whose whole job is to be read later by something else — the `worker-pin`
+ * check, and whoever opens it next. So the committed shape keeps the two
+ * counts, the machine, each run's verdict, timeout list and per-file times —
+ * and ONE per-test table: the pinned run's. That is the run the doctor's
+ * budget check reads, comparing each committed `test.setTimeout` against what
+ * the curve measured for the same test at the count CI actually runs, and
+ * without that one table the check has nothing to compare. The other counts'
+ * tables stay out — a count CI does not run is not a budget question, and the
+ * raw reports keep everything — and the temp path stays out everywhere. When
+ * the measurement carries neither a pin nor a knee, no run carries the table,
+ * which is the shape the file had before any of it was kept.
  *
  * Lives here rather than beside the bench for the reason above: the bench runs
  * the suite when it is imported, so nothing can reach into it.
  */
 export function committedCurve(measurement) {
+  const preferred = measurement.pin ?? measurement.knee;
   return {
     ...measurement,
-    runs: (measurement.runs ?? []).map(({ tests, report, ...rest }) => rest),
+    runs: (measurement.runs ?? []).map(({ tests, report, count, ...rest }) =>
+      count === preferred ? { count, ...rest, tests } : { count, ...rest },
+    ),
   };
 }

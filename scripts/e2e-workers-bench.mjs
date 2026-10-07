@@ -78,9 +78,11 @@
  *   --json=      write the measurements here, for comparing two commits or two
  *                machines. `e2e/worker-curve.json` is the path the `worker-pin`
  *                doctor check reads, and it is where a runner's curve belongs:
- *                written there the bench keeps the counts and the per-file times
- *                and drops the per-test list and a temp path, so the committed
- *                file is 10KB instead of 72KB. Anywhere else keeps everything.
+ *                written there the bench keeps the counts, the per-file times,
+ *                the pinned run's per-test table — the one the doctor's budget
+ *                check reads — and drops the rest: the other counts' tables and
+ *                a temp path, so the committed file is 30KB instead of 72KB.
+ *                Anywhere else keeps everything.
  *   --local      run without CI=1 (retries 0, no CI reporter).
  *   --force      measure on a machine that is too busy to measure on.
  */
@@ -748,7 +750,7 @@ if (options.json !== null) {
   // The doctor compares that file's knee against the pin, so a measurement
   // written anywhere else settles nothing for anybody but this run.
   if (committed) {
-    console.log('  — the per-test timings stay in the raw reports above; this file keeps what a later reader needs');
+    console.log('  — the per-test timings stay in the raw reports above; this file keeps the pinned run\'s table, which is the one the doctor\'s budget check reads');
   } else {
     console.log(`  — ${CURVE} is where the \`worker-pin\` doctor check looks, so nothing else will read this`);
   }
