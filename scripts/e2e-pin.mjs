@@ -54,25 +54,33 @@ export function pinnedWorkers(root) {
  * machine reading it. Most of that belongs in the job's artifact, not in a file
  * whose whole job is to be read later by something else — the `worker-pin`
  * check, and whoever opens it next. So the committed shape keeps the two
- * counts, the machine, each run's verdict, timeout list and per-file times —
- * and ONE per-test table: the pinned run's. That is the run the doctor's
- * budget check reads, comparing each committed `test.setTimeout` against what
- * the curve measured for the same test at the count CI actually runs, and
- * without that one table the check has nothing to compare. The other counts'
- * tables stay out — a count CI does not run is not a budget question, and the
- * raw reports keep everything — and the temp path stays out everywhere. When
- * the measurement carries neither a pin nor a knee, no run carries the table,
- * which is the shape the file had before any of it was kept.
+ * shape keeps: the pinned run's. That is the run the doctor's budget check
+ * reads, comparing each committed `test.setTimeout` against what the curve
+ * measured for the same test at the count CI actually runs, and without that
+ * one table the check has nothing to compare. When a measurement repeats the
+ * pinned count (--repeat=2 and up), the table kept is the SLOWER rep's: the
+ * budgets were sized from a loaded measurement, so the comparison that matters
+ * is the rep the machine struggled with, not the one it breezed through. The
+ * other counts' tables stay out — a count CI does not run is not a budget
+ * question, and the raw reports keep everything — and the temp path stays out
+ * everywhere. When the measurement carries neither a pin nor a knee, no run
+ * carries the table, which is the shape the file had before any of it was kept.
  *
  * Lives here rather than beside the bench for the reason above: the bench runs
  * the suite when it is imported, so nothing can reach into it.
  */
 export function committedCurve(measurement) {
   const preferred = measurement.pin ?? measurement.knee;
+  const candidates = (measurement.runs ?? []).filter((run) => run && run.count === preferred);
+  // The rep whose table survives a repeated pinned count. An unreadable rep
+  // (no suite time) sorts last, because a table that cannot be read settles
+  // nothing; two readable reps sort by suite time, slower first.
+  const kept = candidates.reduce((a, b) => ((b.suite ?? 0) > (a.suite ?? 0) ? b : a), candidates[0]);
   return {
     ...measurement,
-    runs: (measurement.runs ?? []).map(({ tests, report, count, ...rest }) =>
-      count === preferred ? { count, ...rest, tests } : { count, ...rest },
-    ),
+    runs: (measurement.runs ?? []).map((run) => {
+      const { tests, report, count, ...rest } = run;
+      return run === kept ? { count, ...rest, tests } : { count, ...rest };
+    }),
   };
 }

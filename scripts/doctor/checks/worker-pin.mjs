@@ -76,7 +76,7 @@ import { CURVE, pinnedWorkers } from '../../e2e-pin.mjs';
 import { commit, git, track, write } from '../fixture.mjs';
 import { git as gitHere } from '../lib.mjs';
 
-const MEASURE = 'npm run e2e:bench -- --workers=2,3,4 --json=e2e/worker-curve.json --force';
+const MEASURE = 'npm run e2e:bench -- --workers=2,3,4 --repeat=2 --json=e2e/worker-curve.json --force';
 
 /**
  * A budget whose measurement has come within this share of it has spent the

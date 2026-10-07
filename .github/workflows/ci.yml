@@ -446,10 +446,10 @@ jobs:
       contents: write
       pull-requests: write
     runs-on: ubuntu-latest
-    # Three full suite runs plus a build each. The e2e job's 40 is for one run;
-    # this is three, on a runner with four vCPUs, and the point of measuring the
-    # curve is not to have the measurement time out.
-    timeout-minutes: 75
+    # Six full suite runs (three counts, two runs each) plus a build each. The
+    # e2e job's 40 is for one run; this is six, on a runner with four vCPUs, and
+    # the point of measuring the curve is not to have the measurement time out.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -473,7 +473,14 @@ jobs:
         # expects and putting one of these into the repository is copying one
         # file. The bench writes the compact committed shape for this path and
         # the full diagnostic anywhere else; see scripts/e2e-pin.mjs.
-        run: node scripts/e2e-workers-bench.mjs --workers=2,3,4 --json=e2e/worker-curve.json
+        #
+        # --repeat=2 because one run per count is a sample, not a number, and
+        # this runner proved it: across four single-run measurements the fastest
+        # count read 3, 3, 3 and 4 and the knee 3, 2, 2 and 3 — run-to-run noise
+        # on a hosted runner is larger than every gap the knee rule compares.
+        # Two runs per count, the median reported, halves that noise for one
+        # more suite run each.
+        run: node scripts/e2e-workers-bench.mjs --workers=2,3,4 --repeat=2 --json=e2e/worker-curve.json
       - name: Commit the measurement and open a PR, so the pin is re-checked
         # The bench writes e2e/worker-curve.json regardless of whether a count
         # timed out — a failed count is a result, and its knee is still the
