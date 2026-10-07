@@ -203,27 +203,58 @@ export function kneeFromBest(best, within) {
 }
 
 /**
+ * Whether two era-best maps record the same floors.
+ *
+ * Exact float equality on purpose, not an epsilon: a floor in a committed curve
+ * is a stored minimum, not a computed one, and an unchanged floor survives the
+ * JSON round-trip as the very same double — while a floor that moved is the
+ * finding, and an epsilon loose enough to swallow it would be tuned to hide
+ * exactly what this comparison exists to catch. One-sided maps and non-object
+ * maps are a refusal rather than a mismatch: a measurement that cannot prove
+ * what its times are is not proven the same by anything.
+ */
+function sameBests(left, right) {
+  if (left === null || typeof left !== 'object' || right === null || typeof right !== 'object') return false;
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length) return false;
+  for (const key of leftKeys) {
+    if (!(key in right)) return false;
+    if (!Number.isFinite(left[key]) || !Number.isFinite(right[key])) return false;
+    if (left[key] !== right[key]) return false;
+  }
+  return true;
+}
+
+/**
  * Whether two measurements say the same thing — the question that decides
  * whether a re-measurement is worth a pull request.
  *
- * Same knee, same pin, same machine class, and (when both carry the stamp) the
- * same suite content. The recordedAt is deliberately NOT compared: a newer
- * timestamp for an unchanged suite is the normal, healthy outcome of a
- * re-measure, and treating it as a difference is what opened a pull request on
- * every push. A committed curve from before the stamp existed cannot prove
- * content-equality, so it falls back to the old near-identical-timestamp
- * comparison — which means the first measurement after the stamp lands opens
- * one pull request, establishes the stamp, and every equivalent re-measure
- * after it skips.
+ * Same knee, same pin, same machine class, (when both carry the stamp) the
+ * same suite content, and (when both carry the era) the same best times. The
+ * times are the part a knee-equal comparison would otherwise hide: a run whose
+ * floor moved is a finding even when the ordering — and so the knee — did not,
+ * and the bench's merged bests differ from main's exactly when this run
+ * improved one. The recordedAt is deliberately NOT compared: a newer timestamp
+ * for an unchanged suite is the normal, healthy outcome of a re-measure, and
+ * treating it as a difference is what opened a pull request on every push.
+ *
+ * A committed curve from before the stamp or the era existed cannot prove
+ * content-equality or time-equality, so it falls back to the old
+ * near-identical-timestamp comparison — which means the first measurement
+ * after this lands opens one pull request, establishes both, and every
+ * re-measure that changed nothing the file records skips.
  */
 export function sameMeasurement(left, right) {
   if (left === null || right === null) return false;
   if (left.knee !== right.knee) return false;
   if (left.hosted !== right.hosted) return false;
   if (left.pin !== right.pin) return false;
-  if (left.suiteHash !== undefined || right.suiteHash !== undefined) {
-    return left.suiteHash === right.suiteHash;
-  }
+  const stamped = left.suiteHash !== undefined || right.suiteHash !== undefined;
+  if (stamped && left.suiteHash !== right.suiteHash) return false;
+  const carriesBests = left.best !== undefined || right.best !== undefined;
+  if (carriesBests && !sameBests(left.best, right.best)) return false;
+  if (stamped || carriesBests) return true;
   const a = Date.parse(left.recordedAt);
   const b = Date.parse(right.recordedAt);
   if (Number.isNaN(a) || Number.isNaN(b)) return false;

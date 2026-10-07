@@ -5,11 +5,11 @@
  * hand.
  *
  * Only opens a PR when the measurement differs from what main already carries —
- * the same knee over the same suite is not a finding, however fresh its
- * timestamp, and a pull request on every push was exactly the churn this gate
- * exists to stop. Sameness is `sameMeasurement` in scripts/e2e-pin.mjs, shared
- * with every other reader of a measurement, so there is one definition of it
- * and one place to fix. The curve job runs on main pushes, workflow_dispatch
+ * the same knee at the same times over the same suite is not a finding, however
+ * fresh its timestamp, and a pull request on every push was exactly the churn
+ * this gate exists to stop. Sameness is `sameMeasurement` in scripts/e2e-pin.mjs,
+ * shared with every other reader of a measurement, so there is one definition of
+ * it and one place to fix. The curve job runs on main pushes, workflow_dispatch
  * and the weekly schedule; the PR it opens triggers the checks job (including
  * worker-pin) on pull_request, which is the re-check.
  *
@@ -178,7 +178,7 @@ async function main() {
   const onMain = mainMeasurement();
   if (onMain !== null && sameMeasurement(measured, onMain)) {
     console.log(
-      `curve-pr: the runner measured the same knee (${measured.knee}) over the same suite main already carries — nothing to propose`,
+      `curve-pr: the runner measured the same knee (${measured.knee}) at the same times over the same suite main already carries — nothing to propose`,
     );
     return;
   }
