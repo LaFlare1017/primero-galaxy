@@ -160,10 +160,21 @@ function openPr({ owner, repo, branch }) {
     return { action: 'existing', number: existing };
   }
 
-  const number = execSync(
-    `gh pr create --base main --head ${branch} --title ${JSON.stringify(title)} --body-file - --json number --jq '.number'`,
+  // `gh pr create` has no --json flag — the first run of this script died on
+  // exactly that, after its branch had already been pushed. It prints the new
+  // PR's URL on stdout, and the number is the last path segment of it.
+  const url = execSync(
+    `gh pr create --base main --head ${branch} --title ${JSON.stringify(title)} --body-file -`,
     { cwd: ROOT, input: body, encoding: 'utf8' },
-  ).trim();
+  )
+    .trim()
+    .split('\n')
+    .pop()
+    .trim();
+  const number = (url.match(/\/pull\/(\d+)/) ?? [])[1];
+  if (number === undefined) {
+    throw new Error(`gh pr create did not print a pull request URL — it printed: ${url}`);
+  }
   return { action: 'created', number };
 }
 
