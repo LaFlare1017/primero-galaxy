@@ -429,6 +429,14 @@ jobs:
     # is what landing on main is. The e2e job above remains the thing that says
     # whether the suite passes.
     if: github.event_name != 'pull_request'
+    # The job commits its measurement and opens a PR with it (curve-pr.mjs), so
+    # its token has to push one branch and file one pull request. New repos
+    # default to read-only workflow tokens, and the first run of this flow died
+    # on exactly that 403; these two scopes are the whole of what it asks for,
+    # and no other job here gets them.
+    permissions:
+      contents: write
+      pull-requests: write
     runs-on: ubuntu-latest
     # Three full suite runs plus a build each. The e2e job's 40 is for one run;
     # this is three, on a runner with four vCPUs, and the point of measuring the
@@ -470,6 +478,11 @@ jobs:
         # pull_request, which runs worker-pin against the new measurement — that
         # is the re-check this job exists to automate.
         if: always() && !cancelled() && hashFiles('e2e/worker-curve.json') != ''
+        env:
+          # The runner does not hand `gh` a token, and curve-pr asks it to list
+          # and create pull requests; without this the step dies at `gh pr list`
+          # even after the push above is allowed.
+          GH_TOKEN: ${{ github.token }}
         run: node scripts/curve-pr.mjs
 
       - name: Upload the raw measurements and any retry forensics
