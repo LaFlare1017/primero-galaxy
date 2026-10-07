@@ -741,7 +741,11 @@ if (options.json !== null) {
     options,
     runs: results,
   };
-  const committed = options.json === CURVE;
+  // `options.json` was resolved against ROOT above, so comparing it to the
+  // relative CURVE constant is false everywhere and forever — the committed
+  // shape was dead code, and every curve written to e2e/worker-curve.json was
+  // the full diagnostic wearing its name. Resolve the constant the same way.
+  const committed = options.json === resolve(ROOT, CURVE);
   writeFileSync(
     options.json,
     `${JSON.stringify(committed ? committedCurve(measurement) : measurement, null, 2)}\n`,
