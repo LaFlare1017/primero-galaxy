@@ -5,9 +5,12 @@
  * hand.
  *
  * Only opens a PR when the measurement differs from what main already carries —
- * a re-measurement that lands on the same numbers should not open a fresh PR
- * every week. The curve job runs on main pushes, workflow_dispatch and the
- * weekly schedule; the PR it opens triggers the checks job (including
+ * the same knee over the same suite is not a finding, however fresh its
+ * timestamp, and a pull request on every push was exactly the churn this gate
+ * exists to stop. Sameness is `sameMeasurement` in scripts/e2e-pin.mjs, shared
+ * with every other reader of a measurement, so there is one definition of it
+ * and one place to fix. The curve job runs on main pushes, workflow_dispatch
+ * and the weekly schedule; the PR it opens triggers the checks job (including
  * worker-pin) on pull_request, which is the re-check.
  *
  * Usage (from the curve job, after the bench has written e2e/worker-curve.json):
@@ -21,6 +24,8 @@ import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { sameMeasurement } from './e2e-pin.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -69,22 +74,6 @@ function mainMeasurement() {
   } catch {
     return null;
   }
-}
-
-/**
- * Whether two measurements are meaningfully different — same knee and same
- * hosted flag and same recordedAt within a second means nothing changed worth
- * a PR.
- */
-function same(left, right) {
-  if (left === null || right === null) return false;
-  if (left.knee !== right.knee) return false;
-  if (left.hosted !== right.hosted) return false;
-  if (left.pin !== right.pin) return false;
-  const a = Date.parse(left.recordedAt);
-  const b = Date.parse(right.recordedAt);
-  if (Number.isNaN(a) || Number.isNaN(b)) return false;
-  return Math.abs(a - b) < 2000;
 }
 
 /**
@@ -187,9 +176,9 @@ async function main() {
   }
 
   const onMain = mainMeasurement();
-  if (onMain !== null && same(measured, onMain)) {
+  if (onMain !== null && sameMeasurement(measured, onMain)) {
     console.log(
-      `curve-pr: the runner measured the same knee (${measured.knee}) as main already carries — nothing to propose`,
+      `curve-pr: the runner measured the same knee (${measured.knee}) over the same suite main already carries — nothing to propose`,
     );
     return;
   }

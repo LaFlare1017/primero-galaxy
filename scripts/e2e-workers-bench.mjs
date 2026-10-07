@@ -20,7 +20,7 @@
  * and start buying timeouts, which is a failure the pin needs to hear about
  * rather than a reason to keep the number quiet.
  *
- * Four decisions worth stating, because each of them is a way this could have
+ * Five decisions worth stating, because each of them is a way this could have
  * measured the wrong thing and looked right doing it:
  *
  *   - **A failing count is a RESULT, not a bench failure.** Past the knee the
@@ -28,6 +28,15 @@
  *     timed and recorded and named, and is excluded from "fastest green" —
  *     never quietly compared as if it were a good time. The exit code is about
  *     whether a measurement happened at all.
+ *   - **The committed curve accumulates.** Writing `e2e/worker-curve.json`
+ *     merges this run's green bests into the best times the committed curve
+ *     already carries for the same suite content (same `suiteHash`, same
+ *     machine class), and the knee it stamps is read from that merged map —
+ *     so the verdict a pin is checked against is the floor of every green run
+ *     of the era, not whichever run happened to run last. Four hosted
+ *     single-run measurements put the fastest count at 3, 3, 3 and 4 and the
+ *     knee at 3, 2, 2 and 3: one run is a sample, and the era is the thing
+ *     that converges.
  *   - **Two clocks, both printed.** `wall` is what the terminal's stopwatch says
  *     and includes the one build `globalSetup` makes before any worker starts;
  *     `suite` is the report's own duration, which does not. The build is the
@@ -82,7 +91,10 @@
  *                the pinned run's per-test table — the one the doctor's budget
  *                check reads — and drops the rest: the other counts' tables and
  *                a temp path, so the committed file is 30KB instead of 72KB.
- *                Anywhere else keeps everything.
+ *                Written there it also ACCUMULATES: this run's green bests
+ *                merge into the committed curve's era-best times, and the knee
+ *                is read from the merged map. Anywhere else keeps everything
+ *                from this run and accumulates nothing.
  *   --local      run without CI=1 (retries 0, no CI reporter).
  *   --force      measure on a machine that is too busy to measure on.
  */
@@ -91,7 +103,15 @@ import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSyn
 import { arch, cpus, loadavg, platform, release, tmpdir, totalmem } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CURVE, committedCurve, pinnedWorkers } from './e2e-pin.mjs';
+import {
+  CURVE,
+  bestFromRuns,
+  committedCurve,
+  kneeFromBest,
+  mergeBest,
+  pinnedWorkers,
+  suiteHash,
+} from './e2e-pin.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -398,6 +418,21 @@ function readReport(path, broken) {
   };
 }
 
+/**
+ * The curve already committed at a path, or null when there is nothing there
+ * that parses — a missing file, a half-written one, a file some other tool
+ * owns. Every one of those is "no era to merge into", never a reason to fail
+ * a measurement that happened.
+ */
+function readCurveAt(path) {
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8'));
+    return parsed !== null && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 /** The median of a sample, which is what one noisy run should not be allowed to be. */
 function median(values) {
   const sorted = [...values].sort((a, b) => a - b);
@@ -575,26 +610,76 @@ const failedRows = rows.filter((row) => !row.green && row.why === null);
 const unreadable = rows.filter((row) => row.why !== null);
 const fastestOf = (list) => list.reduce((a, b) => (b.suite < a.suite ? b : a));
 
+// This run's own read of the curve, before any era history is applied — the
+// median per count, the same read the table prints. Kept alongside the era's
+// verdict below so the output can name both when they disagree.
+const runFastest = greenRows.length === 0 ? null : fastestOf(greenRows);
+const runKnee =
+  runFastest === null
+    ? null
+    : greenRows
+        .filter((row) => row.suite <= runFastest.suite * (1 + WITHIN))
+        .reduce((a, b) => (b.count < a.count ? b : a));
+
+/**
+ * The era, when this run writes the committed curve: this run's green bests
+ * merged into the best times the committed curve already carries for the same
+ * suite, and the verdict read from the merged map. Only the committed path
+ * accumulates — a diagnostic written elsewhere is this run's record, not the
+ * pin's — and only a full-suite run merges: a filtered run's times are a
+ * measurement of a subset, and a subset's floor is not the suite's.
+ *
+ * The merged verdict replaces this run's read because the doctor check reads
+ * exactly one knee out of the committed file, and that knee should be the
+ * floor of every green run of this suite rather than whichever run ran last —
+ * four hosted single-run measurements read the knee as 3, 2, 2 and 3, and a
+ * pin that flip-flopped with them was nobody's number. The run's own read is
+ * kept and printed alongside, because a disagreement between one run and its
+ * era is exactly the kind of thing a reader should be able to see.
+ */
+const suiteStamp = suiteHash(ROOT);
+const era =
+  options.json !== null && options.json === resolve(ROOT, CURVE) && options.only === null
+    ? (() => {
+        const merged = mergeBest(readCurveAt(options.json), {
+          hosted,
+          suiteHash: suiteStamp,
+          best: bestFromRuns(results),
+        });
+        return { ...merged, ...kneeFromBest(merged.best, WITHIN) };
+      })()
+    : null;
+
 // Hoisted out of the block below because a written measurement has to carry the
 // knee, not just the rows: the doctor check compares this number against the
 // committed pin, and a check that had to re-derive the knee from the runs would
-// be a second definition of "the knee" in a repo that already has one.
-const fastest = greenRows.length === 0 ? null : fastestOf(greenRows);
-const knee =
-  fastest === null
-    ? null
-    : greenRows
-        .filter((row) => row.suite <= fastest.suite * (1 + WITHIN))
-        .reduce((a, b) => (b.count < a.count ? b : a));
+// be a second definition of "the knee" in a repo that already has one. When an
+// era carries a verdict, ITS verdict is what goes in the file; a single run's
+// read is the fallback and the comparison the output owes the reader.
+const fastest = era !== null && era.knee !== null ? era.fastest : runFastest;
+const knee = era !== null && era.knee !== null ? era.knee : runKnee;
 
-if (greenRows.length === 0) {
-  say('', 'No count finished green, so there is no fastest green count to report. The rows above are what happened.');
+if (knee === null) {
+  say(
+    '',
+    `No count finished green${era !== null ? ' this run, and the era carries no best times either' : ''}, so there is no fastest green count to report. The rows above are what happened.`,
+  );
 } else {
   const workers = (count) => `${count} worker${count === 1 ? '' : 's'}`;
   say('fastest green', `${workers(fastest.count)} — suite ${clock(fastest.suite)}`);
   say('the knee', `${workers(knee.count)} — within ${Math.round(WITHIN * 100)}% of that (${clock(knee.suite)}), and one fewer process`);
   if (knee.count !== fastest.count) {
     say('', `${workers(fastest.count)} buys ${clock(fastest.suite - knee.suite)} more than ${workers(knee.count)} does. Whether that is worth the machine is not a question a stopwatch answers.`);
+  }
+  if (era !== null) {
+    if (era.merged) {
+      say('the era', `the verdict above is the era's — this run's green bests merged into the best times the committed curve carries for the same suite`);
+    } else {
+      say('the era', `the era begins with this run — the committed curve carries its best times, and the next measurement of this suite merges into them`);
+    }
+    if (runKnee !== null && runKnee.count !== knee.count) {
+      say('the era', `the knee from best times is ${knee.count}; this run's medians alone read ${runKnee.count} (${clock(runKnee.suite)})`);
+    }
   }
 }
 
@@ -731,13 +816,23 @@ if (options.json !== null) {
     machine,
     hosted,
     pin,
+    // The suite this measurement is of, content-addressed: every later reader
+    // compares this hash instead of guessing from timestamps, because a
+    // comment-only commit measures the same suite and a suite edit can hide
+    // behind an unremarkable date. Absent when there was no suite to hash.
+    ...(suiteStamp === null ? {} : { suiteHash: suiteStamp }),
     // The two counts a later reader needs and cannot get from `runs` without
     // redoing this file's arithmetic: the fastest green count, and the
-    // cheapest count within WITHIN of it. The doctor check reads exactly
-    // these two against the pin in ci.yml.
+    // cheapest count within WITHIN of it — read from the era's best times
+    // when this run wrote the committed path, from this run alone otherwise.
+    // The doctor check reads exactly these two against the pin in ci.yml.
     fastest: fastest === null ? null : fastest.count,
     knee: knee === null ? null : knee.count,
     within: WITHIN,
+    // The era's best times, on the committed path: what the NEXT measurement
+    // of this suite merges into, so the knee is the floor of every green run
+    // of the suite rather than whichever run happened to run last.
+    ...(era !== null ? { best: era.best } : {}),
     options,
     runs: results,
   };
@@ -754,7 +849,7 @@ if (options.json !== null) {
   // The doctor compares that file's knee against the pin, so a measurement
   // written anywhere else settles nothing for anybody but this run.
   if (committed) {
-    console.log('  — the per-test timings stay in the raw reports above; this file keeps the pinned run\'s table, which is the one the doctor\'s budget check reads');
+    console.log(`  — the per-test timings stay in the raw reports above; this file keeps the pinned run's table, which is the one the doctor's budget check reads${era !== null && era.merged ? ", plus the era's best times the knee is read from" : ''}`);
   } else {
     console.log(`  — ${CURVE} is where the \`worker-pin\` doctor check looks, so nothing else will read this`);
   }
