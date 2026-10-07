@@ -358,10 +358,17 @@ jobs:
       # scripts/e2e-workers-bench.mjs — so the pin is a measurement rather than
       # an argument from a laptop. Change it here and that job says whether the
       # change was an improvement.
+      #
+      # The committed value is the bench's own knee: the cheapest count within
+      # 10% of the fastest green run. Three workers has measured fastest, but
+      # two workers sits within that band of it (and four oversubscribes the
+      # four vCPUs outright), and two of the three hosted measurements named 2 —
+      # so the pin is 2, and the worker-pin doctor check reconciles the two
+      # numbers on every run.
       - run: npm run test:e2e
         env:
           CI: '1'
-          E2E_WORKERS: '3'
+          E2E_WORKERS: '2'
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       # A flaky test PASSES under retries, so failure-gated artifacts never
       # show it. Parse the JSON report, write the flaky table into the job
@@ -412,7 +419,8 @@ jobs:
 
   curve:
     name: E2E worker curve
-    # The e2e job above runs the suite at `E2E_WORKERS: 3`, a number chosen by
+    # The e2e job above runs the suite at `E2E_WORKERS: 2`, a number the
+    # runner's own knee measurements picked after an earlier one was set by
     # comparing a fourteen-core laptop to a four-vCPU runner in prose. This job
     # stops doing that by comparison: it runs the whole suite at 2, 3 and 4
     # workers ON THE RUNNER and writes the curve into this job's summary, next
