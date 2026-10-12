@@ -1,20 +1,21 @@
 {
-  "recordedAt": "2026-10-07T19:00:03.731Z",
+  "recordedAt": "2026-10-12T16:53:18.469Z",
   "machine": {
     "platform": "linux 6.17.0-1022-azure x64",
     "cores": 4,
     "memoryGb": 16.8,
     "node": "v24.21.0",
-    "load": 0.8
+    "load": 1
   },
   "hosted": true,
   "pin": 2,
   "suiteHash": "c9490bc8e2a8a3269a4e3bd728e9bcdfcc51e58bb98cf91ab2ad25349d615443",
-  "fastest": 2,
+  "fastest": 3,
   "knee": 2,
   "within": 0.1,
   "best": {
-    "2": 433463.134
+    "2": 424514.203,
+    "3": 416138.349
   },
   "options": {
     "counts": [
@@ -33,124 +34,119 @@
     {
       "count": 2,
       "index": 1,
-      "wall": 458288,
+      "wall": 447243,
       "exit": 0,
-      "suite": 457662.209,
-      "expected": 135,
+      "suite": 446574.684,
+      "expected": 136,
       "unexpected": 0,
-      "flaky": 1,
+      "flaky": 0,
       "skipped": 0,
       "timeouts": [],
-      "flakyTests": [
-        {
-          "test": "finbench-saved-views.spec.ts › saving the current filters creates a revisitable view",
-          "why": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeNull\u001b[2m()\u001b[22m"
-        }
-      ],
+      "flakyTests": [],
       "files": [
         {
           "file": "galaxy-scene.spec.ts",
-          "ms": 175681
-        },
-        {
-          "file": "galaxy-planet-delete.spec.ts",
-          "ms": 82761
+          "ms": 175647
         },
         {
           "file": "a11y.spec.ts",
-          "ms": 74942
+          "ms": 76525
         },
         {
           "file": "galaxy-toast.spec.ts",
-          "ms": 71697
+          "ms": 66152
         },
         {
           "file": "galaxy-webgl.spec.ts",
-          "ms": 66309
+          "ms": 62548
         },
         {
-          "file": "galaxy-user-stars.spec.ts",
-          "ms": 51760
+          "file": "galaxy-planet-delete.spec.ts",
+          "ms": 54646
         },
         {
           "file": "facilitator-run-link.spec.ts",
-          "ms": 50481
+          "ms": 53744
+        },
+        {
+          "file": "galaxy-user-stars.spec.ts",
+          "ms": 49273
         },
         {
           "file": "galaxy-keys.spec.ts",
-          "ms": 43397
+          "ms": 44696
         },
         {
           "file": "galaxy-undo.spec.ts",
-          "ms": 37260
+          "ms": 36114
         },
         {
           "file": "company-search-keys.spec.ts",
-          "ms": 31005
+          "ms": 27887
         },
         {
           "file": "command-palette.spec.ts",
-          "ms": 22411
+          "ms": 23182
         },
         {
           "file": "galaxy-landing.spec.ts",
-          "ms": 19680
+          "ms": 18740
         },
         {
           "file": "reduced-motion.spec.ts",
-          "ms": 12649
+          "ms": 14108
         },
         {
           "file": "delegate-run-resume.spec.ts",
-          "ms": 10157
+          "ms": 11202
         },
         {
           "file": "facilitator-grid.spec.ts",
-          "ms": 8381
-        },
-        {
-          "file": "finbench-saved-views.spec.ts",
-          "ms": 7593
+          "ms": 8340
         },
         {
           "file": "facilitator-saved-views.spec.ts",
-          "ms": 6214
+          "ms": 6738
         },
         {
           "file": "delegate-store-remote.spec.ts",
-          "ms": 6107
+          "ms": 6386
+        },
+        {
+          "file": "finbench-saved-views.spec.ts",
+          "ms": 5946
         },
         {
           "file": "delegate.spec.ts",
-          "ms": 5923
-        },
-        {
-          "file": "finbench-filters.spec.ts",
-          "ms": 4078
+          "ms": 5822
         },
         {
           "file": "facilitator-window.spec.ts",
-          "ms": 4061
+          "ms": 4805
+        },
+        {
+          "file": "finbench-filters.spec.ts",
+          "ms": 4684
         },
         {
           "file": "facilitator-keys.spec.ts",
-          "ms": 3691
+          "ms": 4252
         },
         {
           "file": "delegate-cold-process.spec.ts",
-          "ms": 2567
+          "ms": 2881
         },
         {
           "file": "delegate-cold-chat.spec.ts",
-          "ms": 2452
+          "ms": 2510
         },
         {
           "file": "saved-views-keys.spec.ts",
-          "ms": 1511
+          "ms": 1988
         },
         {
           "file": "delegate-shortcuts.spec.ts",
-          "ms": 1047
+          "ms": 1100
         },
         {
           "file": "keyboard-coherence.spec.ts",
@@ -162,495 +158,495 @@
       "tests": [
         {
           "test": "galaxy-planet-delete.spec.ts › removing from the planet panel offers Undo, and Undo restores the view",
-          "ms": 82761
+          "ms": 54646
         },
         {
           "test": "galaxy-scene.spec.ts › double-clicking a star opens planet view; trajectory + reset complete the loop",
-          "ms": 47020
-        },
-        {
-          "test": "galaxy-scene.spec.ts › a company profile leaves the bottom bar’s controls clickable",
-          "ms": 44841
+          "ms": 45939
         },
         {
           "test": "galaxy-keys.spec.ts › every declared binding does something visible",
-          "ms": 43384
+          "ms": 44690
         },
         {
-          "test": "galaxy-undo.spec.ts › a removal survives a reload, Undo restores the star but not the view",
-          "ms": 37260
+          "test": "galaxy-scene.spec.ts › a company profile leaves the bottom bar’s controls clickable",
+          "ms": 44271
         },
         {
           "test": "galaxy-scene.spec.ts › hovering a star shows the tooltip (raycast → store → UI)",
-          "ms": 34794
+          "ms": 36824
         },
         {
-          "test": "galaxy-user-stars.spec.ts › adding a company creates a persistent star and flies to it",
-          "ms": 33461
+          "test": "galaxy-undo.spec.ts › a removal survives a reload, Undo restores the star but not the view",
+          "ms": 36114
         },
         {
           "test": "galaxy-scene.spec.ts › searching a company by name flies to its star and opens its profile",
-          "ms": 32054
-        },
-        {
-          "test": "galaxy-toast.spec.ts › removing the same company twice keeps one Removed toast; Undo restores it",
-          "ms": 31405
-        },
-        {
-          "test": "company-search-keys.spec.ts › every declared binding does something visible",
-          "ms": 30996
+          "ms": 34720
         },
         {
           "test": "a11y.spec.ts › planet view with the detail panel open is clean",
-          "ms": 29312
+          "ms": 30580
+        },
+        {
+          "test": "galaxy-user-stars.spec.ts › adding a company creates a persistent star and flies to it",
+          "ms": 28315
+        },
+        {
+          "test": "company-search-keys.spec.ts › every declared binding does something visible",
+          "ms": 27879
+        },
+        {
+          "test": "galaxy-toast.spec.ts › removing the same company twice keeps one Removed toast; Undo restores it",
+          "ms": 26445
         },
         {
           "test": "galaxy-webgl.spec.ts › brands without indexed favicons ship stable local logos in the planet panel",
-          "ms": 22866
+          "ms": 22707
         },
         {
           "test": "galaxy-toast.spec.ts › a hydrated toast keeps only its remaining window (no fresh duration)",
-          "ms": 22818
+          "ms": 22412
         },
         {
           "test": "galaxy-user-stars.spec.ts › the Add Company form rejects a duplicate company name",
-          "ms": 18299
-        },
-        {
-          "test": "a11y.spec.ts › Add Your Company dialog is clean",
-          "ms": 18150
-        },
-        {
-          "test": "galaxy-toast.spec.ts › a toast that expired while away does not resurrect on reload",
-          "ms": 17474
-        },
-        {
-          "test": "galaxy-webgl.spec.ts › the share button invokes the native Web Share API when available",
-          "ms": 17244
-        },
-        {
-          "test": "galaxy-scene.spec.ts › boots the galaxy and renders the Fortune 500 dataset",
-          "ms": 16972
+          "ms": 20958
         },
         {
           "test": "a11y.spec.ts › galaxy overview (canvas + overlays) is clean",
-          "ms": 16224
+          "ms": 17333
         },
         {
-          "test": "galaxy-landing.spec.ts › every landing-page CTA lands in the galaxy tool at /galaxy",
-          "ms": 15804
+          "test": "galaxy-toast.spec.ts › a toast that expired while away does not resurrect on reload",
+          "ms": 17295
+        },
+        {
+          "test": "a11y.spec.ts › Add Your Company dialog is clean",
+          "ms": 16870
         },
         {
           "test": "galaxy-webgl.spec.ts › the share button copies the URL when the Web Share API is unavailable",
-          "ms": 15391
+          "ms": 14895
         },
         {
-          "test": "command-palette.spec.ts › opens from the galaxy surface, renders the groups, closes on Esc",
-          "ms": 8437
+          "test": "galaxy-landing.spec.ts › every landing-page CTA lands in the galaxy tool at /galaxy",
+          "ms": 14582
+        },
+        {
+          "test": "galaxy-webgl.spec.ts › the share button invokes the native Web Share API when available",
+          "ms": 14421
+        },
+        {
+          "test": "galaxy-scene.spec.ts › boots the galaxy and renders the Fortune 500 dataset",
+          "ms": 13893
         },
         {
           "test": "reduced-motion.spec.ts › Galaxy freezes the idle rotation but keeps rendering",
-          "ms": 7579
+          "ms": 9053
         },
         {
-          "test": "facilitator-run-link.spec.ts › a half-typed chord shows what completes it, and the console forgets on its own",
-          "ms": 6163
+          "test": "command-palette.spec.ts › opens from the galaxy surface, renders the groups, closes on Esc",
+          "ms": 8596
         },
         {
           "test": "delegate-store-remote.spec.ts › the store gate runs the workshop over the Neon driver, against a real Postgres",
-          "ms": 6107
+          "ms": 6386
+        },
+        {
+          "test": "facilitator-run-link.spec.ts › a half-typed chord shows what completes it, and the console forgets on its own",
+          "ms": 6383
         },
         {
           "test": "facilitator-run-link.spec.ts › the walk says the row it stopped on, and says nothing until it moves",
-          "ms": 5953
+          "ms": 6139
         },
         {
           "test": "delegate.spec.ts › composer beam + thinking orb activate while the agent works, then tear down",
-          "ms": 5200
+          "ms": 5175
         },
         {
           "test": "reduced-motion.spec.ts › Delegate keeps functional cues but never mounts the decorative orb",
-          "ms": 5070
+          "ms": 5055
         },
         {
           "test": "facilitator-run-link.spec.ts › the watch pane shows the submitted result and holds back the score",
-          "ms": 4715
+          "ms": 4861
         },
         {
           "test": "facilitator-run-link.spec.ts › g then i and g then n jump the walk to the ends of the room",
-          "ms": 4389
+          "ms": 4777
         },
         {
           "test": "facilitator-grid.spec.ts › new sessions stream in via the 4s poll without a reload",
-          "ms": 4342
+          "ms": 4413
         },
         {
           "test": "facilitator-run-link.spec.ts › the watch pane mirrors a live run and follows it without a reload",
-          "ms": 4122
-        },
-        {
-          "test": "command-palette.spec.ts › every declared binding does something visible",
-          "ms": 4025
+          "ms": 4253
         },
         {
           "test": "facilitator-keys.spec.ts › every declared binding does something visible",
-          "ms": 3691
+          "ms": 4252
         },
         {
-          "test": "finbench-saved-views.spec.ts › saving the current filters creates a revisitable view",
-          "ms": 3620
+          "test": "command-palette.spec.ts › every declared binding does something visible",
+          "ms": 3538
         },
         {
           "test": "facilitator-run-link.spec.ts › the walk scrolls the cursor row into view, and only when it is off-screen",
-          "ms": 3107
-        },
-        {
-          "test": "galaxy-webgl.spec.ts › the landing page warns before Enter the galaxy when WebGL is unavailable",
-          "ms": 3033
-        },
-        {
-          "test": "delegate-run-resume.spec.ts › the restore offer previews the run it points at",
-          "ms": 2798
-        },
-        {
-          "test": "facilitator-run-link.spec.ts › the watch pane freezes a submitted run at its submitted clock",
-          "ms": 2733
-        },
-        {
-          "test": "facilitator-run-link.spec.ts › the g namespace reaches the watch, the link, and the views panel",
-          "ms": 2694
-        },
-        {
-          "test": "galaxy-landing.spec.ts › the landing page contact form renders and submits a pre-filled mailto",
-          "ms": 2684
+          "ms": 3420
         },
         {
           "test": "facilitator-run-link.spec.ts › the shortcut sheet lists every key, dims the dead ones, and quiets the room while it is open",
-          "ms": 2606
+          "ms": 3209
         },
         {
-          "test": "delegate-run-resume.spec.ts › a submitted run restores read-only with its detection result",
-          "ms": 2603
+          "test": "delegate-run-resume.spec.ts › the restore offer previews the run it points at",
+          "ms": 3059
+        },
+        {
+          "test": "galaxy-landing.spec.ts › the landing page contact form renders and submits a pre-filled mailto",
+          "ms": 2973
         },
         {
           "test": "delegate-cold-process.spec.ts › a run started on one process is viewable and submittable on the next one",
-          "ms": 2567
+          "ms": 2881
         },
         {
-          "test": "facilitator-run-link.spec.ts › j and k walk the grid, and Enter or w watches the row you stopped on",
-          "ms": 2490
+          "test": "facilitator-run-link.spec.ts › the watch pane freezes a submitted run at its submitted clock",
+          "ms": 2847
         },
         {
-          "test": "delegate-cold-chat.spec.ts › a turn on a process that never saw the run still knows what came before it",
-          "ms": 2452
+          "test": "galaxy-webgl.spec.ts › the landing page warns before Enter the galaxy when WebGL is unavailable",
+          "ms": 2826
         },
         {
-          "test": "galaxy-webgl.spec.ts › the galaxy degrades gracefully when WebGL is unavailable",
-          "ms": 2439
+          "test": "facilitator-run-link.spec.ts › the g namespace reaches the watch, the link, and the views panel",
+          "ms": 2802
+        },
+        {
+          "test": "delegate-run-resume.spec.ts › a submitted run restores read-only with its detection result",
+          "ms": 2775
         },
         {
           "test": "delegate-run-resume.spec.ts › a shared run link toasts on arrival, and only once per tab",
-          "ms": 2377
+          "ms": 2593
         },
         {
-          "test": "command-palette.spec.ts › tasks route lists every published task and navigates to a task page",
-          "ms": 2335
+          "test": "delegate-cold-chat.spec.ts › a turn on a process that never saw the run still knows what came before it",
+          "ms": 2510
         },
         {
-          "test": "facilitator-window.spec.ts › a room longer than the page is rendered one page deep, and says which page",
-          "ms": 1928
+          "test": "facilitator-run-link.spec.ts › j and k walk the grid, and Enter or w watches the row you stopped on",
+          "ms": 2496
         },
         {
-          "test": "facilitator-run-link.spec.ts › the watch pane sweeps with the arrow keys, and yields them to text fields",
-          "ms": 1910
-        },
-        {
-          "test": "a11y.spec.ts › Filter popover is clean while open",
-          "ms": 1871
-        },
-        {
-          "test": "command-palette.spec.ts › a scenario picked from another page deep-links /delegate?scenario=…",
-          "ms": 1796
-        },
-        {
-          "test": "galaxy-webgl.spec.ts › brands without indexed favicons ship stable local logos instead of 404ing",
-          "ms": 1770
-        },
-        {
-          "test": "a11y.spec.ts › landing page is clean",
-          "ms": 1761
-        },
-        {
-          "test": "a11y.spec.ts › workspace is clean while the agent is working (orb + live region)",
-          "ms": 1694
+          "test": "galaxy-webgl.spec.ts › the galaxy degrades gracefully when WebGL is unavailable",
+          "ms": 2290
         },
         {
           "test": "facilitator-run-link.spec.ts › a copied submitted-run link restores read-only in a fresh context",
-          "ms": 1680
+          "ms": 2234
         },
         {
-          "test": "command-palette.spec.ts › a scenario picked while already on /delegate selects it in place",
-          "ms": 1670
+          "test": "command-palette.spec.ts › tasks route lists every published task and navigates to a task page",
+          "ms": 2229
         },
         {
-          "test": "facilitator-run-link.spec.ts › Escape closes the topmost layer the console opened, and only that",
-          "ms": 1535
+          "test": "facilitator-window.spec.ts › a room longer than the page is rendered one page deep, and says which page",
+          "ms": 2218
         },
         {
-          "test": "a11y.spec.ts › run explorer with matrix is clean",
-          "ms": 1508
+          "test": "a11y.spec.ts › Filter popover is clean while open",
+          "ms": 2158
+        },
+        {
+          "test": "facilitator-run-link.spec.ts › the watch pane sweeps with the arrow keys, and yields them to text fields",
+          "ms": 2005
         },
         {
           "test": "saved-views-keys.spec.ts › every declared binding does something visible",
-          "ms": 1498
-        },
-        {
-          "test": "facilitator-window.spec.ts › the walk is not clipped by the page: g n still lands on the last participant",
-          "ms": 1464
-        },
-        {
-          "test": "galaxy-webgl.spec.ts › the hero starfield draws one static frame under reduced motion",
-          "ms": 1451
+          "ms": 1978
         },
         {
           "test": "command-palette.spec.ts › Escape leaves a sub-list, and closes the palette only from the root menu",
-          "ms": 1422
-        },
-        {
-          "test": "delegate-run-resume.spec.ts › a live run restores from the URL after a refresh, with its thread",
-          "ms": 1400
-        },
-        {
-          "test": "facilitator-run-link.spec.ts › the saved-views popover shields the room from j, k, and w",
-          "ms": 1389
+          "ms": 1933
         },
         {
           "test": "command-palette.spec.ts › Backspace leaves a sub-list only while the query is empty",
-          "ms": 1385
+          "ms": 1925
         },
         {
-          "test": "facilitator-saved-views.spec.ts › a shared view link copies to the clipboard and toasts on open",
-          "ms": 1377
+          "test": "facilitator-window.spec.ts › the walk is not clipped by the page: g n still lands on the last participant",
+          "ms": 1902
         },
         {
-          "test": "a11y.spec.ts › facilitator console with seeded rows is clean",
-          "ms": 1338
+          "test": "galaxy-webgl.spec.ts › brands without indexed favicons ship stable local logos instead of 404ing",
+          "ms": 1880
         },
         {
           "test": "command-palette.spec.ts › searching filters the task list and unknown queries show the empty state",
-          "ms": 1330
+          "ms": 1726
         },
         {
-          "test": "facilitator-run-link.spec.ts › a copied live-run link restores the workspace in a fresh context",
-          "ms": 1296
+          "test": "facilitator-run-link.spec.ts › Escape closes the topmost layer the console opened, and only that",
+          "ms": 1660
         },
         {
-          "test": "facilitator-run-link.spec.ts › Home and End jump the sweep to its first and last visible participant",
-          "ms": 1235
+          "test": "delegate-run-resume.spec.ts › a live run restores from the URL after a refresh, with its thread",
+          "ms": 1635
         },
         {
-          "test": "galaxy-landing.spec.ts › the contact address ships nowhere in the served page or JS (only base64)",
-          "ms": 1192
+          "test": "a11y.spec.ts › workspace is clean while the agent is working (orb + live region)",
+          "ms": 1630
         },
         {
-          "test": "facilitator-saved-views.spec.ts › a filtered and sorted state replays exactly, including the URL shape",
-          "ms": 1132
+          "test": "command-palette.spec.ts › a scenario picked while already on /delegate selects it in place",
+          "ms": 1616
         },
         {
-          "test": "facilitator-saved-views.spec.ts › the default state is savable: a named full-room view restores the unfiltered grid",
-          "ms": 1100
-        },
-        {
-          "test": "a11y.spec.ts › deep-linked filtered state is clean",
-          "ms": 1088
-        },
-        {
-          "test": "galaxy-webgl.spec.ts › the hero starfield scales its star budget down for mobile viewports",
-          "ms": 1083
-        },
-        {
-          "test": "finbench-saved-views.spec.ts › views persist across reloads",
-          "ms": 1076
-        },
-        {
-          "test": "galaxy-webgl.spec.ts › the hero starfield paints and animates immediately on load",
-          "ms": 1032
+          "test": "command-palette.spec.ts › a scenario picked from another page deep-links /delegate?scenario=…",
+          "ms": 1607
         },
         {
           "test": "a11y.spec.ts › landing page is clean",
-          "ms": 999
+          "ms": 1544
         },
         {
-          "test": "finbench-filters.spec.ts › sorting by Task header reorders the rows and lands in the URL",
-          "ms": 999
+          "test": "a11y.spec.ts › run explorer with matrix is clean",
+          "ms": 1500
+        },
+        {
+          "test": "facilitator-saved-views.spec.ts › a shared view link copies to the clipboard and toasts on open",
+          "ms": 1500
+        },
+        {
+          "test": "a11y.spec.ts › deep-linked filtered state is clean",
+          "ms": 1473
+        },
+        {
+          "test": "galaxy-webgl.spec.ts › the hero starfield draws one static frame under reduced motion",
+          "ms": 1472
+        },
+        {
+          "test": "facilitator-run-link.spec.ts › a copied live-run link restores the workspace in a fresh context",
+          "ms": 1438
+        },
+        {
+          "test": "facilitator-saved-views.spec.ts › a filtered and sorted state replays exactly, including the URL shape",
+          "ms": 1269
+        },
+        {
+          "test": "facilitator-run-link.spec.ts › the saved-views popover shields the room from j, k, and w",
+          "ms": 1251
         },
         {
           "test": "a11y.spec.ts › task detail page is clean",
-          "ms": 997
+          "ms": 1231
         },
         {
-          "test": "facilitator-grid.spec.ts › status facet chips show counts and toggle selection",
-          "ms": 921
+          "test": "finbench-saved-views.spec.ts › saving the current filters creates a revisitable view",
+          "ms": 1218
         },
         {
-          "test": "facilitator-grid.spec.ts › ?scenario= focuses the room and can launch the participant view",
-          "ms": 820
+          "test": "a11y.spec.ts › facilitator console with seeded rows is clean",
+          "ms": 1190
+        },
+        {
+          "test": "galaxy-landing.spec.ts › the contact address ships nowhere in the served page or JS (only base64)",
+          "ms": 1185
+        },
+        {
+          "test": "facilitator-saved-views.spec.ts › the default state is savable: a named full-room view restores the unfiltered grid",
+          "ms": 1171
+        },
+        {
+          "test": "finbench-saved-views.spec.ts › views persist across reloads",
+          "ms": 1127
         },
         {
           "test": "finbench-saved-views.spec.ts › a view can be renamed and re-iconed",
-          "ms": 820
+          "ms": 1121
+        },
+        {
+          "test": "facilitator-run-link.spec.ts › Home and End jump the sweep to its first and last visible participant",
+          "ms": 1097
         },
         {
           "test": "finbench-saved-views.spec.ts › views never cross benchmark tracks",
-          "ms": 801
+          "ms": 1092
         },
         {
-          "test": "facilitator-grid.spec.ts › sorting state lands in ?sort=/?dir= and defaults drop out",
-          "ms": 779
+          "test": "galaxy-webgl.spec.ts › the hero starfield scales its star budget down for mobile viewports",
+          "ms": 1078
+        },
+        {
+          "test": "a11y.spec.ts › landing page is clean",
+          "ms": 1016
+        },
+        {
+          "test": "galaxy-webgl.spec.ts › the hero starfield paints and animates immediately on load",
+          "ms": 979
         },
         {
           "test": "facilitator-run-link.spec.ts › the watch pane sweeps the visible participants with prev/next",
-          "ms": 768
+          "ms": 978
+        },
+        {
+          "test": "finbench-filters.spec.ts › sorting by Task header reorders the rows and lands in the URL",
+          "ms": 913
         },
         {
           "test": "facilitator-saved-views.spec.ts › a view can be renamed and re-iconed",
-          "ms": 756
+          "ms": 899
         },
         {
-          "test": "delegate.spec.ts › scenario 6 shows the pending-decision beam until the posting decision is made",
-          "ms": 723
-        },
-        {
-          "test": "facilitator-saved-views.spec.ts › views persist across reloads",
-          "ms": 683
-        },
-        {
-          "test": "finbench-saved-views.spec.ts › Save current is disabled until a filter combination exists",
-          "ms": 647
-        },
-        {
-          "test": "facilitator-saved-views.spec.ts › a hand-edited store row with an unknown sort key applies safely",
-          "ms": 644
+          "test": "facilitator-grid.spec.ts › status facet chips show counts and toggle selection",
+          "ms": 837
         },
         {
           "test": "finbench-saved-views.spec.ts › a view can be deleted",
-          "ms": 629
+          "ms": 816
         },
         {
-          "test": "facilitator-run-link.spec.ts › a shared ?watch= link whose row the status filter hides says so, and offers to show it",
-          "ms": 569
+          "test": "facilitator-grid.spec.ts › ?scenario= focuses the room and can launch the participant view",
+          "ms": 804
         },
         {
-          "test": "facilitator-run-link.spec.ts › a shared ?watch= link that points at nothing heals into the full room",
-          "ms": 565
+          "test": "facilitator-grid.spec.ts › sorting state lands in ?sort=/?dir= and defaults drop out",
+          "ms": 768
+        },
+        {
+          "test": "facilitator-saved-views.spec.ts › views persist across reloads",
+          "ms": 705
+        },
+        {
+          "test": "finbench-filters.spec.ts › driving the UI produces the same URL format as the deep links",
+          "ms": 695
+        },
+        {
+          "test": "delegate.spec.ts › scenario 6 shows the pending-decision beam until the posting decision is made",
+          "ms": 647
         },
         {
           "test": "facilitator-run-link.spec.ts › the watch pane invents no verdict for a scenario with no planted defect",
+          "ms": 642
+        },
+        {
+          "test": "facilitator-run-link.spec.ts › a shared ?watch= link whose row the status filter hides says so, and offers to show it",
+          "ms": 626
+        },
+        {
+          "test": "facilitator-run-link.spec.ts › a shared ?watch= link that points at nothing heals into the full room",
+          "ms": 626
+        },
+        {
+          "test": "facilitator-saved-views.spec.ts › a hand-edited store row with an unknown sort key applies safely",
+          "ms": 625
+        },
+        {
+          "test": "delegate-run-resume.spec.ts › declining the restore offer strips the params and stays clean",
+          "ms": 623
+        },
+        {
+          "test": "finbench-saved-views.spec.ts › Save current is disabled until a filter combination exists",
+          "ms": 572
+        },
+        {
+          "test": "facilitator-saved-views.spec.ts › a view can be deleted",
+          "ms": 569
+        },
+        {
+          "test": "finbench-filters.spec.ts › removing a filter chip clears the URL param immediately",
           "ms": 562
         },
         {
           "test": "finbench-filters.spec.ts › filter popover exposes all eight filterable columns",
-          "ms": 523
-        },
-        {
-          "test": "facilitator-saved-views.spec.ts › a view can be deleted",
-          "ms": 522
-        },
-        {
-          "test": "delegate-run-resume.spec.ts › declining the restore offer strips the params and stays clean",
-          "ms": 504
-        },
-        {
-          "test": "finbench-filters.spec.ts › removing a filter chip clears the URL param immediately",
-          "ms": 490
-        },
-        {
-          "test": "finbench-filters.spec.ts › driving the UI produces the same URL format as the deep links",
-          "ms": 476
+          "ms": 534
         },
         {
           "test": "delegate-run-resume.spec.ts › a stale run link degrades to start-fresh guidance",
-          "ms": 475
-        },
-        {
-          "test": "facilitator-grid.spec.ts › Clear appears only while a facet is active",
-          "ms": 468
-        },
-        {
-          "test": "finbench-filters.spec.ts › garbage ?filters= degrades to the unfiltered view",
-          "ms": 371
-        },
-        {
-          "test": "facilitator-grid.spec.ts › an unknown ?status= value filters to the empty grid without crashing",
-          "ms": 360
-        },
-        {
-          "test": "facilitator-grid.spec.ts › grid renders the seeded participants with their statuses",
-          "ms": 349
-        },
-        {
-          "test": "facilitator-window.spec.ts › a shared watch link to a participant past the page still has a row",
-          "ms": 349
-        },
-        {
-          "test": "facilitator-grid.spec.ts › a deep link with ?status=/?sort=/?dir= reproduces the shared view",
-          "ms": 342
-        },
-        {
-          "test": "finbench-filters.spec.ts › \"is not\" deep link: chip renders the operator and the table keeps only passes",
-          "ms": 321
-        },
-        {
-          "test": "facilitator-window.spec.ts › a view that fits the page is rendered whole, with no note",
-          "ms": 320
-        },
-        {
-          "test": "finbench-filters.spec.ts › numeric \"is between\" deep link over 0–1 fractions",
-          "ms": 304
+          "ms": 517
         },
         {
           "test": "finbench-filters.spec.ts › \"is\" deep link for the one miss resolves to the expected run row",
-          "ms": 303
+          "ms": 470
         },
         {
-          "test": "delegate-shortcuts.spec.ts › allows only what no text field, overlay, or modifier owns",
-          "ms": 301
+          "test": "facilitator-grid.spec.ts › Clear appears only while a facet is active",
+          "ms": 452
+        },
+        {
+          "test": "finbench-filters.spec.ts › numeric \"is between\" deep link over 0–1 fractions",
+          "ms": 445
+        },
+        {
+          "test": "finbench-filters.spec.ts › garbage ?filters= degrades to the unfiltered view",
+          "ms": 401
+        },
+        {
+          "test": "facilitator-window.spec.ts › a shared watch link to a participant past the page still has a row",
+          "ms": 378
+        },
+        {
+          "test": "facilitator-grid.spec.ts › a deep link with ?status=/?sort=/?dir= reproduces the shared view",
+          "ms": 365
+        },
+        {
+          "test": "facilitator-grid.spec.ts › grid renders the seeded participants with their statuses",
+          "ms": 357
+        },
+        {
+          "test": "facilitator-grid.spec.ts › an unknown ?status= value filters to the empty grid without crashing",
+          "ms": 344
+        },
+        {
+          "test": "finbench-filters.spec.ts › \"is not\" deep link: chip renders the operator and the table keeps only passes",
+          "ms": 340
         },
         {
           "test": "finbench-filters.spec.ts › default view: all runs, no filter chips",
-          "ms": 291
+          "ms": 324
         },
         {
-          "test": "delegate-shortcuts.spec.ts › reads the console state as gates",
-          "ms": 205
+          "test": "facilitator-window.spec.ts › a view that fits the page is rendered whole, with no note",
+          "ms": 307
         },
         {
-          "test": "delegate-shortcuts.spec.ts › builds the key map, the layer mounts and the aria strings from the same rows",
-          "ms": 185
-        },
-        {
-          "test": "delegate-shortcuts.spec.ts › a layer that closed itself on this very key still owns it",
-          "ms": 171
+          "test": "delegate-shortcuts.spec.ts › allows only what no text field, overlay, or modifier owns",
+          "ms": 299
         },
         {
           "test": "delegate-shortcuts.spec.ts › declares the chord namespace beside the keys, and binds only what it runs",
-          "ms": 168
+          "ms": 241
+        },
+        {
+          "test": "delegate-shortcuts.spec.ts › a layer that closed itself on this very key still owns it",
+          "ms": 184
+        },
+        {
+          "test": "delegate-shortcuts.spec.ts › reads the console state as gates",
+          "ms": 182
+        },
+        {
+          "test": "delegate-shortcuts.spec.ts › builds the key map, the layer mounts and the aria strings from the same rows",
+          "ms": 174
         },
         {
           "test": "keyboard-coherence.spec.ts › reports each way a declaration can be incoherent, and where",
-          "ms": 41
-        },
-        {
-          "test": "galaxy-keys.spec.ts › the declaration agrees with itself in every state the page can be in",
-          "ms": 11
-        },
-        {
-          "test": "saved-views-keys.spec.ts › the declaration agrees with itself in every state the panel can be in",
-          "ms": 11
+          "ms": 33
         },
         {
           "test": "command-palette.spec.ts › the declaration agrees with itself in every state the palette can be in",
-          "ms": 8
+          "ms": 10
+        },
+        {
+          "test": "keyboard-coherence.spec.ts › two rows the page binds itself may share one key only where the state keeps them apart",
+          "ms": 10
+        },
+        {
+          "test": "keyboard-coherence.spec.ts › two declarations describing one binding have to describe it the same way",
+          "ms": 9
         },
         {
           "test": "delegate-shortcuts.spec.ts › no reachable state lets two bindings claim one key, and every gate is reachable",
@@ -658,14 +654,22 @@
         },
         {
           "test": "keyboard-coherence.spec.ts › a coherent manifest reports nothing",
-          "ms": 8
-        },
-        {
-          "test": "company-search-keys.spec.ts › the declaration agrees with itself in every state the field can be in",
           "ms": 7
         },
         {
+          "test": "saved-views-keys.spec.ts › the declaration agrees with itself in every state the panel can be in",
+          "ms": 7
+        },
+        {
+          "test": "company-search-keys.spec.ts › the declaration agrees with itself in every state the field can be in",
+          "ms": 6
+        },
+        {
           "test": "delegate-shortcuts.spec.ts › every surface advertises, and the chip offers, exactly what is bound",
+          "ms": 6
+        },
+        {
+          "test": "delegate-shortcuts.spec.ts › the one binding this console documents for another surface is the one that surface binds",
           "ms": 6
         },
         {
@@ -673,20 +677,16 @@
           "ms": 5
         },
         {
-          "test": "keyboard-coherence.spec.ts › two rows the page binds itself may share one key only where the state keeps them apart",
-          "ms": 5
+          "test": "galaxy-keys.spec.ts › the declaration agrees with itself in every state the page can be in",
+          "ms": 4
         },
         {
-          "test": "keyboard-coherence.spec.ts › two declarations describing one binding have to describe it the same way",
-          "ms": 5
+          "test": "saved-views-keys.spec.ts › the name field advertises exactly the keys it answers to, in every state",
+          "ms": 3
         },
         {
           "test": "command-palette.spec.ts › the dialog advertises exactly the keys it answers to, in every state",
-          "ms": 3
-        },
-        {
-          "test": "delegate-shortcuts.spec.ts › the one binding this console documents for another surface is the one that surface binds",
-          "ms": 3
+          "ms": 2
         },
         {
           "test": "company-search-keys.spec.ts › the field advertises exactly the keys it answers to, in every state",
@@ -699,19 +699,15 @@
         {
           "test": "keyboard-coherence.spec.ts › a check that walks no state says so instead of passing",
           "ms": 2
-        },
-        {
-          "test": "saved-views-keys.spec.ts › the name field advertises exactly the keys it answers to, in every state",
-          "ms": 2
         }
       ]
     },
     {
       "count": 2,
       "index": 2,
-      "wall": 433982,
+      "wall": 425102,
       "exit": 0,
-      "suite": 433463.134,
+      "suite": 424514.203,
       "expected": 136,
       "unexpected": 0,
       "flaky": 0,
@@ -721,111 +717,111 @@
       "files": [
         {
           "file": "galaxy-scene.spec.ts",
-          "ms": 175899
-        },
-        {
-          "file": "galaxy-planet-delete.spec.ts",
-          "ms": 90752
+          "ms": 170451
         },
         {
           "file": "a11y.spec.ts",
-          "ms": 73285
+          "ms": 77069
         },
         {
           "file": "galaxy-toast.spec.ts",
-          "ms": 70408
+          "ms": 63133
         },
         {
           "file": "galaxy-webgl.spec.ts",
-          "ms": 62881
-        },
-        {
-          "file": "galaxy-user-stars.spec.ts",
-          "ms": 53997
-        },
-        {
-          "file": "galaxy-keys.spec.ts",
-          "ms": 51903
+          "ms": 61770
         },
         {
           "file": "facilitator-run-link.spec.ts",
-          "ms": 50811
+          "ms": 54451
+        },
+        {
+          "file": "galaxy-planet-delete.spec.ts",
+          "ms": 49168
+        },
+        {
+          "file": "galaxy-user-stars.spec.ts",
+          "ms": 48065
+        },
+        {
+          "file": "galaxy-keys.spec.ts",
+          "ms": 46766
         },
         {
           "file": "galaxy-undo.spec.ts",
-          "ms": 33832
+          "ms": 35502
         },
         {
           "file": "company-search-keys.spec.ts",
-          "ms": 23092
+          "ms": 31838
         },
         {
           "file": "command-palette.spec.ts",
-          "ms": 21121
+          "ms": 23010
         },
         {
           "file": "galaxy-landing.spec.ts",
-          "ms": 19071
+          "ms": 19949
         },
         {
           "file": "reduced-motion.spec.ts",
-          "ms": 14565
+          "ms": 12530
         },
         {
           "file": "delegate-run-resume.spec.ts",
-          "ms": 10833
+          "ms": 11414
         },
         {
           "file": "facilitator-grid.spec.ts",
-          "ms": 8739
-        },
-        {
-          "file": "delegate-store-remote.spec.ts",
-          "ms": 6250
+          "ms": 8757
         },
         {
           "file": "facilitator-saved-views.spec.ts",
-          "ms": 6229
+          "ms": 6930
         },
         {
-          "file": "delegate.spec.ts",
-          "ms": 5847
+          "file": "delegate-store-remote.spec.ts",
+          "ms": 6428
         },
         {
           "file": "finbench-saved-views.spec.ts",
-          "ms": 5066
+          "ms": 6041
         },
         {
-          "file": "finbench-filters.spec.ts",
-          "ms": 4466
-        },
-        {
-          "file": "facilitator-keys.spec.ts",
-          "ms": 4426
+          "file": "delegate.spec.ts",
+          "ms": 5704
         },
         {
           "file": "facilitator-window.spec.ts",
-          "ms": 4119
+          "ms": 4938
         },
         {
-          "file": "delegate-cold-chat.spec.ts",
-          "ms": 2578
+          "file": "finbench-filters.spec.ts",
+          "ms": 4889
+        },
+        {
+          "file": "facilitator-keys.spec.ts",
+          "ms": 4656
         },
         {
           "file": "delegate-cold-process.spec.ts",
-          "ms": 2268
+          "ms": 2832
+        },
+        {
+          "file": "delegate-cold-chat.spec.ts",
+          "ms": 2594
         },
         {
           "file": "saved-views-keys.spec.ts",
-          "ms": 1823
+          "ms": 1846
         },
         {
           "file": "delegate-shortcuts.spec.ts",
-          "ms": 1705
+          "ms": 1137
         },
         {
           "file": "keyboard-coherence.spec.ts",
-          "ms": 85
+          "ms": 109
         }
       ],
       "readable": true,
@@ -834,134 +830,123 @@
     {
       "count": 3,
       "index": 1,
-      "wall": 794420,
+      "wall": 416693,
       "exit": 0,
-      "suite": 793893.464,
-      "expected": 134,
+      "suite": 416138.349,
+      "expected": 136,
       "unexpected": 0,
-      "flaky": 2,
+      "flaky": 0,
       "skipped": 0,
-      "timeouts": [
-        "galaxy-undo.spec.ts › a removal survives a reload, Undo restores the star but not the view"
-      ],
-      "flakyTests": [
-        {
-          "test": "galaxy-toast.spec.ts › a hydrated toast keeps only its remaining window (no fresh duration)",
-          "why": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeLessThan\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m"
-        },
-        {
-          "test": "galaxy-undo.spec.ts › a removal survives a reload, Undo restores the star but not the view",
-          "why": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m"
-        }
-      ],
+      "timeouts": [],
+      "flakyTests": [],
       "files": [
         {
-          "file": "galaxy-undo.spec.ts",
-          "ms": 516852
-        },
-        {
           "file": "galaxy-scene.spec.ts",
-          "ms": 237909
-        },
-        {
-          "file": "galaxy-toast.spec.ts",
-          "ms": 147766
+          "ms": 249477
         },
         {
           "file": "galaxy-planet-delete.spec.ts",
-          "ms": 119175
+          "ms": 106587
+        },
+        {
+          "file": "galaxy-toast.spec.ts",
+          "ms": 93190
         },
         {
           "file": "a11y.spec.ts",
-          "ms": 94518
+          "ms": 92410
         },
         {
           "file": "galaxy-webgl.spec.ts",
-          "ms": 79218
+          "ms": 91703
         },
         {
           "file": "galaxy-keys.spec.ts",
-          "ms": 76653
+          "ms": 89837
         },
         {
           "file": "galaxy-user-stars.spec.ts",
-          "ms": 66393
+          "ms": 68356
         },
         {
           "file": "facilitator-run-link.spec.ts",
-          "ms": 61925
+          "ms": 64717
+        },
+        {
+          "file": "galaxy-undo.spec.ts",
+          "ms": 52821
         },
         {
           "file": "company-search-keys.spec.ts",
-          "ms": 43676
+          "ms": 48258
         },
         {
           "file": "command-palette.spec.ts",
-          "ms": 32914
+          "ms": 35169
         },
         {
           "file": "galaxy-landing.spec.ts",
-          "ms": 21539
+          "ms": 25988
         },
         {
           "file": "reduced-motion.spec.ts",
-          "ms": 19599
+          "ms": 20471
         },
         {
           "file": "delegate-run-resume.spec.ts",
-          "ms": 13320
+          "ms": 14218
         },
         {
           "file": "facilitator-grid.spec.ts",
-          "ms": 11456
+          "ms": 12693
         },
         {
           "file": "facilitator-saved-views.spec.ts",
-          "ms": 11101
+          "ms": 10144
         },
         {
           "file": "delegate-store-remote.spec.ts",
-          "ms": 9963
+          "ms": 9971
         },
         {
           "file": "finbench-saved-views.spec.ts",
-          "ms": 8704
+          "ms": 9402
         },
         {
           "file": "facilitator-keys.spec.ts",
-          "ms": 7619
-        },
-        {
-          "file": "delegate.spec.ts",
-          "ms": 6507
+          "ms": 9213
         },
         {
           "file": "finbench-filters.spec.ts",
-          "ms": 6486
+          "ms": 6918
+        },
+        {
+          "file": "delegate.spec.ts",
+          "ms": 6881
         },
         {
           "file": "facilitator-window.spec.ts",
-          "ms": 6465
+          "ms": 6729
         },
         {
           "file": "delegate-cold-process.spec.ts",
-          "ms": 3944
+          "ms": 4288
         },
         {
           "file": "delegate-cold-chat.spec.ts",
-          "ms": 3169
+          "ms": 3481
         },
         {
           "file": "saved-views-keys.spec.ts",
-          "ms": 3159
+          "ms": 2560
         },
         {
           "file": "delegate-shortcuts.spec.ts",
-          "ms": 2455
+          "ms": 2281
         },
         {
           "file": "keyboard-coherence.spec.ts",
-          "ms": 99
+          "ms": 97
         }
       ],
       "readable": true,
@@ -970,9 +955,9 @@
     {
       "count": 3,
       "index": 2,
-      "wall": 979520,
+      "wall": 972651,
       "exit": 0,
-      "suite": 978968.081,
+      "suite": 972121.026,
       "expected": 135,
       "unexpected": 0,
       "flaky": 1,
@@ -989,111 +974,111 @@
       "files": [
         {
           "file": "galaxy-planet-delete.spec.ts",
-          "ms": 819839
+          "ms": 809783
         },
         {
           "file": "galaxy-scene.spec.ts",
-          "ms": 242743
+          "ms": 253858
         },
         {
           "file": "a11y.spec.ts",
-          "ms": 96833
+          "ms": 91354
         },
         {
           "file": "galaxy-toast.spec.ts",
-          "ms": 80779
+          "ms": 87208
         },
         {
           "file": "galaxy-webgl.spec.ts",
-          "ms": 77278
-        },
-        {
-          "file": "galaxy-keys.spec.ts",
-          "ms": 76665
+          "ms": 84193
         },
         {
           "file": "galaxy-user-stars.spec.ts",
-          "ms": 72248
+          "ms": 70432
+        },
+        {
+          "file": "galaxy-keys.spec.ts",
+          "ms": 67547
         },
         {
           "file": "facilitator-run-link.spec.ts",
-          "ms": 61342
-        },
-        {
-          "file": "galaxy-undo.spec.ts",
-          "ms": 45622
+          "ms": 61797
         },
         {
           "file": "company-search-keys.spec.ts",
-          "ms": 42306
+          "ms": 52034
+        },
+        {
+          "file": "galaxy-undo.spec.ts",
+          "ms": 47790
         },
         {
           "file": "command-palette.spec.ts",
-          "ms": 32692
+          "ms": 33622
         },
         {
           "file": "galaxy-landing.spec.ts",
-          "ms": 21678
+          "ms": 23540
         },
         {
           "file": "reduced-motion.spec.ts",
-          "ms": 18118
+          "ms": 18802
         },
         {
           "file": "delegate-run-resume.spec.ts",
-          "ms": 13353
-        },
-        {
-          "file": "facilitator-saved-views.spec.ts",
-          "ms": 11887
+          "ms": 14325
         },
         {
           "file": "facilitator-grid.spec.ts",
-          "ms": 11784
+          "ms": 12857
         },
         {
           "file": "delegate-store-remote.spec.ts",
-          "ms": 9881
+          "ms": 10614
+        },
+        {
+          "file": "facilitator-saved-views.spec.ts",
+          "ms": 9577
         },
         {
           "file": "finbench-saved-views.spec.ts",
-          "ms": 7902
+          "ms": 9217
         },
         {
           "file": "facilitator-keys.spec.ts",
-          "ms": 7480
+          "ms": 8252
         },
         {
           "file": "facilitator-window.spec.ts",
-          "ms": 7341
+          "ms": 7331
         },
         {
           "file": "delegate.spec.ts",
-          "ms": 6611
+          "ms": 6659
         },
         {
           "file": "finbench-filters.spec.ts",
-          "ms": 6130
+          "ms": 6273
         },
         {
           "file": "delegate-cold-process.spec.ts",
-          "ms": 3924
+          "ms": 3842
         },
         {
           "file": "delegate-cold-chat.spec.ts",
-          "ms": 3440
+          "ms": 3475
         },
         {
           "file": "saved-views-keys.spec.ts",
-          "ms": 2578
+          "ms": 2316
         },
         {
           "file": "delegate-shortcuts.spec.ts",
-          "ms": 2241
+          "ms": 1830
         },
         {
           "file": "keyboard-coherence.spec.ts",
-          "ms": 158
+          "ms": 111
         }
       ],
       "readable": true,
@@ -1102,123 +1087,138 @@
     {
       "count": 4,
       "index": 1,
-      "wall": 457970,
+      "wall": 990365,
       "exit": 1,
-      "suite": 457435.73000000004,
-      "expected": 134,
-      "unexpected": 2,
-      "flaky": 0,
+      "suite": 989810.264,
+      "expected": 132,
+      "unexpected": 1,
+      "flaky": 3,
       "skipped": 0,
-      "timeouts": [],
-      "flakyTests": [],
+      "timeouts": [
+        "galaxy-planet-delete.spec.ts › removing from the planet panel offers Undo, and Undo restores the view"
+      ],
+      "flakyTests": [
+        {
+          "test": "facilitator-keys.spec.ts › every declared binding does something visible",
+          "why": "Error: the cursor started away from the first row"
+        },
+        {
+          "test": "galaxy-planet-delete.spec.ts › removing from the planet panel offers Undo, and Undo restores the view",
+          "why": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m"
+        },
+        {
+          "test": "galaxy-toast.spec.ts › a hydrated toast keeps only its remaining window (no fresh duration)",
+          "why": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBeLessThan\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m)\u001b[22m"
+        }
+      ],
       "files": [
         {
+          "file": "galaxy-planet-delete.spec.ts",
+          "ms": 826989
+        },
+        {
           "file": "galaxy-scene.spec.ts",
-          "ms": 310696
+          "ms": 309383
         },
         {
           "file": "galaxy-undo.spec.ts",
-          "ms": 247434
+          "ms": 241595
         },
         {
           "file": "galaxy-toast.spec.ts",
-          "ms": 192545
-        },
-        {
-          "file": "galaxy-planet-delete.spec.ts",
-          "ms": 139401
+          "ms": 133540
         },
         {
           "file": "a11y.spec.ts",
-          "ms": 115629
-        },
-        {
-          "file": "galaxy-webgl.spec.ts",
-          "ms": 93747
+          "ms": 125065
         },
         {
           "file": "galaxy-keys.spec.ts",
-          "ms": 90372
+          "ms": 107080
+        },
+        {
+          "file": "galaxy-webgl.spec.ts",
+          "ms": 107064
         },
         {
           "file": "galaxy-user-stars.spec.ts",
-          "ms": 88811
+          "ms": 94962
         },
         {
           "file": "facilitator-run-link.spec.ts",
-          "ms": 75464
+          "ms": 78262
         },
         {
           "file": "company-search-keys.spec.ts",
-          "ms": 54450
+          "ms": 63102
         },
         {
           "file": "command-palette.spec.ts",
-          "ms": 37872
+          "ms": 37238
         },
         {
           "file": "galaxy-landing.spec.ts",
-          "ms": 29343
-        },
-        {
-          "file": "reduced-motion.spec.ts",
-          "ms": 24024
-        },
-        {
-          "file": "delegate-run-resume.spec.ts",
-          "ms": 16405
-        },
-        {
-          "file": "facilitator-grid.spec.ts",
-          "ms": 15504
-        },
-        {
-          "file": "delegate-store-remote.spec.ts",
-          "ms": 15319
-        },
-        {
-          "file": "finbench-saved-views.spec.ts",
-          "ms": 14143
+          "ms": 28756
         },
         {
           "file": "facilitator-keys.spec.ts",
-          "ms": 12889
+          "ms": 27340
+        },
+        {
+          "file": "reduced-motion.spec.ts",
+          "ms": 23583
+        },
+        {
+          "file": "delegate-run-resume.spec.ts",
+          "ms": 17287
+        },
+        {
+          "file": "delegate-store-remote.spec.ts",
+          "ms": 16549
+        },
+        {
+          "file": "facilitator-grid.spec.ts",
+          "ms": 15412
+        },
+        {
+          "file": "finbench-saved-views.spec.ts",
+          "ms": 14924
         },
         {
           "file": "facilitator-saved-views.spec.ts",
-          "ms": 11740
+          "ms": 14714
         },
         {
           "file": "facilitator-window.spec.ts",
-          "ms": 10453
+          "ms": 12328
         },
         {
           "file": "finbench-filters.spec.ts",
-          "ms": 10364
+          "ms": 10398
         },
         {
           "file": "delegate.spec.ts",
-          "ms": 7344
+          "ms": 7819
         },
         {
           "file": "delegate-cold-process.spec.ts",
-          "ms": 5355
+          "ms": 5931
         },
         {
           "file": "delegate-cold-chat.spec.ts",
-          "ms": 4248
+          "ms": 4789
         },
         {
           "file": "saved-views-keys.spec.ts",
-          "ms": 3601
+          "ms": 4168
         },
         {
           "file": "delegate-shortcuts.spec.ts",
-          "ms": 2696
+          "ms": 2703
         },
         {
           "file": "keyboard-coherence.spec.ts",
-          "ms": 282
+          "ms": 71
         }
       ],
       "readable": true,
@@ -1227,130 +1227,138 @@
     {
       "count": 4,
       "index": 2,
-      "wall": 688054,
+      "wall": 968784,
       "exit": 1,
-      "suite": 687504.16,
-      "expected": 134,
+      "suite": 968224.3960000001,
+      "expected": 132,
       "unexpected": 1,
-      "flaky": 1,
+      "flaky": 3,
       "skipped": 0,
       "timeouts": [
-        "galaxy-undo.spec.ts › a removal survives a reload, Undo restores the star but not the view"
+        "galaxy-planet-delete.spec.ts › removing from the planet panel offers Undo, and Undo restores the view"
       ],
       "flakyTests": [
         {
+          "test": "facilitator-keys.spec.ts › every declared binding does something visible",
+          "why": "Error: the cursor started away from the first row"
+        },
+        {
+          "test": "galaxy-planet-delete.spec.ts › removing from the planet panel offers Undo, and Undo restores the view",
+          "why": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m"
+        },
+        {
           "test": "galaxy-undo.spec.ts › a removal survives a reload, Undo restores the star but not the view",
-          "why": "\u001b[31mTest timeout of 420000ms exceeded.\u001b[39m"
+          "why": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m"
         }
       ],
       "files": [
         {
-          "file": "galaxy-undo.spec.ts",
-          "ms": 451540
+          "file": "galaxy-planet-delete.spec.ts",
+          "ms": 797814
         },
         {
           "file": "galaxy-scene.spec.ts",
-          "ms": 297720
+          "ms": 317069
         },
         {
           "file": "galaxy-toast.spec.ts",
-          "ms": 193643
+          "ms": 198945
         },
         {
-          "file": "galaxy-planet-delete.spec.ts",
-          "ms": 139090
+          "file": "galaxy-undo.spec.ts",
+          "ms": 163092
         },
         {
           "file": "a11y.spec.ts",
-          "ms": 123445
+          "ms": 132235
         },
         {
           "file": "galaxy-keys.spec.ts",
-          "ms": 118960
+          "ms": 120156
         },
         {
           "file": "galaxy-webgl.spec.ts",
-          "ms": 101524
+          "ms": 103734
         },
         {
           "file": "galaxy-user-stars.spec.ts",
-          "ms": 92762
+          "ms": 100946
         },
         {
           "file": "facilitator-run-link.spec.ts",
-          "ms": 79089
+          "ms": 77180
         },
         {
           "file": "company-search-keys.spec.ts",
-          "ms": 60439
+          "ms": 61806
         },
         {
           "file": "command-palette.spec.ts",
-          "ms": 41906
+          "ms": 40768
         },
         {
           "file": "galaxy-landing.spec.ts",
-          "ms": 28467
-        },
-        {
-          "file": "reduced-motion.spec.ts",
-          "ms": 21101
-        },
-        {
-          "file": "delegate-run-resume.spec.ts",
-          "ms": 18072
-        },
-        {
-          "file": "facilitator-grid.spec.ts",
-          "ms": 16452
-        },
-        {
-          "file": "delegate-store-remote.spec.ts",
-          "ms": 15477
-        },
-        {
-          "file": "finbench-saved-views.spec.ts",
-          "ms": 14971
-        },
-        {
-          "file": "facilitator-saved-views.spec.ts",
-          "ms": 13816
+          "ms": 30017
         },
         {
           "file": "facilitator-keys.spec.ts",
-          "ms": 12372
+          "ms": 28539
         },
         {
-          "file": "finbench-filters.spec.ts",
-          "ms": 10917
+          "file": "delegate-run-resume.spec.ts",
+          "ms": 17924
+        },
+        {
+          "file": "reduced-motion.spec.ts",
+          "ms": 17703
+        },
+        {
+          "file": "facilitator-saved-views.spec.ts",
+          "ms": 17413
+        },
+        {
+          "file": "facilitator-grid.spec.ts",
+          "ms": 16262
+        },
+        {
+          "file": "delegate-store-remote.spec.ts",
+          "ms": 15369
+        },
+        {
+          "file": "finbench-saved-views.spec.ts",
+          "ms": 14918
         },
         {
           "file": "facilitator-window.spec.ts",
-          "ms": 10836
+          "ms": 14154
+        },
+        {
+          "file": "finbench-filters.spec.ts",
+          "ms": 10957
         },
         {
           "file": "delegate.spec.ts",
-          "ms": 7903
+          "ms": 7770
         },
         {
           "file": "delegate-cold-process.spec.ts",
-          "ms": 6439
+          "ms": 5929
         },
         {
           "file": "delegate-cold-chat.spec.ts",
-          "ms": 4286
-        },
-        {
-          "file": "saved-views-keys.spec.ts",
-          "ms": 3211
+          "ms": 5070
         },
         {
           "file": "delegate-shortcuts.spec.ts",
-          "ms": 3208
+          "ms": 2949
+        },
+        {
+          "file": "saved-views-keys.spec.ts",
+          "ms": 2826
         },
         {
           "file": "keyboard-coherence.spec.ts",
-          "ms": 167
+          "ms": 268
         }
       ],
       "readable": true,
